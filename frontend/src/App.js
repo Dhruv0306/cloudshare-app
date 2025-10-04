@@ -1,0 +1,213 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import Login from './components/Login';
+import Signup from './components/Signup';
+
+function FileManager() {
+  const [files, setFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState('');
+  const { currentUser, logout } = useAuth();
+
+  useEffect(() => {
+    fetchFiles();
+  }, []);
+
+  const fetchFiles = async () => {
+    try {
+      const response = await axios.get('/api/files');
+      setFiles(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching files:', error);
+      setMessage('Error fetching files');
+      setMessageType('error');
+      setLoading(false);
+    }
+  };
+
+  const handleFileSelect = (event) => {
+    setSelectedFile(event.target.files[0]);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setMessage('Please select a file to upload');
+      setMessageType('error');
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      await axios.post('/api/files/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      setMessage('File uploaded successfully!');
+      setMessageType('success');
+      setSelectedFile(null);
+      document.getElementById('fileInput').value = '';
+      fetchFiles();
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      setMessage('Error uploading file');
+      setMessageType('error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDownload = async (fileName, originalFileName) => {
+    try {
+      const response = await axios.get(`/api/files/download/${fileName}`, {
+        responseType: 'blob',
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', originalFileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      setMessage('Error downloading file');
+      setMessageType('error');
+    }
+  };
+
+  const handleDelete = async (fileId) => {
+    if (window.confirm('Are you sure you want to delete this file?')) {
+      try {
+        await axios.delete(`/api/files/${fileId}`);
+        setMessage('File deleted successfully!');
+        setMessageType('success');
+        fetchFiles();
+      } catch (error) {
+        console.error('Error deleting file:', error);
+        setMessage('Error deleting file');
+        setMessageType('error');
+      }
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  return (
+    <div className="container">
+      <div className="header-section">
+        <h1 className="header">File Sharing App</h1>
+        <div className="user-info">
+          <span>Welcome, {currentUser?.username}!</span>
+          <button onClick={logout} className="logout-btn">Logout</button>
+        </div>
+      </div>
+      
+      {message && (
+        <div className={messageType === 'error' ? 'error' : 'success'}>
+          {message}
+        </div>
+      )}
+
+      <div className="upload-section">
+        <h2>Upload File</h2>
+        <div className="file-input">
+          <input
+            id="fileInput"
+            type="file"
+            onChange={handleFileSelect}
+            disabled={uploading}
+          />
+        </div>
+        <button
+          className="upload-btn"
+          onClick={handleUpload}
+          disabled={uploading || !selectedFile}
+        >
+          {uploading ? 'Uploading...' : 'Upload File'}
+        </button>
+      </div>
+
+      <div className="files-section">
+        <h2>Uploaded Files</h2>
+        {loading ? (
+          <div className="loading">Loading files...</div>
+        ) : files.length === 0 ? (
+          <div className="loading">No files uploaded yet</div>
+        ) : (
+          files.map((file) => (
+            <div key={file.id} className="file-item">
+              <div className="file-info">
+                <div className="file-name">{file.originalFileName}</div>
+                <div className="file-details">
+                  Size: {formatFileSize(file.fileSize)} | 
+                  Uploaded: {formatDate(file.uploadTime)}
+                </div>
+              </div>
+              <div className="file-actions">
+                <button
+                  className="download-btn"
+                  onClick={() => handleDownload(file.fileName, file.originalFileName)}
+                >
+                  Download
+                </button>
+                <button
+                  className="delete-btn"
+                  onClick={() => handleDelete(file.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AuthWrapper() {
+  const [isLogin, setIsLogin] = useState(true);
+  const { token } = useAuth();
+
+  if (token) {
+    return <FileManager />;
+  }
+
+  return isLogin ? (
+    <Login onSwitchToSignup={() => setIsLogin(false)} />
+  ) : (
+    <Signup onSwitchToLogin={() => setIsLogin(true)} />
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AuthWrapper />
+    </AuthProvider>
+  );
+}
+
+export default App;

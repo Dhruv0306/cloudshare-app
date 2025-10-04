@@ -1,0 +1,85 @@
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import axios from 'axios';
+
+const AuthContext = createContext();
+
+export const useAuth = () => {
+  return useContext(AuthContext);
+};
+
+export const AuthProvider = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      setToken(token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // You could validate the token here by making a request to the server
+    }
+    setLoading(false);
+  }, []);
+
+  const login = async (username, password) => {
+    try {
+      const response = await axios.post('/api/auth/signin', {
+        username,
+        password
+      });
+      
+      const { accessToken, id, username: user, email } = response.data;
+      
+      localStorage.setItem('token', accessToken);
+      setToken(accessToken);
+      setCurrentUser({ id, username: user, email });
+      axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+      
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Login failed' 
+      };
+    }
+  };
+
+  const signup = async (username, email, password) => {
+    try {
+      await axios.post('/api/auth/signup', {
+        username,
+        email,
+        password
+      });
+      
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Signup failed' 
+      };
+    }
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setCurrentUser(null);
+    delete axios.defaults.headers.common['Authorization'];
+  };
+
+  const value = {
+    currentUser,
+    token,
+    login,
+    signup,
+    logout
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
+};
