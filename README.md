@@ -126,8 +126,8 @@ This project includes a comprehensive CI/CD pipeline using GitHub Actions that a
 - **Deploys automatically** after successful tests on main branch
 
 ### Pipeline Status
-![CI Pipeline](https://github.com/yourusername/your-repo-name/actions/workflows/ci.yml/badge.svg)
-![Deploy](https://github.com/yourusername/your-repo-name/actions/workflows/deploy.yml/badge.svg)
+![CI Pipeline](https://github.com/Dhruv0306/cloudshare-app/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/Dhruv0306/cloudshare-app/actions/workflows/deploy.yml/badge.svg)
 
 ### Workflows
 
