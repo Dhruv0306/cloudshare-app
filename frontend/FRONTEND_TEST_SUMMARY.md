@@ -1,7 +1,7 @@
 # Frontend Test Suite Summary
 
 ## Overview
-Comprehensive test suite for the React file sharing application frontend with **15 passing tests** and **44.82% code coverage**.
+Comprehensive test suite for the React file sharing application frontend with **41 passing tests** and **57.94% code coverage**.
 
 ## Test Structure
 
@@ -18,16 +18,17 @@ Comprehensive test suite for the React file sharing application frontend with **
   - Loading state management
 
 #### Signup Component (`src/components/Signup.test.js`)
-- **7 tests** covering user registration
+- **10 tests** covering user registration and email verification
 - **100% code coverage**
 - Tests include:
   - Form rendering with all fields
-  - Empty field validation
+  - Empty field validation (weak password)
   - Password mismatch validation
-  - Password length validation
-  - Successful signup flow
+  - Password strength validation (weak/medium)
+  - Successful signup flow with email verification
   - Error handling for failed signup
-  - Form clearing after success
+  - Password strength indicator functionality
+  - Form validation with missing fields
 
 #### App Component (`src/App.test.js`)
 - **3 tests** covering main application flow
@@ -35,6 +36,25 @@ Comprehensive test suite for the React file sharing application frontend with **
   - Initial login form rendering
   - Navigation between login/signup forms
   - Form validation integration
+
+#### EmailVerificationForm Component (`src/components/EmailVerificationForm.test.js`)
+- **16 tests** covering email verification functionality
+- Tests include:
+  - Form rendering with correct email display
+  - Input validation (numeric only, 6-digit limit)
+  - Validation errors for empty/incomplete codes
+  - Successful verification flow
+  - Error handling (expired codes, network errors)
+  - Resend functionality with rate limiting
+  - User interaction (back to signup, error clearing)
+  - UI features (digit counter, helpful tips)
+
+#### PasswordStrengthIndicator Component (`src/components/PasswordStrengthIndicator.test.js`)
+- **3 tests** covering password strength visualization
+- Tests include:
+  - Strength level display (weak, medium, strong)
+  - Visual indicators and color coding
+  - Requirements checklist functionality
 
 ### 2. Test Configuration
 
@@ -91,11 +111,16 @@ npm test -- --testPathPattern=Login.test.js
 
 | File | Statements | Branches | Functions | Lines |
 |------|------------|----------|-----------|-------|
-| **All files** | **44.82%** | **58.62%** | **53.12%** | **45.08%** |
+| **All files** | **57.94%** | **64.65%** | **45.26%** | **58.77%** |
 | App.js | 8.33% | 13.63% | 25% | 8.43% |
-| Login.js | 100% | 100% | 100% | 100% |
-| Signup.js | 100% | 100% | 100% | 100% |
-| AuthContext.js | 45.71% | 37.5% | 50% | 45.71% |
+| EmailVerificationForm.js | 58.01% | 58.42% | 50% | 58.4% |
+| ErrorBoundary.js | 45.45% | 16.66% | 33.33% | 45.45% |
+| FormField.js | 100% | 77.77% | 100% | 100% |
+| Login.js | 58.1% | 63.15% | 38.46% | 60.56% |
+| PasswordStrengthIndicator.js | 100% | 100% | 100% | 100% |
+| Signup.js | 70.7% | 73.68% | 42.1% | 73.4% |
+| AuthContext.js | 38% | 21.42% | 33.33% | 38% |
+| validation.js | 84.52% | 80% | 100% | 84.52% |
 
 ## Key Testing Features
 

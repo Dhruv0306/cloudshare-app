@@ -3,6 +3,8 @@ import axios from 'axios';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import Signup from './components/Signup';
+import ErrorBoundary from './components/ErrorBoundary';
+import './components/ErrorBoundary.css';
 
 function FileManager() {
   const [files, setFiles] = useState([]);
@@ -204,9 +206,11 @@ function AuthWrapper() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AuthWrapper />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AuthWrapper />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

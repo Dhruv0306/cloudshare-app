@@ -61,6 +61,12 @@
         <appender-ref ref="CONSOLE"/>
     </logger>
 
+    <!-- Logger for email verification service -->
+    <logger name="com.cloud.computing.filesharingapp.service.EmailVerificationService" level="INFO" additivity="false">
+        <appender-ref ref="SECURITY_FILE"/>
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
     <!-- Logger for file operations -->
     <logger name="com.cloud.computing.filesharingapp.service.FileService" level="INFO" additivity="false">
         <appender-ref ref="FILE_OPS"/>

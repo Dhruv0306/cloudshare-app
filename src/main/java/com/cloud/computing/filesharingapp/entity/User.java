@@ -32,8 +32,18 @@ public class User {
     @Column(nullable = false)
     private LocalDateTime createdAt;
     
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+    
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private AccountStatus accountStatus = AccountStatus.PENDING;
+    
     @OneToMany(mappedBy = "owner", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<FileEntity> files;
+    
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<EmailVerification> emailVerifications;
     
     // Constructors
     public User() {
@@ -65,4 +75,13 @@ public class User {
     
     public List<FileEntity> getFiles() { return files; }
     public void setFiles(List<FileEntity> files) { this.files = files; }
+    
+    public boolean isEmailVerified() { return emailVerified; }
+    public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
+    
+    public AccountStatus getAccountStatus() { return accountStatus; }
+    public void setAccountStatus(AccountStatus accountStatus) { this.accountStatus = accountStatus; }
+    
+    public List<EmailVerification> getEmailVerifications() { return emailVerifications; }
+    public void setEmailVerifications(List<EmailVerification> emailVerifications) { this.emailVerifications = emailVerifications; }
 }

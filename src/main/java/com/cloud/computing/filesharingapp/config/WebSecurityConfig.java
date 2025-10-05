@@ -2,6 +2,8 @@ package com.cloud.computing.filesharingapp.config;
 
 import com.cloud.computing.filesharingapp.security.AuthEntryPointJwt;
 import com.cloud.computing.filesharingapp.security.AuthTokenFilter;
+import com.cloud.computing.filesharingapp.security.EmailVerificationFilter;
+import com.cloud.computing.filesharingapp.security.RateLimitingFilter;
 import com.cloud.computing.filesharingapp.security.UserDetailsServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -38,6 +40,16 @@ public class WebSecurityConfig {
     }
     
     @Bean
+    public EmailVerificationFilter emailVerificationFilter() {
+        return new EmailVerificationFilter();
+    }
+    
+    @Bean
+    public RateLimitingFilter rateLimitingFilter() {
+        return new RateLimitingFilter();
+    }
+    
+    @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
     }
@@ -54,14 +66,21 @@ public class WebSecurityConfig {
             .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> 
-                auth.requestMatchers("/api/auth/**").permitAll()
+                auth.requestMatchers("/api/auth/signin").permitAll()
+                    .requestMatchers("/api/auth/signup").permitAll()
+                    .requestMatchers("/api/auth/verify-email").permitAll()
+                    .requestMatchers("/api/auth/resend-verification").permitAll()
+                    .requestMatchers("/api/auth/check-password-strength").permitAll()
+                    .requestMatchers("/api/auth/user-email/**").permitAll()
                     .requestMatchers("/api/test/**").permitAll()
                     .requestMatchers("/h2-console/**").permitAll()
                     .anyRequest().authenticated()
             );
         
         // Authentication provider is automatically configured
+        http.addFilterBefore(rateLimitingFilter(), UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(emailVerificationFilter(), AuthTokenFilter.class);
         
         // For H2 Console
         http.headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()));

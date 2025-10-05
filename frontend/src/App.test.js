@@ -78,7 +78,7 @@ describe('App Component', () => {
     fireEvent.click(loginButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Please fill in all fields')).toBeInTheDocument();
+      expect(screen.getByText('Please correct the errors below')).toBeInTheDocument();
     });
   });
 });

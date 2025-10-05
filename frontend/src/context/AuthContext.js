@@ -69,12 +69,58 @@ export const AuthProvider = ({ children }) => {
     delete axios.defaults.headers.common['Authorization'];
   };
 
+  const verifyEmail = async (email, verificationCode) => {
+    try {
+      const response = await axios.post('/api/auth/verify-email', {
+        email,
+        verificationCode
+      });
+      
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Email verification failed' 
+      };
+    }
+  };
+
+  const resendVerificationCode = async (email) => {
+    try {
+      const response = await axios.post('/api/auth/resend-verification', {
+        email
+      });
+      
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Failed to resend verification code' 
+      };
+    }
+  };
+
+  const getUserEmail = async (username) => {
+    try {
+      const response = await axios.get(`/api/auth/user-email/${username}`);
+      return { success: true, email: response.data.email };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error.response?.data?.message || 'Failed to get user email' 
+      };
+    }
+  };
+
   const value = {
     currentUser,
     token,
     login,
     signup,
-    logout
+    logout,
+    verifyEmail,
+    resendVerificationCode,
+    getUserEmail
   };
 
   return (

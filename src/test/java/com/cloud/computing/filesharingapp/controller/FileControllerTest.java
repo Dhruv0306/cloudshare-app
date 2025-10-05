@@ -2,6 +2,7 @@ package com.cloud.computing.filesharingapp.controller;
 
 import com.cloud.computing.filesharingapp.entity.FileEntity;
 import com.cloud.computing.filesharingapp.entity.User;
+import com.cloud.computing.filesharingapp.entity.AccountStatus;
 import com.cloud.computing.filesharingapp.repository.FileRepository;
 import com.cloud.computing.filesharingapp.repository.UserRepository;
 import com.cloud.computing.filesharingapp.security.UserPrincipal;
@@ -59,6 +60,8 @@ class FileControllerTest {
 
         // Create test user
         testUser = new User("testuser", "test@example.com", passwordEncoder.encode("password123"));
+        testUser.setEmailVerified(true);
+        testUser.setAccountStatus(AccountStatus.ACTIVE);
         testUser = userRepository.save(testUser);
 
         // Create authentication

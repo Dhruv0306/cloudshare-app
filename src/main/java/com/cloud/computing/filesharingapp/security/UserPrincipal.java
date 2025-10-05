@@ -1,5 +1,6 @@
 package com.cloud.computing.filesharingapp.security;
 
+import com.cloud.computing.filesharingapp.entity.AccountStatus;
 import com.cloud.computing.filesharingapp.entity.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -12,12 +13,16 @@ public class UserPrincipal implements UserDetails {
     private String username;
     private String email;
     private String password;
+    private boolean emailVerified;
+    private AccountStatus accountStatus;
     
-    public UserPrincipal(Long id, String username, String email, String password) {
+    public UserPrincipal(Long id, String username, String email, String password, boolean emailVerified, AccountStatus accountStatus) {
         this.id = id;
         this.username = username;
         this.email = email;
         this.password = password;
+        this.emailVerified = emailVerified;
+        this.accountStatus = accountStatus;
     }
     
     public static UserPrincipal create(User user) {
@@ -25,7 +30,9 @@ public class UserPrincipal implements UserDetails {
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
-                user.getPassword()
+                user.getPassword(),
+                user.isEmailVerified(),
+                user.getAccountStatus()
         );
     }
     
@@ -35,6 +42,14 @@ public class UserPrincipal implements UserDetails {
     
     public String getEmail() {
         return email;
+    }
+    
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+    
+    public AccountStatus getAccountStatus() {
+        return accountStatus;
     }
     
     @Override
@@ -69,6 +84,7 @@ public class UserPrincipal implements UserDetails {
     
     @Override
     public boolean isEnabled() {
-        return true;
+        // Only allow login for verified users with ACTIVE status
+        return emailVerified && accountStatus == AccountStatus.ACTIVE;
     }
 }

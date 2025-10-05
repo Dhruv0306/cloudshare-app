@@ -5,11 +5,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
+@EnableScheduling
 public class FilesharingappApplication implements CommandLineRunner {
 
-	@Autowired
+	@Autowired(required = false)
 	private FileService fileService;
 
 	public static void main(String[] args) {
@@ -18,6 +20,8 @@ public class FilesharingappApplication implements CommandLineRunner {
 
 	@Override
 	public void run(String... args) throws Exception {
-		fileService.init();
+		if (fileService != null) {
+			fileService.init();
+		}
 	}
 }

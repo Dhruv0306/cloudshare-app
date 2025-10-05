@@ -32,7 +32,7 @@ describe('Login Component', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Please fill in all fields')).toBeInTheDocument();
+      expect(screen.getByText('Please correct the errors below')).toBeInTheDocument();
     });
   });
 

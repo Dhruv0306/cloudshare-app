@@ -1,13 +1,18 @@
 package com.cloud.computing.filesharingapp;
 
+import com.cloud.computing.filesharingapp.config.TestEmailConfig;
 import com.cloud.computing.filesharingapp.dto.LoginRequest;
 import com.cloud.computing.filesharingapp.dto.SignupRequest;
+import com.cloud.computing.filesharingapp.entity.User;
+import com.cloud.computing.filesharingapp.entity.AccountStatus;
+import com.cloud.computing.filesharingapp.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
@@ -25,12 +30,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureWebMvc
 @ActiveProfiles("test")
 @Transactional
+@Import(TestEmailConfig.class)
 class FilesharingappApplicationTests {
 
     @Autowired
     private WebApplicationContext context;
 
-
+    @Autowired
+    private UserRepository userRepository;
 
     private MockMvc mockMvc;
     private ObjectMapper objectMapper;
@@ -52,16 +59,23 @@ class FilesharingappApplicationTests {
     @Test
     void testCompleteUserJourney() throws Exception {
         // 1. Sign up a new user
-        SignupRequest signupRequest = new SignupRequest("journeyuser", "journey@example.com", "password123");
+        SignupRequest signupRequest = new SignupRequest("journeyuser", "journey@example.com", "Password123");
         
         mockMvc.perform(post("/api/auth/signup")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(signupRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("User registered successfully!"));
+                .andExpect(jsonPath("$.message").value("User registered successfully! Please check your email for verification code."));
 
-        // 2. Login with the user
-        LoginRequest loginRequest = new LoginRequest("journeyuser", "password123");
+        // 2. Manually verify the user (simulate email verification)
+        // In a real scenario, user would click email link, but for testing we'll verify directly
+        User user = userRepository.findByUsername("journeyuser").orElseThrow();
+        user.setEmailVerified(true);
+        user.setAccountStatus(AccountStatus.ACTIVE);
+        userRepository.save(user);
+
+        // 3. Login with the user
+        LoginRequest loginRequest = new LoginRequest("journeyuser", "Password123");
         
         MvcResult loginResult = mockMvc.perform(post("/api/auth/signin")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -74,7 +88,7 @@ class FilesharingappApplicationTests {
         String responseBody = loginResult.getResponse().getContentAsString();
         String token = objectMapper.readTree(responseBody).get("accessToken").asText();
 
-        // 3. Upload a file
+        // 4. Upload a file
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "journey-test.txt",

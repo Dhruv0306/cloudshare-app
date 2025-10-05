@@ -1,0 +1,165 @@
+.verification-info {
+  text-align: center;
+  margin-bottom: 25px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+}
+
+.verification-info p {
+  margin: 8px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.verification-info strong {
+  color: #333;
+  font-size: 16px;
+  display: block;
+  margin: 10px 0;
+  word-break: break-all;
+}
+
+.verification-input {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  letter-spacing: 8px;
+  font-family: 'Courier New', monospace;
+}
+
+.verification-input::placeholder {
+  letter-spacing: normal;
+  font-size: 16px;
+  font-weight: normal;
+  font-family: inherit;
+}
+
+.input-hint {
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  margin-top: 5px;
+}
+
+.verification-actions {
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+}
+
+.resend-section {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.resend-section p {
+  margin: 0 0 10px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.resend-btn {
+  font-weight: 500;
+}
+
+.resend-btn:disabled {
+  color: #999 !important;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.back-section {
+  text-align: center;
+}
+
+.verification-tips {
+  margin-top: 25px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-left: 4px solid #007bff;
+}
+
+.verification-tips h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 14px;
+}
+
+.verification-tips ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.verification-tips li {
+  color: #666;
+  font-size: 12px;
+  margin-bottom: 5px;
+  line-height: 1.4;
+}
+
+/* Loading states */
+.verification-input:disabled {
+  background-color: #f8f9fa;
+  color: #666;
+}
+
+/* Success state styling */
+.success {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.error {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* Responsive design */
+@media (max-width: 480px) {
+  .verification-input {
+    font-size: 20px;
+    letter-spacing: 6px;
+  }
+  
+  .verification-info {
+    padding: 15px;
+  }
+  
+  .verification-tips {
+    padding: 12px;
+  }
+  
+  .verification-tips li {
+    font-size: 11px;
+  }
+}
+
+/* Focus states for accessibility */
+.verification-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .verification-info {
+    border: 2px solid #333;
+  }
+  
+  .verification-tips {
+    border-left: 4px solid #000;
+  }
+}
