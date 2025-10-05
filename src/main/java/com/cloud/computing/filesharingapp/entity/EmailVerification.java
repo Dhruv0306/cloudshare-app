@@ -46,7 +46,7 @@ public class EmailVerification {
     // Constructors
     public EmailVerification() {
         this.createdAt = LocalDateTime.now();
-        this.expiresAt = LocalDateTime.now().plusMinutes(15); // 15 minutes expiry
+        this.expiresAt = createdAt.plusMinutes(15); // 15 minutes expiry
     }
     
     public EmailVerification(String email, String verificationCode, User user) {
@@ -54,7 +54,7 @@ public class EmailVerification {
         this.verificationCode = verificationCode;
         this.user = user;
         this.createdAt = LocalDateTime.now();
-        this.expiresAt = LocalDateTime.now().plusMinutes(15); // 15 minutes expiry
+        this.expiresAt = createdAt.plusMinutes(15); // 15 minutes expiry
     }
     
     // Getters and Setters

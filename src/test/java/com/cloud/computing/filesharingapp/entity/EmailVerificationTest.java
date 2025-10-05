@@ -27,16 +27,16 @@ class EmailVerificationTest {
         @DisplayName("Default constructor should initialize timestamps correctly")
         void testDefaultConstructor() {
             EmailVerification verification = new EmailVerification();
-            
+
             assertNotNull(verification);
             assertNotNull(verification.getCreatedAt());
             assertNotNull(verification.getExpiresAt());
             assertFalse(verification.isUsed());
-            
+
             // Verify that createdAt is set to current time (within 1 second tolerance)
             assertTrue(verification.getCreatedAt().isBefore(LocalDateTime.now().plusSeconds(1)));
             assertTrue(verification.getCreatedAt().isAfter(LocalDateTime.now().minusSeconds(1)));
-            
+
             // Verify that expiresAt is 15 minutes after createdAt
             LocalDateTime expectedExpiry = verification.getCreatedAt().plusMinutes(15);
             assertEquals(expectedExpiry, verification.getExpiresAt());
@@ -47,16 +47,16 @@ class EmailVerificationTest {
         void testParameterizedConstructor() {
             String email = "test@example.com";
             String code = "123456";
-            
+
             EmailVerification verification = new EmailVerification(email, code, testUser);
-            
+
             assertEquals(email, verification.getEmail());
             assertEquals(code, verification.getVerificationCode());
             assertEquals(testUser, verification.getUser());
             assertNotNull(verification.getCreatedAt());
             assertNotNull(verification.getExpiresAt());
             assertFalse(verification.isUsed());
-            
+
             // Verify timestamps are set correctly
             assertTrue(verification.getCreatedAt().isBefore(LocalDateTime.now().plusSeconds(1)));
             LocalDateTime expectedExpiry = verification.getCreatedAt().plusMinutes(15);
@@ -68,14 +68,33 @@ class EmailVerificationTest {
         void testParameterizedConstructorWithNullUser() {
             String email = "test@example.com";
             String code = "123456";
-            
+
             EmailVerification verification = new EmailVerification(email, code, null);
-            
+
             assertEquals(email, verification.getEmail());
             assertEquals(code, verification.getVerificationCode());
             assertNull(verification.getUser());
             assertNotNull(verification.getCreatedAt());
             assertNotNull(verification.getExpiresAt());
+        }
+
+        @Test
+        @DisplayName("Default constructor should ensure consistent timestamp calculation")
+        void testDefaultConstructorTimestampConsistency() {
+            EmailVerification verification = new EmailVerification();
+
+            // The key improvement: expiresAt should be calculated from createdAt, not from
+            // a new LocalDateTime.now()
+            // This ensures no timing discrepancy between the two timestamps
+            LocalDateTime createdAt = verification.getCreatedAt();
+            LocalDateTime expiresAt = verification.getExpiresAt();
+
+            // Verify exact 15-minute difference
+            assertEquals(createdAt.plusMinutes(15), expiresAt);
+
+            // Verify that the difference is exactly 15 minutes (900 seconds)
+            long secondsDifference = java.time.Duration.between(createdAt, expiresAt).getSeconds();
+            assertEquals(900, secondsDifference);
         }
     }
 
@@ -127,10 +146,10 @@ class EmailVerificationTest {
         @DisplayName("Used getter and setter should work correctly")
         void testUsedGetterSetter() {
             assertFalse(emailVerification.isUsed()); // Default value
-            
+
             emailVerification.setUsed(true);
             assertTrue(emailVerification.isUsed());
-            
+
             emailVerification.setUsed(false);
             assertFalse(emailVerification.isUsed());
         }
@@ -140,7 +159,7 @@ class EmailVerificationTest {
         void testUserGetterSetter() {
             emailVerification.setUser(testUser);
             assertEquals(testUser, emailVerification.getUser());
-            
+
             emailVerification.setUser(null);
             assertNull(emailVerification.getUser());
         }
@@ -155,7 +174,7 @@ class EmailVerificationTest {
         void testIsExpiredReturnsFalseForNonExpired() {
             // Set expiry to 1 hour in the future
             emailVerification.setExpiresAt(LocalDateTime.now().plusHours(1));
-            
+
             assertFalse(emailVerification.isExpired());
         }
 
@@ -164,7 +183,7 @@ class EmailVerificationTest {
         void testIsExpiredReturnsTrueForExpired() {
             // Set expiry to 1 hour in the past
             emailVerification.setExpiresAt(LocalDateTime.now().minusHours(1));
-            
+
             assertTrue(emailVerification.isExpired());
         }
 
@@ -173,7 +192,7 @@ class EmailVerificationTest {
         void testIsExpiredReturnsTrueForExactlyNow() {
             // Set expiry to current time (should be considered expired)
             emailVerification.setExpiresAt(LocalDateTime.now().minusNanos(1));
-            
+
             assertTrue(emailVerification.isExpired());
         }
 
@@ -182,7 +201,7 @@ class EmailVerificationTest {
         void testIsExpiredHandlesRecentExpiry() {
             // Set expiry to 1 second ago
             emailVerification.setExpiresAt(LocalDateTime.now().minusSeconds(1));
-            
+
             assertTrue(emailVerification.isExpired());
         }
 
@@ -191,7 +210,7 @@ class EmailVerificationTest {
         void testIsExpiredHandlesNearFutureExpiry() {
             // Set expiry to 1 second in the future
             emailVerification.setExpiresAt(LocalDateTime.now().plusSeconds(1));
-            
+
             assertFalse(emailVerification.isExpired());
         }
     }
@@ -205,21 +224,21 @@ class EmailVerificationTest {
         void testCompleteVerificationLifecycle() {
             String email = "user@example.com";
             String code = "987654";
-            
+
             // Create verification
             EmailVerification verification = new EmailVerification(email, code, testUser);
-            
+
             // Verify initial state
             assertFalse(verification.isUsed());
             assertFalse(verification.isExpired());
             assertEquals(email, verification.getEmail());
             assertEquals(code, verification.getVerificationCode());
             assertEquals(testUser, verification.getUser());
-            
+
             // Mark as used
             verification.setUsed(true);
             assertTrue(verification.isUsed());
-            
+
             // Should still not be expired if within 15 minutes
             assertFalse(verification.isExpired());
         }
@@ -228,10 +247,10 @@ class EmailVerificationTest {
         @DisplayName("Verification should expire after set time")
         void testVerificationExpiresAfterSetTime() {
             EmailVerification verification = new EmailVerification("test@example.com", "123456", testUser);
-            
+
             // Manually set expiry to past
             verification.setExpiresAt(LocalDateTime.now().minusMinutes(1));
-            
+
             assertTrue(verification.isExpired());
             // Used status should be independent of expiry
             assertFalse(verification.isUsed());
@@ -242,17 +261,17 @@ class EmailVerificationTest {
         void testMultipleVerificationsIndependence() {
             EmailVerification verification1 = new EmailVerification("test@example.com", "111111", testUser);
             EmailVerification verification2 = new EmailVerification("test@example.com", "222222", testUser);
-            
+
             // Mark first as used
             verification1.setUsed(true);
-            
+
             // Second should remain unused
             assertTrue(verification1.isUsed());
             assertFalse(verification2.isUsed());
-            
+
             // Both should have different codes
             assertNotEquals(verification1.getVerificationCode(), verification2.getVerificationCode());
-            
+
             // Both should reference same user
             assertEquals(verification1.getUser(), verification2.getUser());
         }
@@ -281,7 +300,7 @@ class EmailVerificationTest {
         void testNullTimestamps() {
             emailVerification.setCreatedAt(null);
             emailVerification.setExpiresAt(null);
-            
+
             assertNull(emailVerification.getCreatedAt());
             assertNull(emailVerification.getExpiresAt());
         }
@@ -290,7 +309,7 @@ class EmailVerificationTest {
         @DisplayName("isExpired should handle null expiresAt")
         void testIsExpiredWithNullExpiresAt() {
             emailVerification.setExpiresAt(null);
-            
+
             // This should throw NullPointerException as per current implementation
             assertThrows(NullPointerException.class, () -> {
                 emailVerification.isExpired();
@@ -302,7 +321,7 @@ class EmailVerificationTest {
         void testEmptyStringValues() {
             emailVerification.setEmail("");
             emailVerification.setVerificationCode("");
-            
+
             assertEquals("", emailVerification.getEmail());
             assertEquals("", emailVerification.getVerificationCode());
         }
