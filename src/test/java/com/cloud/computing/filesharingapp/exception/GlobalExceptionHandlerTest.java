@@ -120,6 +120,7 @@ class GlobalExceptionHandlerTest {
     void handleValidationExceptions_WithNullErrorMessage_ShouldHandleGracefully() {
         // Arrange
         MethodArgumentNotValidException exception = mock(MethodArgumentNotValidException.class);
+        @SuppressWarnings("null")
         FieldError fieldError = new FieldError("user", "email", (String) null);
 
         when(exception.getBindingResult()).thenReturn(bindingResult);
