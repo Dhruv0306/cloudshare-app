@@ -49,7 +49,7 @@ const PasswordStrengthIndicator = ({ password }) => {
     }
 
     // Special character check
-    if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
       score += 20;
       requirements.push('✓ Contains special characters');
     } else {
@@ -70,7 +70,7 @@ const PasswordStrengthIndicator = ({ password }) => {
       level = 'WEAK';
       color = '#dc3545'; // Red
     } else if (/[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password)) {
-      if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password) && password.length >= 12) {
+      if (/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password) && password.length >= 12) {
         // Requirement 2.4: lowercase, uppercase, numbers, special chars, 12+ length = Strong
         level = 'STRONG';
         color = '#28a745'; // Green

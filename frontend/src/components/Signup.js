@@ -32,7 +32,7 @@ function Signup({ onSwitchToLogin }) {
     const hasLower = /[a-z]/.test(password);
     const hasUpper = /[A-Z]/.test(password);
     const hasNumber = /\d/.test(password);
-    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
     
     if (hasLower && hasUpper && hasNumber) {
       if (hasSpecial && password.length >= 12) {
