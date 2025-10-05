@@ -18,7 +18,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Comprehensive unit tests for VerifyEmailRequest DTO
- * Tests constructor behavior, getters/setters, validation constraints, and edge cases
+ * Tests constructor behavior, getters/setters, validation constraints, and edge
+ * cases
  * Updated to reflect field name change from 'code' to 'verificationCode'
  */
 @DisplayName("VerifyEmailRequest DTO Tests")
@@ -171,7 +172,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Valid 6-digit code should not have validation errors: " + validCode);
     }
 
@@ -239,7 +240,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Invalid code should have validation errors: " + invalidCode);
     }
 
@@ -252,7 +253,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Null or empty code should have validation errors");
     }
 
@@ -278,7 +279,7 @@ class VerifyEmailRequestTest {
 
         assertTrue(violations.size() >= 2, "Should have at least 2 validation errors");
         assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("email")));
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")));
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")));
     }
 
     @Test
@@ -302,7 +303,7 @@ class VerifyEmailRequestTest {
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
         ConstraintViolation<VerifyEmailRequest> codeViolation = violations.stream()
-                .filter(v -> v.getPropertyPath().toString().equals("code"))
+                .filter(v -> v.getPropertyPath().toString().equals("verificationCode"))
                 .findFirst()
                 .orElse(null);
 
@@ -353,7 +354,7 @@ class VerifyEmailRequestTest {
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
         ConstraintViolation<VerifyEmailRequest> codeViolation = violations.stream()
-                .filter(v -> v.getPropertyPath().toString().equals("code"))
+                .filter(v -> v.getPropertyPath().toString().equals("verificationCode"))
                 .findFirst()
                 .orElse(null);
 
@@ -394,7 +395,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Code with leading zeros should be valid");
     }
 
@@ -449,7 +450,7 @@ class VerifyEmailRequestTest {
 
         // Validation should fail for code with spaces
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")));
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")));
     }
 
     // Strict Regex Pattern Tests (for ^\\d{6}$ pattern)
@@ -461,7 +462,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Code with prefix should be rejected by strict regex");
     }
 
@@ -473,7 +474,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Code with suffix should be rejected by strict regex");
     }
 
@@ -485,7 +486,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Code with 6 digits embedded in longer string should be rejected");
     }
 
@@ -497,7 +498,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Code with surrounding whitespace should be rejected");
     }
 
@@ -509,7 +510,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Code with surrounding tabs should be rejected");
     }
 
@@ -521,7 +522,7 @@ class VerifyEmailRequestTest {
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                 "Code with surrounding newlines should be rejected");
     }
 
@@ -540,7 +541,7 @@ class VerifyEmailRequestTest {
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-            assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("code")),
+            assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                     "Valid 6-digit code should pass validation: " + validCode);
         }
     }
@@ -566,7 +567,7 @@ class VerifyEmailRequestTest {
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                     "Invalid code should be rejected by strict regex: " + invalidCode);
         }
     }
@@ -625,7 +626,7 @@ class VerifyEmailRequestTest {
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                     "Unicode digits should be rejected: " + unicodeCode);
         }
     }
@@ -648,7 +649,7 @@ class VerifyEmailRequestTest {
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                     "Mixed ASCII/non-ASCII code should be rejected: " + mixedCode);
         }
     }
@@ -679,7 +680,7 @@ class VerifyEmailRequestTest {
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                     "Code with control characters should be rejected");
         }
     }
@@ -703,7 +704,7 @@ class VerifyEmailRequestTest {
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-            assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("code")),
+            assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                     "Valid systematic 6-digit code should pass: " + validCode);
         }
     }
@@ -736,7 +737,7 @@ class VerifyEmailRequestTest {
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
-            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("verificationCode")),
                     "Code should be rejected due to regex anchors: '" + anchorTestCode + "'");
         }
     }
