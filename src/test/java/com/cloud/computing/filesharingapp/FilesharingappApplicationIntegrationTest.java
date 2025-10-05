@@ -1,30 +1,43 @@
 package com.cloud.computing.filesharingapp;
 
+import com.cloud.computing.filesharingapp.service.FileService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 
-/**
- * Integration tests for FilesharingappApplication startup behavior.
- * Tests the application context loading and graceful handling of dependencies.
- */
+import java.nio.file.Path;
+
+import static org.mockito.Mockito.verify;
+
 @SpringBootTest
-@ActiveProfiles("test")
+@TestPropertySource(properties = {
+    "logging.file.path=${java.io.tmpdir}/test-logs",
+    "spring.datasource.url=jdbc:h2:mem:testdb",
+    "spring.jpa.hibernate.ddl-auto=create-drop",
+    "JWT_SECRET=testSecretKey123456789012345678901234567890",
+    "app.jwtSecret=testSecretKey123456789012345678901234567890"
+})
 class FilesharingappApplicationIntegrationTest {
 
+    @MockitoBean
+    private FileService fileService;
+
+    @TempDir
+    Path tempDir;
+
     @Test
-    void contextLoadsSuccessfully() {
-        // Given: Application context is loaded
-        // When: Application starts up
-        // Then: Context should load without errors
-        // This test passes if the Spring context loads successfully
+    void contextLoads() {
+        // This test ensures that the Spring context loads successfully
+        // with all the new changes in FilesharingappApplication
     }
 
     @Test
-    void applicationHandlesOptionalDependenciesGracefully() {
-        // This test verifies that the application can handle optional dependencies
-        // The @Autowired(required = false) annotation should prevent startup failures
-        // when FileService is not available
-        // Test passes if context loads without throwing exceptions
+    void testApplicationStartupCallsFileServiceInit() throws Exception {
+        // Given - Spring Boot application context is loaded
+        
+        // Then - FileService.init() should have been called during startup
+        verify(fileService).init();
     }
 }

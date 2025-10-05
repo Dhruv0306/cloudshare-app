@@ -16,18 +16,11 @@ import java.util.Map;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-    
-    /**
-     * Handle validation errors from @Valid annotations
-     */
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ValidationErrorResponse> handleValidationExceptions(
-            MethodArgumentNotValidException ex, WebRequest request) {
-        
-        logger.warn("Validation error occurred: {}", ex.getMessage());
-        
+    public ResponseEntity<?> handleValidationExceptions(MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
             String fieldName = ((FieldError) error).getField();
@@ -35,74 +28,53 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
         
-        ValidationErrorResponse errorResponse = new ValidationErrorResponse(
-            "Validation failed", 
-            errors
-        );
+        logger.warn("Validation errors: {}", errors);
         
-        return ResponseEntity.badRequest().body(errorResponse);
+        // Return the first error message for simplicity
+        String firstError = errors.values().iterator().next();
+        return ResponseEntity.badRequest()
+                .body(new MessageResponse("Validation Error: " + firstError));
     }
-    
-    /**
-     * Handle custom business logic exceptions
-     */
+
     @ExceptionHandler(EmailVerificationException.class)
-    public ResponseEntity<MessageResponse> handleEmailVerificationException(
-            EmailVerificationException ex, WebRequest request) {
-        
+    public ResponseEntity<?> handleEmailVerificationException(EmailVerificationException ex) {
         logger.warn("Email verification error: {}", ex.getMessage());
-        return ResponseEntity.badRequest().body(new MessageResponse("Error: " + ex.getMessage()));
+        return ResponseEntity.badRequest()
+                .body(new MessageResponse("Error: " + ex.getMessage()));
     }
-    
-    /**
-     * Handle rate limiting exceptions
-     */
+
     @ExceptionHandler(RateLimitExceededException.class)
-    public ResponseEntity<MessageResponse> handleRateLimitExceededException(
-            RateLimitExceededException ex, WebRequest request) {
-        
+    public ResponseEntity<?> handleRateLimitException(RateLimitExceededException ex) {
         logger.warn("Rate limit exceeded: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new MessageResponse("Error: " + ex.getMessage()));
     }
-    
-    /**
-     * Handle password validation exceptions
-     */
+
     @ExceptionHandler(PasswordValidationException.class)
-    public ResponseEntity<MessageResponse> handlePasswordValidationException(
-            PasswordValidationException ex, WebRequest request) {
-        
+    public ResponseEntity<?> handlePasswordValidationException(PasswordValidationException ex) {
         logger.warn("Password validation error: {}", ex.getMessage());
-        return ResponseEntity.badRequest().body(new MessageResponse("Error: " + ex.getMessage()));
+        return ResponseEntity.badRequest()
+                .body(new MessageResponse("Error: " + ex.getMessage()));
     }
-    
-    /**
-     * Handle generic runtime exceptions (excluding Spring Security exceptions)
-     */
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<MessageResponse> handleRuntimeException(
-            RuntimeException ex, WebRequest request) {
-        
-        // Let Spring Security handle authentication exceptions
-        if (ex instanceof org.springframework.security.core.AuthenticationException) {
-            throw ex;
-        }
-        
-        logger.error("Runtime exception occurred: {}", ex.getMessage(), ex);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new MessageResponse("Error: An unexpected error occurred. Please try again."));
+
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    public ResponseEntity<?> handleBadCredentialsException(org.springframework.security.authentication.BadCredentialsException ex) {
+        logger.warn("Authentication failed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new MessageResponse("Error: Invalid username or password"));
     }
-    
-    /**
-     * Handle all other exceptions
-     */
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<?> handleAuthenticationException(org.springframework.security.core.AuthenticationException ex) {
+        logger.warn("Authentication error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new MessageResponse("Error: Authentication failed"));
+    }
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<MessageResponse> handleGlobalException(
-            Exception ex, WebRequest request) {
-        
-        logger.error("Unexpected exception occurred: {}", ex.getMessage(), ex);
+    public ResponseEntity<?> handleGenericException(Exception ex, WebRequest request) {
+        logger.error("Unexpected error: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new MessageResponse("Error: An unexpected error occurred. Please try again."));
+                .body(new MessageResponse("An unexpected error occurred. Please try again later."));
     }
 }

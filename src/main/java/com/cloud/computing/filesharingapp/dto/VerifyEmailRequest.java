@@ -11,20 +11,20 @@ public class VerifyEmailRequest {
     
     @NotBlank(message = "Verification code is required")
     @Pattern(regexp = "^\\d{6}$", message = "Verification code must be exactly 6 digits")
-    private String code;
+    private String verificationCode;
     
     // Constructors
     public VerifyEmailRequest() {}
     
-    public VerifyEmailRequest(String email, String code) {
+    public VerifyEmailRequest(String email, String verificationCode) {
         this.email = email;
-        this.code = code;
+        this.verificationCode = verificationCode;
     }
     
     // Getters and Setters
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
     
-    public String getCode() { return code; }
-    public void setCode(String code) { this.code = code; }
+    public String getVerificationCode() { return verificationCode; }
+    public void setVerificationCode(String verificationCode) { this.verificationCode = verificationCode; }
 }

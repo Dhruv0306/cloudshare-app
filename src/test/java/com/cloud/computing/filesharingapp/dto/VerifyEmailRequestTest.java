@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Comprehensive unit tests for VerifyEmailRequest DTO
- * Tests constructor behavior, getters/setters, validation constraints, and edge
- * cases
+ * Tests constructor behavior, getters/setters, validation constraints, and edge cases
+ * Updated to reflect field name change from 'code' to 'verificationCode'
  */
 @DisplayName("VerifyEmailRequest DTO Tests")
 class VerifyEmailRequestTest {
@@ -42,20 +42,20 @@ class VerifyEmailRequestTest {
 
         assertNotNull(request);
         assertNull(request.getEmail());
-        assertNull(request.getCode());
+        assertNull(request.getVerificationCode());
     }
 
     @Test
     @DisplayName("Should create instance with parameterized constructor")
     void shouldCreateInstanceWithParameterizedConstructor() {
         String email = "test@example.com";
-        String code = "123456";
+        String verificationCode = "123456";
 
-        VerifyEmailRequest request = new VerifyEmailRequest(email, code);
+        VerifyEmailRequest request = new VerifyEmailRequest(email, verificationCode);
 
         assertNotNull(request);
         assertEquals(email, request.getEmail());
-        assertEquals(code, request.getCode());
+        assertEquals(verificationCode, request.getVerificationCode());
     }
 
     @Test
@@ -65,7 +65,7 @@ class VerifyEmailRequestTest {
 
         assertNotNull(request);
         assertNull(request.getEmail());
-        assertNull(request.getCode());
+        assertNull(request.getVerificationCode());
     }
 
     // Getter and Setter Tests
@@ -79,10 +79,10 @@ class VerifyEmailRequestTest {
 
     @Test
     @DisplayName("Should set and get code correctly")
-    void shouldSetAndGetCodeCorrectly() {
+    void shouldSetAndgetVerificationCodeCorrectly() {
         String code = "654321";
-        request.setCode(code);
-        assertEquals(code, request.getCode());
+        request.setVerificationCode(code);
+        assertEquals(code, request.getVerificationCode());
     }
 
     @Test
@@ -95,8 +95,8 @@ class VerifyEmailRequestTest {
     @Test
     @DisplayName("Should handle null code")
     void shouldHandleNullCode() {
-        request.setCode(null);
-        assertNull(request.getCode());
+        request.setVerificationCode(null);
+        assertNull(request.getVerificationCode());
     }
 
     // Email Validation Tests
@@ -112,7 +112,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should accept valid email formats")
     void shouldAcceptValidEmailFormats(String validEmail) {
         request.setEmail(validEmail);
-        request.setCode("123456");
+        request.setVerificationCode("123456");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -134,7 +134,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject invalid email formats")
     void shouldRejectInvalidEmailFormats(String invalidEmail) {
         request.setEmail(invalidEmail);
-        request.setCode("123456");
+        request.setVerificationCode("123456");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -147,7 +147,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject null and empty email")
     void shouldRejectNullAndEmptyEmail(String email) {
         request.setEmail(email);
-        request.setCode("123456");
+        request.setVerificationCode("123456");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -167,7 +167,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should accept valid 6-digit codes")
     void shouldAcceptValid6DigitCodes(String validCode) {
         request.setEmail("test@example.com");
-        request.setCode(validCode);
+        request.setVerificationCode(validCode);
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -235,7 +235,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject invalid code formats")
     void shouldRejectInvalidCodeFormats(String invalidCode) {
         request.setEmail("test@example.com");
-        request.setCode(invalidCode);
+        request.setVerificationCode(invalidCode);
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -248,7 +248,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject null and empty code")
     void shouldRejectNullAndEmptyCode(String code) {
         request.setEmail("test@example.com");
-        request.setCode(code);
+        request.setVerificationCode(code);
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -261,7 +261,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should pass validation with valid email and code")
     void shouldPassValidationWithValidEmailAndCode() {
         request.setEmail("user@example.com");
-        request.setCode("123456");
+        request.setVerificationCode("123456");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -272,7 +272,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should fail validation with both invalid email and code")
     void shouldFailValidationWithBothInvalidEmailAndCode() {
         request.setEmail("invalid-email");
-        request.setCode("invalid-code");
+        request.setVerificationCode("invalid-code");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -285,7 +285,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should fail validation with null values")
     void shouldFailValidationWithNullValues() {
         request.setEmail(null);
-        request.setCode(null);
+        request.setVerificationCode(null);
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -297,7 +297,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should provide correct validation message for invalid code pattern")
     void shouldProvideCorrectValidationMessageForInvalidCodePattern() {
         request.setEmail("test@example.com");
-        request.setCode("12345"); // Invalid: only 5 digits
+        request.setVerificationCode("12345"); // Invalid: only 5 digits
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -314,7 +314,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should provide correct validation message for blank email")
     void shouldProvideCorrectValidationMessageForBlankEmail() {
         request.setEmail("");
-        request.setCode("123456");
+        request.setVerificationCode("123456");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -331,7 +331,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should provide correct validation message for invalid email format")
     void shouldProvideCorrectValidationMessageForInvalidEmailFormat() {
         request.setEmail("invalid-email");
-        request.setCode("123456");
+        request.setVerificationCode("123456");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -348,7 +348,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should provide correct validation message for blank code")
     void shouldProvideCorrectValidationMessageForBlankCode() {
         request.setEmail("test@example.com");
-        request.setCode("");
+        request.setVerificationCode("");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -367,7 +367,7 @@ class VerifyEmailRequestTest {
     void shouldHandleVeryLongEmailAddresses() {
         String longEmail = "a".repeat(50) + "@" + "b".repeat(50) + ".com";
         request.setEmail(longEmail);
-        request.setCode("123456");
+        request.setVerificationCode("123456");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -379,7 +379,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should handle email with special characters")
     void shouldHandleEmailWithSpecialCharacters() {
         request.setEmail("user+test@example-domain.co.uk");
-        request.setCode("123456");
+        request.setVerificationCode("123456");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -390,7 +390,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should handle code with leading zeros")
     void shouldHandleCodeWithLeadingZeros() {
         request.setEmail("test@example.com");
-        request.setCode("000123");
+        request.setVerificationCode("000123");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -406,31 +406,31 @@ class VerifyEmailRequestTest {
         String code = "123456";
 
         request.setEmail(email);
-        request.setCode(code);
+        request.setVerificationCode(code);
 
         // Values should remain unchanged
         assertEquals(email, request.getEmail());
-        assertEquals(code, request.getCode());
+        assertEquals(code, request.getVerificationCode());
 
         // Setting new values should update correctly
         String newEmail = "new@example.com";
         String newCode = "654321";
 
         request.setEmail(newEmail);
-        request.setCode(newCode);
+        request.setVerificationCode(newCode);
 
         assertEquals(newEmail, request.getEmail());
-        assertEquals(newCode, request.getCode());
+        assertEquals(newCode, request.getVerificationCode());
     }
 
     @Test
     @DisplayName("Should handle empty string values")
     void shouldHandleEmptyStringValues() {
         request.setEmail("");
-        request.setCode("");
+        request.setVerificationCode("");
 
         assertEquals("", request.getEmail());
-        assertEquals("", request.getCode());
+        assertEquals("", request.getVerificationCode());
 
         // Empty strings should fail validation
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
@@ -441,11 +441,11 @@ class VerifyEmailRequestTest {
     @DisplayName("Should handle whitespace in fields")
     void shouldHandleWhitespaceInFields() {
         request.setEmail("  test@example.com  ");
-        request.setCode("  123456  ");
+        request.setVerificationCode("  123456  ");
 
         // Values should be stored as-is (trimming is typically done at service layer)
         assertEquals("  test@example.com  ", request.getEmail());
-        assertEquals("  123456  ", request.getCode());
+        assertEquals("  123456  ", request.getVerificationCode());
 
         // Validation should fail for code with spaces
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
@@ -457,7 +457,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject code with 6 digits but additional characters at start")
     void shouldRejectCodeWith6DigitsButAdditionalCharactersAtStart() {
         request.setEmail("test@example.com");
-        request.setCode("a123456");
+        request.setVerificationCode("a123456");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -469,7 +469,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject code with 6 digits but additional characters at end")
     void shouldRejectCodeWith6DigitsButAdditionalCharactersAtEnd() {
         request.setEmail("test@example.com");
-        request.setCode("123456a");
+        request.setVerificationCode("123456a");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -481,7 +481,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject code with 6 digits embedded in longer string")
     void shouldRejectCodeWith6DigitsEmbeddedInLongerString() {
         request.setEmail("test@example.com");
-        request.setCode("abc123456def");
+        request.setVerificationCode("abc123456def");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -493,7 +493,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject code with whitespace around 6 digits")
     void shouldRejectCodeWithWhitespaceAround6Digits() {
         request.setEmail("test@example.com");
-        request.setCode(" 123456 ");
+        request.setVerificationCode(" 123456 ");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -505,7 +505,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject code with tab characters around 6 digits")
     void shouldRejectCodeWithTabCharactersAround6Digits() {
         request.setEmail("test@example.com");
-        request.setCode("\t123456\t");
+        request.setVerificationCode("\t123456\t");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -517,7 +517,7 @@ class VerifyEmailRequestTest {
     @DisplayName("Should reject code with newline characters around 6 digits")
     void shouldRejectCodeWithNewlineCharactersAround6Digits() {
         request.setEmail("test@example.com");
-        request.setCode("\n123456\n");
+        request.setVerificationCode("\n123456\n");
 
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -536,7 +536,7 @@ class VerifyEmailRequestTest {
 
         for (String validCode : validCodes) {
             request.setEmail("test@example.com");
-            request.setCode(validCode);
+            request.setVerificationCode(validCode);
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -562,7 +562,7 @@ class VerifyEmailRequestTest {
 
         for (String invalidCode : invalidCodes) {
             request.setEmail("test@example.com");
-            request.setCode(invalidCode);
+            request.setVerificationCode(invalidCode);
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -578,7 +578,7 @@ class VerifyEmailRequestTest {
         // Simulate typical controller usage
         VerifyEmailRequest request = new VerifyEmailRequest();
         request.setEmail("user@company.com");
-        request.setCode("987654");
+        request.setVerificationCode("987654");
 
         // Validate the request
         Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
@@ -588,7 +588,7 @@ class VerifyEmailRequestTest {
 
         // Should have correct values
         assertEquals("user@company.com", request.getEmail());
-        assertEquals("987654", request.getCode());
+        assertEquals("987654", request.getVerificationCode());
     }
 
     @Test
@@ -605,7 +605,7 @@ class VerifyEmailRequestTest {
 
         // Should have correct values
         assertEquals("admin@system.com", request.getEmail());
-        assertEquals("555555", request.getCode());
+        assertEquals("555555", request.getVerificationCode());
     }
 
     // Additional Edge Cases for Strict Regex
@@ -621,7 +621,7 @@ class VerifyEmailRequestTest {
 
         for (String unicodeCode : unicodeCodes) {
             request.setEmail("test@example.com");
-            request.setCode(unicodeCode);
+            request.setVerificationCode(unicodeCode);
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -644,7 +644,7 @@ class VerifyEmailRequestTest {
 
         for (String mixedCode : mixedCodes) {
             request.setEmail("test@example.com");
-            request.setCode(mixedCode);
+            request.setVerificationCode(mixedCode);
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -675,7 +675,7 @@ class VerifyEmailRequestTest {
 
         for (String controlCharCode : controlCharCodes) {
             request.setEmail("test@example.com");
-            request.setCode(controlCharCode);
+            request.setVerificationCode(controlCharCode);
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -699,7 +699,7 @@ class VerifyEmailRequestTest {
 
         for (String validCode : systematicCodes) {
             request.setEmail("test@example.com");
-            request.setCode(validCode);
+            request.setVerificationCode(validCode);
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
@@ -732,7 +732,7 @@ class VerifyEmailRequestTest {
 
         for (String anchorTestCode : anchorTestCodes) {
             request.setEmail("test@example.com");
-            request.setCode(anchorTestCode);
+            request.setVerificationCode(anchorTestCode);
 
             Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
 
