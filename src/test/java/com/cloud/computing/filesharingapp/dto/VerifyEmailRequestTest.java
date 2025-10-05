@@ -185,7 +185,52 @@ class VerifyEmailRequestTest {
             "12-456", // contains hyphen
             "123.456", // contains dot
             "123456a", // 6 digits + letter
-            "a123456" // letter + 6 digits
+            "a123456", // letter + 6 digits
+            "123456789", // 9 digits
+            "1", // single digit
+            "12", // 2 digits
+            "123", // 3 digits
+            "1234", // 4 digits
+            "12345678", // 8 digits
+            "prefix123456", // 6 digits with prefix
+            "123456suffix", // 6 digits with suffix
+            "pre123456suf", // 6 digits with prefix and suffix
+            "123-456", // 6 digits with hyphen
+            "123 456", // 6 digits with space
+            "123.456", // 6 digits with dot
+            "123_456", // 6 digits with underscore
+            "123/456", // 6 digits with slash
+            "123\\456", // 6 digits with backslash
+            "123+456", // 6 digits with plus
+            "123*456", // 6 digits with asterisk
+            "123#456", // 6 digits with hash
+            "123@456", // 6 digits with at symbol
+            "123$456", // 6 digits with dollar
+            "123%456", // 6 digits with percent
+            "123^456", // 6 digits with caret
+            "123&456", // 6 digits with ampersand
+            "123(456)", // 6 digits with parentheses
+            "[123456]", // 6 digits with brackets
+            "{123456}", // 6 digits with braces
+            "\"123456\"", // 6 digits with quotes
+            "'123456'", // 6 digits with single quotes
+            "`123456`", // 6 digits with backticks
+            "~123456", // 6 digits with tilde
+            "!123456", // 6 digits with exclamation
+            "?123456", // 6 digits with question mark
+            ":123456", // 6 digits with colon
+            ";123456", // 6 digits with semicolon
+            ",123456", // 6 digits with comma
+            ".123456", // 6 digits with leading dot
+            "123456.", // 6 digits with trailing dot
+            " 123456", // 6 digits with leading space
+            "123456 ", // 6 digits with trailing space
+            "\t123456", // 6 digits with leading tab
+            "123456\t", // 6 digits with trailing tab
+            "\n123456", // 6 digits with leading newline
+            "123456\n", // 6 digits with trailing newline
+            "\r123456", // 6 digits with leading carriage return
+            "123456\r" // 6 digits with trailing carriage return
     })
     @DisplayName("Should reject invalid code formats")
     void shouldRejectInvalidCodeFormats(String invalidCode) {
@@ -407,6 +452,125 @@ class VerifyEmailRequestTest {
         assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")));
     }
 
+    // Strict Regex Pattern Tests (for ^\\d{6}$ pattern)
+    @Test
+    @DisplayName("Should reject code with 6 digits but additional characters at start")
+    void shouldRejectCodeWith6DigitsButAdditionalCharactersAtStart() {
+        request.setEmail("test@example.com");
+        request.setCode("a123456");
+
+        Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                "Code with prefix should be rejected by strict regex");
+    }
+
+    @Test
+    @DisplayName("Should reject code with 6 digits but additional characters at end")
+    void shouldRejectCodeWith6DigitsButAdditionalCharactersAtEnd() {
+        request.setEmail("test@example.com");
+        request.setCode("123456a");
+
+        Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                "Code with suffix should be rejected by strict regex");
+    }
+
+    @Test
+    @DisplayName("Should reject code with 6 digits embedded in longer string")
+    void shouldRejectCodeWith6DigitsEmbeddedInLongerString() {
+        request.setEmail("test@example.com");
+        request.setCode("abc123456def");
+
+        Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                "Code with 6 digits embedded in longer string should be rejected");
+    }
+
+    @Test
+    @DisplayName("Should reject code with whitespace around 6 digits")
+    void shouldRejectCodeWithWhitespaceAround6Digits() {
+        request.setEmail("test@example.com");
+        request.setCode(" 123456 ");
+
+        Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                "Code with surrounding whitespace should be rejected");
+    }
+
+    @Test
+    @DisplayName("Should reject code with tab characters around 6 digits")
+    void shouldRejectCodeWithTabCharactersAround6Digits() {
+        request.setEmail("test@example.com");
+        request.setCode("\t123456\t");
+
+        Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                "Code with surrounding tabs should be rejected");
+    }
+
+    @Test
+    @DisplayName("Should reject code with newline characters around 6 digits")
+    void shouldRejectCodeWithNewlineCharactersAround6Digits() {
+        request.setEmail("test@example.com");
+        request.setCode("\n123456\n");
+
+        Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                "Code with surrounding newlines should be rejected");
+    }
+
+    @Test
+    @DisplayName("Should accept exactly 6 digits with no additional characters")
+    void shouldAcceptExactly6DigitsWithNoAdditionalCharacters() {
+        String[] validCodes = {
+                "000000", "111111", "222222", "333333", "444444", "555555",
+                "666666", "777777", "888888", "999999", "123456", "654321",
+                "987654", "135792", "246810", "098765", "012345", "543210"
+        };
+
+        for (String validCode : validCodes) {
+            request.setEmail("test@example.com");
+            request.setCode(validCode);
+
+            Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+            assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("code")),
+                    "Valid 6-digit code should pass validation: " + validCode);
+        }
+    }
+
+    @Test
+    @DisplayName("Should verify regex pattern matches exactly 6 digits boundary")
+    void shouldVerifyRegexPatternMatchesExactly6DigitsBoundary() {
+        // Test boundary conditions for the strict regex ^\\d{6}$
+        String[] invalidCodes = {
+                "12345", // 5 digits - too short
+                "1234567", // 7 digits - too long
+                "x123456", // prefix
+                "123456x", // suffix
+                "12345x", // 5 digits + char
+                "x12345", // char + 5 digits
+                "1234567x", // 7 digits + char
+                "x1234567" // char + 7 digits
+        };
+
+        for (String invalidCode : invalidCodes) {
+            request.setEmail("test@example.com");
+            request.setCode(invalidCode);
+
+            Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                    "Invalid code should be rejected by strict regex: " + invalidCode);
+        }
+    }
+
     // Integration-style Tests
     @Test
     @DisplayName("Should work correctly in typical usage scenario")
@@ -442,5 +606,138 @@ class VerifyEmailRequestTest {
         // Should have correct values
         assertEquals("admin@system.com", request.getEmail());
         assertEquals("555555", request.getCode());
+    }
+
+    // Additional Edge Cases for Strict Regex
+    @Test
+    @DisplayName("Should reject code with Unicode digits")
+    void shouldRejectCodeWithUnicodeDigits() {
+        // Unicode digits that look like regular digits but aren't ASCII 0-9
+        String[] unicodeCodes = {
+                "１２３４５６", // Full-width digits
+                "𝟎𝟏𝟐𝟑𝟒𝟓", // Mathematical bold digits
+                "𝟘𝟙𝟚𝟛𝟜𝟝" // Mathematical double-struck digits
+        };
+
+        for (String unicodeCode : unicodeCodes) {
+            request.setEmail("test@example.com");
+            request.setCode(unicodeCode);
+
+            Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                    "Unicode digits should be rejected: " + unicodeCode);
+        }
+    }
+
+    @Test
+    @DisplayName("Should reject code with mixed ASCII and non-ASCII characters")
+    void shouldRejectCodeWithMixedAsciiAndNonAsciiCharacters() {
+        String[] mixedCodes = {
+                "12345６", // 5 ASCII digits + 1 full-width digit
+                "１23456", // 1 full-width digit + 5 ASCII digits
+                "123４56", // Mixed ASCII and full-width digits
+                "12３４56", // Multiple mixed digits
+                "123456ａ", // 6 digits + full-width letter
+                "ａ123456" // Full-width letter + 6 digits
+        };
+
+        for (String mixedCode : mixedCodes) {
+            request.setEmail("test@example.com");
+            request.setCode(mixedCode);
+
+            Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                    "Mixed ASCII/non-ASCII code should be rejected: " + mixedCode);
+        }
+    }
+
+    @Test
+    @DisplayName("Should reject code with control characters")
+    void shouldRejectCodeWithControlCharacters() {
+        String[] controlCharCodes = {
+                "123456\u0000", // Null character
+                "\u0001123456", // Start of heading
+                "123\u0002456", // Start of text
+                "123456\u0003", // End of text
+                "123456\u0004", // End of transmission
+                "123456\u0005", // Enquiry
+                "123456\u0006", // Acknowledge
+                "123456\u0007", // Bell
+                "123456\u0008", // Backspace
+                "123456\u000B", // Vertical tab
+                "123456\u000C", // Form feed
+                "123456\u000E", // Shift out
+                "123456\u000F", // Shift in
+                "123456\u007F" // Delete
+        };
+
+        for (String controlCharCode : controlCharCodes) {
+            request.setEmail("test@example.com");
+            request.setCode(controlCharCode);
+
+            Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                    "Code with control characters should be rejected");
+        }
+    }
+
+    @Test
+    @DisplayName("Should handle all valid 6-digit combinations systematically")
+    void shouldHandleAllValid6DigitCombinationsSystematically() {
+        // Test systematic patterns to ensure regex works correctly
+        String[] systematicCodes = {
+                "000000", "000001", "000010", "000100", "001000", "010000", "100000",
+                "111111", "222222", "333333", "444444", "555555", "666666", "777777", "888888", "999999",
+                "123456", "234567", "345678", "456789", "567890", "678901", "789012", "890123", "901234",
+                "987654", "876543", "765432", "654321", "543210", "432109", "321098", "210987", "109876",
+                "135792", "246813", "357924", "468135", "579246", "680357", "791468", "802579", "913680",
+                "024681", "135790", "246801", "357912", "468023", "579134", "680245", "791356", "802467"
+        };
+
+        for (String validCode : systematicCodes) {
+            request.setEmail("test@example.com");
+            request.setCode(validCode);
+
+            Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+            assertTrue(violations.stream().noneMatch(v -> v.getPropertyPath().toString().equals("code")),
+                    "Valid systematic 6-digit code should pass: " + validCode);
+        }
+    }
+
+    @Test
+    @DisplayName("Should verify regex anchors work correctly")
+    void shouldVerifyRegexAnchorsWorkCorrectly() {
+        // Test that ^ and $ anchors in the regex work as expected
+        // These should all fail because they don't match the exact pattern ^\\d{6}$
+        String[] anchorTestCodes = {
+                "x123456x", // Characters before and after
+                "123456x789", // Valid 6 digits but with extra content
+                "abc123456", // Valid 6 digits but with prefix
+                "123456def", // Valid 6 digits but with suffix
+                "12345612345", // 6 digits repeated
+                "1234561234", // 6 digits + 4 more
+                "12123456", // 8 digits starting with valid 6
+                "12345678", // 8 digits ending with valid 6
+                "1234567890", // 10 digits containing valid 6
+                " 123456", // Leading space
+                "123456 ", // Trailing space
+                "\t123456\t", // Leading and trailing tabs
+                "\n123456\n", // Leading and trailing newlines
+                "\r123456\r" // Leading and trailing carriage returns
+        };
+
+        for (String anchorTestCode : anchorTestCodes) {
+            request.setEmail("test@example.com");
+            request.setCode(anchorTestCode);
+
+            Set<ConstraintViolation<VerifyEmailRequest>> violations = validator.validate(request);
+
+            assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("code")),
+                    "Code should be rejected due to regex anchors: '" + anchorTestCode + "'");
+        }
     }
 }
