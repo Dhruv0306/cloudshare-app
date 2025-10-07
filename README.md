@@ -1,6 +1,6 @@
 # File Sharing App
 
-A secure, full-stack file sharing application built with Spring Boot (backend) and React (frontend), featuring comprehensive email verification, advanced security measures, and robust testing coverage.
+A secure, full-stack file sharing application built with Spring Boot (backend) and React (frontend), featuring comprehensive email verification, advanced security measures, file sharing capabilities, and robust testing coverage.
 
 ## Features
 
@@ -8,9 +8,19 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 - **Secure User Registration**: Email verification required for account activation
 - **JWT Authentication**: Token-based authentication with secure session management
 - **File Management**: Upload, download, list, and delete files with user isolation
+- **File Sharing System**: Share files with secure tokens, permissions, and access controls
 - **Email Verification**: 6-digit verification codes with rate limiting and expiration
 - **Password Security**: Real-time password strength validation and requirements
 - **File Security**: Path traversal protection and UUID-based file naming
+
+### File Sharing Features
+- **Secure Share Links**: UUID-based tokens for unpredictable, secure file access
+- **Permission Control**: View-only or download permissions for shared files
+- **Access Limits**: Optional maximum access count and expiration dates
+- **Access Tracking**: Comprehensive logging of all share access attempts
+- **Email Notifications**: Automated notifications to recipients with share links
+- **Usage Analytics**: Detailed statistics on share usage and access patterns
+- **Security Monitoring**: IP-based access tracking and suspicious activity detection
 
 ### Advanced Security
 - **Rate Limiting**: Protection against brute force attacks and spam
@@ -21,6 +31,7 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 - **Email Rate Limiting**: Maximum 5 verification codes per hour per user
 - **Password Strength Analysis**: Real-time password strength scoring and requirements
 - **Admin Maintenance**: Secure admin endpoints for system maintenance
+- **Share Security**: Token-based access with IP tracking and access limits
 
 ### User Experience
 - **Responsive Design**: Modern, mobile-friendly React interface
@@ -33,27 +44,32 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 
 ### Backend
 - **Java 17** with Spring Boot 3.5.6
-- **Spring Security 6** with JWT authentication
-- **Spring Data JPA** with H2/MySQL support
-- **Spring Mail** for email verification
+- **Spring Security 6** with JWT authentication and rate limiting
+- **Spring Data JPA** with H2/MySQL support and custom queries
+- **Spring Mail** for email verification and notifications
 - **JWT (jsonwebtoken 0.11.5)** for secure token management
 - **BCrypt** password encryption
+- **Spring Validation** for comprehensive input validation
+- **Dotenv Java** for environment configuration
 - **Maven** build system with JaCoCo coverage
 - **Logback** structured logging with file rotation
+- **Testcontainers** for integration testing
 
 ### Frontend
 - **React 18** with modern hooks and context
 - **Axios** for HTTP client with interceptors
-- **CSS3** with responsive design
-- **Jest & React Testing Library** for comprehensive testing
+- **CSS3** with responsive design and accessibility features
+- **Jest & React Testing Library** for comprehensive testing (41 tests, 57.94% coverage)
 - **ESLint** for code quality
+- **React Scripts 5.0.1** for build tooling
 
 ### Development & DevOps
-- **GitHub Actions** CI/CD pipeline
+- **GitHub Actions** CI/CD pipeline with MySQL service
 - **Trivy** security vulnerability scanning
-- **JaCoCo** code coverage reporting
+- **JaCoCo** code coverage reporting (backend)
 - **Maven Surefire** test reporting
 - **Environment-based configuration** with .env support
+- **H2 Console** for development database management
 
 ## Getting Started
 
@@ -111,6 +127,15 @@ The frontend will start on `http://localhost:3000`
 - `GET /api/files/{id}` - Get specific file details
 - `GET /api/files/download/{fileName}` - Download user's file
 - `DELETE /api/files/{id}` - Delete user's file
+
+### File Sharing (Requires Authentication & Verification)
+- `POST /api/shares/create` - Create secure share link for a file
+- `GET /api/shares` - List user's active file shares
+- `GET /api/shares/{shareToken}` - Access shared file via token
+- `GET /api/shares/{shareToken}/download` - Download shared file
+- `DELETE /api/shares/{id}` - Revoke file share
+- `GET /api/shares/{id}/analytics` - Get share usage statistics
+- `POST /api/shares/{id}/notify` - Send email notification to recipients
 
 ### System & Maintenance
 - `GET /api/test/logs` - Test logging functionality (development)
@@ -182,6 +207,17 @@ Once logged in and verified, you can:
 - **Download Files**: Click download button for any of your files
 - **Delete Files**: Remove files you no longer need
 - **File Security**: Only you can access your files
+
+### File Sharing
+Advanced sharing capabilities for secure file distribution:
+- **Create Share Links**: Generate secure, token-based links for any file
+- **Set Permissions**: Choose view-only or download access for recipients
+- **Configure Expiration**: Set optional expiration dates for shares
+- **Limit Access**: Set maximum number of accesses per share
+- **Track Usage**: Monitor who accessed your shares and when
+- **Email Notifications**: Send share links directly to recipients via email
+- **Revoke Access**: Instantly disable share links when needed
+- **Analytics Dashboard**: View detailed statistics on share usage patterns
 
 ### Password Security System
 The application includes a comprehensive password strength evaluation system:
@@ -274,20 +310,25 @@ open coverage/lcov-report/index.html
 
 ### Test Coverage Summary
 
-#### Backend Testing (29 Tests)
-- **Entity Tests** (8 tests): User and FileEntity validation
-- **Security Tests** (11 tests): JWT utilities, UserPrincipal, authentication
-- **Service Tests** (10 tests): FileService with mocked dependencies
+#### Backend Testing (32+ Tests)
+- **Entity Tests** (11 tests): User, FileEntity, FileShare, ShareAccess, ShareNotification validation
+- **Security Tests** (11 tests): JWT utilities, UserPrincipal, authentication, rate limiting
+- **Service Tests** (10+ tests): FileService with mocked dependencies
+- **Repository Tests**: Custom queries for file sharing and analytics
 - **Coverage Areas**: 
   - ✅ JWT token lifecycle and validation
   - ✅ Path traversal attack prevention
   - ✅ File operations with ownership checks
   - ✅ Entity relationships and validation
   - ✅ Security auditing and logging
+  - ✅ File sharing token generation and validation
+  - ✅ Access tracking and analytics queries
+  - ✅ Email notification tracking
 
 #### Frontend Testing (41 Tests)
 - **Component Tests**: Login (5), Signup (10), EmailVerification (16)
 - **Integration Tests**: App flow (3), Password strength (3), Form validation (4)
+- **Coverage**: 57.94% overall with 40%+ threshold requirements
 - **Coverage Areas**:
   - ✅ User authentication flows
   - ✅ Email verification process
@@ -347,8 +388,62 @@ Files are stored in the `uploads/` directory in the project root. Each file is g
 - **Security Event Logging**: Dedicated `security.log` file
 - **Authentication Tracking**: All login attempts and failures
 - **File Operation Auditing**: Complete audit trail for file access
+- **Share Access Logging**: Detailed tracking of all share access attempts
 - **Suspicious Activity Detection**: Automated monitoring and alerting
 - **Log Integrity**: Structured logging with timestamps and user context
+- **IP-based Monitoring**: Track access patterns by IP address
+- **User Agent Analysis**: Browser and client identification for security
+
+## File Sharing System Architecture
+
+### Core Components
+
+#### FileShare Entity
+- **Unique Share Tokens**: UUID-based tokens for secure, unpredictable access
+- **Permission Levels**: VIEW_ONLY (preview only) or DOWNLOAD (full access)
+- **Expiration Control**: Optional expiration dates for time-limited sharing
+- **Access Limits**: Optional maximum access count per share
+- **Status Management**: Active/inactive status for instant revocation
+
+#### ShareAccess Logging
+- **Comprehensive Tracking**: Every access attempt logged with timestamp
+- **IP Address Logging**: Track accessor location and patterns
+- **User Agent Capture**: Browser and device information for security
+- **Access Type Tracking**: Distinguish between view and download actions
+- **Analytics Support**: Data foundation for usage statistics and reporting
+
+#### ShareNotification System
+- **Email Integration**: Automated notifications to share recipients
+- **Delivery Tracking**: Confirmation of successful email delivery
+- **Notification History**: Complete audit trail of all notifications sent
+- **Unique Tracking IDs**: UUID-based tracking for each notification
+
+### Database Design
+The file sharing system uses three interconnected tables:
+
+```sql
+file_shares (
+  id, file_id, owner_id, share_token, permission, 
+  created_at, expires_at, active, access_count, max_access
+)
+
+share_access_logs (
+  id, share_id, accessor_ip, user_agent, 
+  accessed_at, access_type
+)
+
+share_notifications (
+  id, share_id, recipient_email, sent_at, 
+  delivered, notification_id
+)
+```
+
+### Security Features
+- **Token-based Access**: No user authentication required for share access
+- **Path Traversal Protection**: Secure file serving with validation
+- **Rate Limiting**: Protection against abuse of sharing endpoints
+- **Access Validation**: Real-time checks for expiration and limits
+- **Audit Trail**: Complete logging for security and compliance
 
 ## Project Structure
 
@@ -358,21 +453,21 @@ filesharingapp/
 │   ├── config/          # Configuration classes
 │   ├── controller/      # REST API controllers
 │   ├── dto/            # Data Transfer Objects
-│   ├── entity/         # JPA entities
+│   ├── entity/         # JPA entities (User, FileEntity, FileShare, ShareAccess, ShareNotification)
 │   ├── exception/      # Custom exceptions
-│   ├── repository/     # Data access layer
-│   ├── security/       # Security configuration
+│   ├── repository/     # Data access layer with custom queries
+│   ├── security/       # Security configuration (JWT, Rate limiting)
 │   └── service/        # Business logic layer
 ├── frontend/
 │   ├── src/
-│   │   ├── components/ # React components
-│   │   ├── context/    # React context providers
-│   │   └── utils/      # Utility functions
+│   │   ├── components/ # React components (Login, Signup, EmailVerification, etc.)
+│   │   ├── context/    # React context providers (AuthContext)
+│   │   └── utils/      # Utility functions and validation
 │   └── public/         # Static assets
-├── logs/               # Application log files
+├── logs/               # Application log files (security, file-operations, general)
 ├── uploads/            # User uploaded files
 ├── test-uploads/       # Test file storage
-└── .github/workflows/  # CI/CD pipeline
+└── .github/workflows/  # CI/CD pipeline with comprehensive testing
 ```
 
 ## Environment Variables
@@ -380,11 +475,23 @@ filesharingapp/
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DB_URL` | Database connection URL | `jdbc:h2:mem:testdb` |
+| `DB_USERNAME` | Database username | `sa` |
+| `DB_PASSWORD` | Database password | `password` |
 | `JWT_SECRET` | JWT signing secret (Base64) | Required |
+| `JWT_EXPIRATION_MS` | JWT token expiration time | `86400000` (24 hours) |
+| `EMAIL_HOST` | SMTP server host | `smtp.gmail.com` |
+| `EMAIL_PORT` | SMTP server port | `587` |
 | `EMAIL_USERNAME` | SMTP username | Required for email |
 | `EMAIL_PASSWORD` | SMTP password/app password | Required for email |
+| `EMAIL_FROM` | From email address | `noreply@filesharingapp.com` |
+| `EMAIL_FROM_NAME` | From name for emails | `File Sharing App` |
 | `MAX_FILE_SIZE` | Maximum upload size | `10MB` |
+| `MAX_REQUEST_SIZE` | Maximum request size | `10MB` |
+| `FILE_UPLOAD_DIR` | Upload directory path | `uploads` |
+| `SERVER_PORT` | Server port | `8080` |
+| `VERIFICATION_CODE_LENGTH` | Verification code length | `6` |
 | `VERIFICATION_EXPIRY_MINUTES` | Code expiry time | `15` |
+| `VERIFICATION_MAX_ATTEMPTS` | Max verification attempts | `3` |
 | `VERIFICATION_MAX_CODES_PER_HOUR` | Rate limit | `5` |
 
 See `.env.example` for complete configuration options.
