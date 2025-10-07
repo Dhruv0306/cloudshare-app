@@ -103,15 +103,19 @@ public class ShareAccessService {
      * 
      * <p>This method performs comprehensive access validation including:
      * <ul>
-     *   <li>IP-based rate limiting checks</li>
-     *   <li>Share-specific rate limiting</li>
-     *   <li>Suspicious activity detection</li>
-     *   <li>Access permission validation</li>
+     *   <li>Share validity checks (active status, expiration, access limits)</li>
+     *   <li>Permission validation for the requested access type</li>
+     *   <li>IP-based rate limiting checks (global and per-share)</li>
+     *   <li>Suspicious activity pattern detection</li>
      * </ul>
+     * 
+     * <p>The validation process follows a security-first approach, checking the most
+     * critical security constraints first before proceeding to rate limiting and
+     * behavioral analysis.
      * 
      * @param fileShare the file share being accessed
      * @param accessorIp the IP address of the accessor
-     * @param accessType the type of access requested
+     * @param accessType the type of access requested (VIEW or DOWNLOAD)
      * @return AccessValidationResult containing validation outcome and details
      */
     public AccessValidationResult validateAccess(FileShare fileShare, String accessorIp, ShareAccessType accessType) {
@@ -282,6 +286,16 @@ public class ShareAccessService {
 
     // Private helper methods
 
+    /**
+     * Checks if an IP address has exceeded the global rate limit.
+     * 
+     * <p>This method queries the database for actual access counts within the
+     * configured time window to ensure accuracy. The rate limit is enforced
+     * globally across all shares to prevent system-wide abuse.
+     * 
+     * @param accessorIp the IP address to check
+     * @return true if the IP has exceeded the rate limit, false otherwise
+     */
     private boolean isIpRateLimited(String accessorIp) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime windowStart = now.minusHours(rateLimitWindowHours);
@@ -299,6 +313,17 @@ public class ShareAccessService {
         return isLimited;
     }
 
+    /**
+     * Checks if an IP address has exceeded the rate limit for a specific share.
+     * 
+     * <p>This method implements per-share rate limiting to prevent focused attacks
+     * on individual files. It uses an in-memory cache for performance but falls back
+     * to database queries for accuracy when needed.
+     * 
+     * @param shareId the ID of the file share
+     * @param accessorIp the IP address to check
+     * @return true if the IP has exceeded the share-specific rate limit, false otherwise
+     */
     private boolean isShareIpRateLimited(Long shareId, String accessorIp) {
         // This would require a method in repository to count by share and IP
         // For now, using a simplified approach with cache
@@ -312,6 +337,17 @@ public class ShareAccessService {
         return info.getCount() >= maxAccessPerSharePerIpPerHour;
     }
 
+    /**
+     * Detects suspicious activity patterns for an IP address and file share.
+     * 
+     * <p>This method analyzes recent access patterns to identify potential abuse
+     * or automated attacks. It looks for access frequencies that exceed normal
+     * human behavior patterns within a short time window.
+     * 
+     * @param accessorIp the IP address to analyze
+     * @param fileShare the file share being accessed
+     * @return true if suspicious activity is detected, false otherwise
+     */
     private boolean isSuspiciousActivity(String accessorIp, FileShare fileShare) {
         LocalDateTime since = LocalDateTime.now().minusHours(1);
         
@@ -321,6 +357,19 @@ public class ShareAccessService {
         return !patterns.isEmpty();
     }
 
+    /**
+     * Updates the in-memory rate limiting cache with new access information.
+     * 
+     * <p>This method maintains counters for both global IP-based rate limiting
+     * and share-specific IP rate limiting. The cache is used for performance
+     * optimization but should be supplemented with database queries for accuracy.
+     * 
+     * <p>Note: In a production environment with multiple server instances,
+     * consider using a distributed cache like Redis instead of in-memory storage.
+     * 
+     * @param accessorIp the IP address that made the access
+     * @param shareId the ID of the accessed share
+     */
     private void updateRateLimitCache(String accessorIp, Long shareId) {
         LocalDateTime now = LocalDateTime.now();
         
@@ -346,6 +395,17 @@ public class ShareAccessService {
         });
     }
 
+    /**
+     * Performs real-time suspicious activity monitoring and logging.
+     * 
+     * <p>This method is called after each access to monitor for potential abuse
+     * patterns. It checks for high-frequency access attempts that may indicate
+     * automated attacks or abuse. Suspicious activity is logged to the security
+     * logger for monitoring and alerting purposes.
+     * 
+     * @param accessorIp the IP address to monitor
+     * @param fileShare the file share that was accessed
+     */
     private void checkSuspiciousActivity(String accessorIp, FileShare fileShare) {
         // Check if this IP has made too many requests recently
         LocalDateTime since = LocalDateTime.now().minusMinutes(10);

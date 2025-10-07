@@ -28,6 +28,9 @@ public enum SharePermission {
     /**
      * Checks if this permission level allows downloading files.
      * 
+     * <p>This method is used by the access control system to determine
+     * whether a download request should be permitted for a given share.
+     * 
      * @return true if download is allowed, false otherwise
      */
     public boolean allowsDownload() {
@@ -37,9 +40,25 @@ public enum SharePermission {
     /**
      * Checks if this permission level allows viewing files.
      * 
-     * @return true if viewing is allowed (always true for all permission levels)
+     * <p>All permission levels currently allow viewing, as this is considered
+     * the minimum level of access for any shared file. This method is provided
+     * for consistency and future extensibility.
+     * 
+     * @return true if viewing is allowed (always true for all current permission levels)
      */
     public boolean allowsView() {
         return true;
+    }
+
+    /**
+     * Returns a human-readable description of this permission level.
+     * 
+     * @return a descriptive string explaining what this permission allows
+     */
+    public String getDescription() {
+        return switch (this) {
+            case VIEW_ONLY -> "Recipients can view the file but cannot download it";
+            case DOWNLOAD -> "Recipients can view and download the file";
+        };
     }
 }

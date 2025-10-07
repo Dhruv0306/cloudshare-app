@@ -182,7 +182,7 @@ public class FileSharingService {
     public ShareAccessValidationResult validateShareAccess(String shareToken, String accessorIp, ShareAccessType accessType) {
         logger.debug("Validating share access for token: {} from IP: {} for {}", shareToken, accessorIp, accessType);
 
-        // First validate the token
+        // First validate the token - checks basic share validity (active, not expired, under access limit)
         Optional<FileShare> shareOptional = validateShareToken(shareToken);
         if (shareOptional.isEmpty()) {
             return ShareAccessValidationResult.invalid("Share not found, expired, or invalid");
@@ -190,7 +190,7 @@ public class FileSharingService {
 
         FileShare share = shareOptional.get();
 
-        // Perform security validation
+        // Perform comprehensive security validation including rate limiting and suspicious activity detection
         ShareAccessService.AccessValidationResult securityValidation = 
             shareAccessService.validateAccess(share, accessorIp, accessType);
 
@@ -216,6 +216,7 @@ public class FileSharingService {
     public boolean recordShareAccess(String shareToken, String accessorIp, String userAgent, ShareAccessType accessType) {
         logger.debug("Recording {} access for share token: {} from IP: {}", accessType, shareToken, accessorIp);
 
+        // Validate the share token first
         Optional<FileShare> shareOptional = validateShareToken(shareToken);
         if (shareOptional.isEmpty()) {
             return false;
@@ -223,7 +224,7 @@ public class FileSharingService {
 
         FileShare share = shareOptional.get();
         
-        // Validate access with security checks
+        // Perform comprehensive security validation before allowing access
         ShareAccessService.AccessValidationResult validation = 
             shareAccessService.validateAccess(share, accessorIp, accessType);
         
@@ -233,10 +234,10 @@ public class FileSharingService {
             return false;
         }
 
-        // Log the access
+        // Log the access attempt for security monitoring and analytics
         shareAccessService.logAccess(share, accessorIp, userAgent, accessType);
         
-        // Increment access count
+        // Increment the share's access counter and persist the change
         share.incrementAccessCount();
         fileShareRepository.save(share);
 
