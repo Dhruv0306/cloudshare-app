@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import axios from 'axios';
 
 // Mock axios before importing App
 jest.mock('axios', () => ({
@@ -13,6 +14,8 @@ jest.mock('axios', () => ({
     }
   }
 }));
+
+
 
 import App from './App';
 
@@ -82,3 +85,4 @@ describe('App Component', () => {
     });
   });
 });
+

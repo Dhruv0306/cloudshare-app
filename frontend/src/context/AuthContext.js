@@ -17,7 +17,20 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       setToken(token);
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // You could validate the token here by making a request to the server
+      
+      // Try to get user info from localStorage or validate token with server
+      const userInfo = localStorage.getItem('userInfo');
+      if (userInfo) {
+        try {
+          setCurrentUser(JSON.parse(userInfo));
+        } catch (error) {
+          console.error('Error parsing user info from localStorage:', error);
+          // If parsing fails, clear the invalid data
+          localStorage.removeItem('userInfo');
+          localStorage.removeItem('token');
+          setToken(null);
+        }
+      }
     }
     setLoading(false);
   }, []);
@@ -31,9 +44,12 @@ export const AuthProvider = ({ children }) => {
       
       const { accessToken, id, username: user, email } = response.data;
       
+      const userInfo = { id, username: user, email };
+      
       localStorage.setItem('token', accessToken);
+      localStorage.setItem('userInfo', JSON.stringify(userInfo));
       setToken(accessToken);
-      setCurrentUser({ id, username: user, email });
+      setCurrentUser(userInfo);
       axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
       
       return { success: true };
@@ -64,6 +80,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('userInfo');
     setToken(null);
     setCurrentUser(null);
     delete axios.defaults.headers.common['Authorization'];

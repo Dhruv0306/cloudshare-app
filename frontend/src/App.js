@@ -22,12 +22,14 @@ function FileManager() {
   const fetchFiles = async () => {
     try {
       const response = await axios.get('/api/files');
-      setFiles(response.data);
+      // Ensure we always set an array, even if response.data is null/undefined
+      setFiles(Array.isArray(response.data) ? response.data : []);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching files:', error);
       setMessage('Error fetching files');
       setMessageType('error');
+      setFiles([]); // Ensure files is always an array
       setLoading(false);
     }
   };
@@ -53,7 +55,7 @@ function FileManager() {
           'Content-Type': 'multipart/form-data',
         },
       });
-      
+
       setMessage('File uploaded successfully!');
       setMessageType('success');
       setSelectedFile(null);
@@ -73,7 +75,7 @@ function FileManager() {
       const response = await axios.get(`/api/files/download/${fileName}`, {
         responseType: 'blob',
       });
-      
+
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -125,7 +127,7 @@ function FileManager() {
           <button onClick={logout} className="logout-btn">Logout</button>
         </div>
       </div>
-      
+
       {message && (
         <div className={messageType === 'error' ? 'error' : 'success'}>
           {message}
@@ -158,12 +160,12 @@ function FileManager() {
         ) : files.length === 0 ? (
           <div className="loading">No files uploaded yet</div>
         ) : (
-          files.map((file) => (
+          Array.isArray(files) && files.map((file) => (
             <div key={file.id} className="file-item">
               <div className="file-info">
                 <div className="file-name">{file.originalFileName}</div>
                 <div className="file-details">
-                  Size: {formatFileSize(file.fileSize)} | 
+                  Size: {formatFileSize(file.fileSize)} |
                   Uploaded: {formatDate(file.uploadTime)}
                 </div>
               </div>
