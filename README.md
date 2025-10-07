@@ -1,34 +1,59 @@
 # File Sharing App
 
-A full-stack file sharing application built with Spring Boot (backend) and React (frontend).
+A secure, full-stack file sharing application built with Spring Boot (backend) and React (frontend), featuring comprehensive email verification, advanced security measures, and robust testing coverage.
 
 ## Features
 
-- **User Authentication**: Sign up and login with JWT tokens
-- **Secure File Management**: Users can only access their own files
-- **File Upload**: Upload files to the server (max 10MB)
-- **File Download**: Download your uploaded files
-- **File Listing**: View all your uploaded files with metadata
-- **File Deletion**: Delete your own files
-- **File Metadata**: Track file size, upload time, and original names
-- **Responsive UI**: Clean, modern web interface
-- **Security**: JWT-based authentication and authorization
+### Core Functionality
+- **Secure User Registration**: Email verification required for account activation
+- **JWT Authentication**: Token-based authentication with secure session management
+- **File Management**: Upload, download, list, and delete files with user isolation
+- **Email Verification**: 6-digit verification codes with rate limiting and expiration
+- **Password Security**: Real-time password strength validation and requirements
+- **File Security**: Path traversal protection and UUID-based file naming
+
+### Advanced Security
+- **Rate Limiting**: Protection against brute force attacks and spam
+- **Account Status Management**: Pending, verified, and suspended account states
+- **Security Auditing**: Comprehensive logging of authentication and file operations
+- **Input Validation**: Server-side validation for all user inputs
+- **CORS Protection**: Secure cross-origin resource sharing configuration
+- **Email Rate Limiting**: Maximum 5 verification codes per hour per user
+- **Password Strength Analysis**: Real-time password strength scoring and requirements
+- **Admin Maintenance**: Secure admin endpoints for system maintenance
+
+### User Experience
+- **Responsive Design**: Modern, mobile-friendly React interface
+- **Real-time Feedback**: Password strength indicators and form validation
+- **Error Handling**: Comprehensive error messages and user guidance
+- **Loading States**: Visual feedback for all async operations
+- **Accessibility**: Screen reader compatible with proper ARIA labels
 
 ## Technology Stack
 
 ### Backend
-- Java 21
-- Spring Boot 3.5.6
-- Spring Security 6
-- Spring Data JPA
-- JWT Authentication (jsonwebtoken)
-- H2 Database (in-memory)
-- Maven
+- **Java 17** with Spring Boot 3.5.6
+- **Spring Security 6** with JWT authentication
+- **Spring Data JPA** with H2/MySQL support
+- **Spring Mail** for email verification
+- **JWT (jsonwebtoken 0.11.5)** for secure token management
+- **BCrypt** password encryption
+- **Maven** build system with JaCoCo coverage
+- **Logback** structured logging with file rotation
 
 ### Frontend
-- React 18
-- Axios for HTTP requests
-- Modern CSS styling
+- **React 18** with modern hooks and context
+- **Axios** for HTTP client with interceptors
+- **CSS3** with responsive design
+- **Jest & React Testing Library** for comprehensive testing
+- **ESLint** for code quality
+
+### Development & DevOps
+- **GitHub Actions** CI/CD pipeline
+- **Trivy** security vulnerability scanning
+- **JaCoCo** code coverage reporting
+- **Maven Surefire** test reporting
+- **Environment-based configuration** with .env support
 
 ## Getting Started
 
@@ -72,48 +97,115 @@ The frontend will start on `http://localhost:3000`
 
 ## API Endpoints
 
-### Authentication
-- `POST /api/auth/signup` - Register a new user
-- `POST /api/auth/signin` - Login user
+### Authentication & User Management
+- `POST /api/auth/signup` - Register new user (requires email verification)
+- `POST /api/auth/signin` - Login user (requires verified account)
+- `POST /api/auth/verify-email` - Verify email with 6-digit code
+- `POST /api/auth/resend-verification` - Resend verification code (rate limited)
+- `POST /api/auth/check-password-strength` - Validate password strength
+- `GET /api/auth/user-email` - Get current user's email
 
-### File Management (Requires Authentication)
-- `POST /api/files/upload` - Upload a file (user's own)
-- `GET /api/files` - Get user's files
-- `GET /api/files/{id}` - Get user's file by ID
+### File Management (Requires Authentication & Verification)
+- `POST /api/files/upload` - Upload file (max 10MB, user isolation)
+- `GET /api/files` - List user's files with metadata
+- `GET /api/files/{id}` - Get specific file details
 - `GET /api/files/download/{fileName}` - Download user's file
 - `DELETE /api/files/{id}` - Delete user's file
 
+### System & Maintenance
+- `GET /api/test/logs` - Test logging functionality (development)
+- `POST /api/admin/maintenance/cleanup-verifications` - Clean up expired verification codes (admin only)
+- `POST /api/admin/maintenance/cleanup-logs` - Clean up old log files (admin only)
+
 ## Configuration
 
-### File Upload Settings
-- Maximum file size: 10MB
-- Upload directory: `uploads/` (created automatically)
+### Environment Setup
+The application uses environment variables for configuration. Copy `.env.example` to `.env` and configure:
 
-### Database
-- H2 in-memory database
-- Console available at: `http://localhost:8080/h2-console`
-- JDBC URL: `jdbc:h2:mem:testdb`
-- Username: `sa`
-- Password: `password`
+```bash
+cp .env.example .env
+```
 
-### Logging Configuration
-- Log files location: `logs/` directory
-- Console logging: Enabled for development
-- File logging: Automatic rotation and archival
-- Security events: Tracked in separate security.log
-- Test logging endpoint: `GET /api/test/logs` (for testing purposes)
+### Key Configuration Areas
+
+#### File Upload Settings
+- **Maximum file size**: 10MB (configurable via `MAX_FILE_SIZE`)
+- **Upload directory**: `uploads/` (configurable via `FILE_UPLOAD_DIR`)
+- **Supported formats**: All file types with security validation
+- **File naming**: UUID prefix to prevent conflicts
+
+#### Database Configuration
+- **Default**: H2 in-memory database for development
+- **Production**: MySQL/PostgreSQL support via environment variables
+- **H2 Console**: Available at `http://localhost:8080/h2-console`
+- **Connection**: `jdbc:h2:mem:testdb` (sa/password)
+
+#### Email Verification System
+- **SMTP Configuration**: Gmail by default (configurable)
+- **Verification Codes**: 6-digit numeric codes
+- **Code Expiry**: 15 minutes (configurable)
+- **Rate Limiting**: 5 codes per hour per user
+- **Max Attempts**: 3 verification attempts per code
+
+#### Security Configuration
+- **JWT Secret**: Base64-encoded 512-bit key for HS512 algorithm
+- **Token Expiry**: 24 hours (configurable)
+- **Password Requirements**: Minimum 8 characters with complexity rules
+- **Rate Limiting**: Built-in protection against brute force attacks
+
+#### Logging System
+- **Log Directory**: `logs/` (auto-created)
+- **Log Files**: 
+  - `filesharing-app.log` - General application logs
+  - `security.log` - Authentication and security events
+  - `file-operations.log` - File upload/download/delete operations
+- **Rotation**: Daily rotation, max 10MB per file
+- **Cleanup**: Automatic cleanup keeps 10 most recent files
 
 ## Usage
 
-1. Start both backend and frontend servers
-2. Open `http://localhost:3000` in your browser
-3. **Sign up** for a new account or **login** with existing credentials
-4. Once authenticated, you can:
-   - Upload files using the upload form
-   - View your uploaded files in the list
-   - Download your files using the download button
-   - Delete your files using the delete button
-5. Each user can only see and manage their own files
+### Getting Started
+1. **Start the backend server** (see setup instructions below)
+2. **Start the frontend server** (see setup instructions below)
+3. **Open your browser** to `http://localhost:3000`
+
+### User Registration Flow
+1. **Sign Up**: Create account with email and strong password
+2. **Email Verification**: Check your email for a 6-digit verification code
+3. **Verify Account**: Enter the code to activate your account
+4. **Login**: Use your credentials to access the application
+
+### File Management
+Once logged in and verified, you can:
+- **Upload Files**: Drag & drop or select files (max 10MB each)
+- **View Files**: See all your uploaded files with metadata
+- **Download Files**: Click download button for any of your files
+- **Delete Files**: Remove files you no longer need
+- **File Security**: Only you can access your files
+
+### Password Security System
+The application includes a comprehensive password strength evaluation system:
+
+#### Password Requirements
+- **Minimum Length**: 8 characters (12+ for strong rating)
+- **Character Diversity**: Must include:
+  - At least one uppercase letter (A-Z)
+  - At least one lowercase letter (a-z)
+  - At least one number (0-9)
+  - At least one special character (!@#$%^&*()_+-=[]{}|;':\"\\,.<>?/)
+
+#### Real-time Password Analysis
+- **Strength Scoring**: Dynamic scoring from 0-100
+- **Strength Levels**: Weak, Medium, Strong classification
+- **Visual Feedback**: Color-coded strength indicators
+- **Requirement Checklist**: Real-time validation of each requirement
+- **Improvement Suggestions**: Contextual tips for stronger passwords
+
+### Email Verification Features
+- **Rate Limited**: Maximum 5 verification codes per hour
+- **Time Limited**: Codes expire after 15 minutes
+- **Attempt Limited**: Maximum 3 attempts per code
+- **Resend Option**: Request new code if needed
 
 ## CI/CD Pipeline
 
@@ -145,50 +237,71 @@ This project includes a comprehensive CI/CD pipeline using GitHub Actions that a
 
 ### Running Tests Locally
 
+#### Backend Tests
 ```bash
-# Run all tests
+# Run all backend tests
 mvn test
 
-# Run tests with coverage
+# Run tests with coverage report
 mvn test jacoco:report
 
-# Run specific test class
-mvn test -Dtest=AuthControllerTest
+# Run specific test categories
+mvn test -Dtest="*EntityTest"        # Entity validation tests
+mvn test -Dtest="*SecurityTest"      # JWT and security tests  
+mvn test -Dtest="*ServiceTest"       # Business logic tests
 
-# Run tests in a specific package
-mvn test -Dtest="com.cloud.computing.filesharingapp.controller.*"
-
-# Frontend tests
-cd frontend
-npm test
-
-# Frontend tests with coverage
-cd frontend
-npm run test:ci
+# View coverage report
+open target/site/jacoco/index.html
 ```
 
-### Test Coverage
+#### Frontend Tests
+```bash
+cd frontend
 
-The application includes comprehensive unit tests:
+# Run all frontend tests
+npm test
 
-- **Entity Tests**: Domain object validation and behavior
-- **Service Tests**: Business logic with mocked dependencies  
-- **Security Tests**: JWT token generation and validation
-- **File Operations**: Upload, download, delete with security checks
+# Run tests with coverage
+npm run test:ci
 
-### Test Categories
+# Run specific test files
+npm test -- --testPathPattern=Login.test.js
+npm test -- --testPathPattern=Signup.test.js
 
-1. **Entity Tests**: User and FileEntity validation (8 tests)
-2. **Service Tests**: FileService business logic with mocks (10 tests)
-3. **Security Tests**: JWT utilities and UserPrincipal (11 tests)
-4. **Total Coverage**: 29 comprehensive unit tests
+# View coverage report
+open coverage/lcov-report/index.html
+```
 
-### Test Results
-✅ All 29 tests passing  
-✅ Security validation (JWT, path traversal protection)  
-✅ File operations (upload, download, delete)  
-✅ Entity relationships and validation  
-✅ Logging verification throughout operations
+### Test Coverage Summary
+
+#### Backend Testing (29 Tests)
+- **Entity Tests** (8 tests): User and FileEntity validation
+- **Security Tests** (11 tests): JWT utilities, UserPrincipal, authentication
+- **Service Tests** (10 tests): FileService with mocked dependencies
+- **Coverage Areas**: 
+  - ✅ JWT token lifecycle and validation
+  - ✅ Path traversal attack prevention
+  - ✅ File operations with ownership checks
+  - ✅ Entity relationships and validation
+  - ✅ Security auditing and logging
+
+#### Frontend Testing (41 Tests)
+- **Component Tests**: Login (5), Signup (10), EmailVerification (16)
+- **Integration Tests**: App flow (3), Password strength (3), Form validation (4)
+- **Coverage Areas**:
+  - ✅ User authentication flows
+  - ✅ Email verification process
+  - ✅ Form validation and error handling
+  - ✅ Password strength validation
+  - ✅ Accessibility features
+  - ✅ Loading states and async operations
+
+### Test Quality Features
+- **Isolation**: Each test runs independently with proper setup/teardown
+- **Mocking**: Comprehensive mocking strategy for external dependencies
+- **Security Focus**: Extensive testing of security-critical functionality
+- **Accessibility**: Tests verify screen reader compatibility and ARIA labels
+- **Error Scenarios**: Comprehensive error handling and edge case testing
 
 ## File Storage
 
@@ -201,35 +314,147 @@ Files are stored in the `uploads/` directory in the project root. Each file is g
 - The React app uses a proxy configuration to forward API requests to the Spring Boot server
 - Files are validated for security (no path traversal attacks)
 
-## Security Features
+## Security Architecture
 
-- **JWT Authentication**: Secure token-based authentication
-- **Password Encryption**: BCrypt password hashing
-- **File Access Control**: Users can only access their own files
-- **CORS Configuration**: Proper cross-origin resource sharing setup
-- **Input Validation**: Server-side validation for all inputs
-- **Path Traversal Protection**: Secure file path handling
+### Authentication & Authorization
+- **JWT Tokens**: HS512 algorithm with 512-bit secret key
+- **Password Security**: BCrypt hashing with salt rounds
+- **Email Verification**: Required for account activation
+- **Session Management**: Secure token storage and validation
+- **Account Status**: Pending/Verified/Suspended state management
 
-## Logging Features
+### File Security
+- **User Isolation**: Strict file ownership validation
+- **Path Traversal Protection**: Prevents `../` directory traversal attacks
+- **UUID File Naming**: Prevents filename conflicts and guessing
+- **File Type Validation**: Server-side MIME type checking
+- **Size Limits**: Configurable file size restrictions (default 10MB)
 
-- **Comprehensive Logging**: Detailed logging throughout the application
-- **Separate Log Files**: 
-  - `logs/filesharing-app.log` - General application logs
-  - `logs/security.log` - Authentication and security events
-  - `logs/file-operations.log` - File upload/download/delete operations
-- **Log Rotation**: Automatic log rotation (daily, max 10MB per file)
-- **Configurable Levels**: Different log levels for development and production
-- **Security Auditing**: Track all login attempts, file operations, and access violations
+### Rate Limiting & Abuse Prevention
+- **Email Verification**: 5 codes per hour per user
+- **Login Attempts**: Protection against brute force attacks
+- **Request Rate Limiting**: Configurable per-endpoint limits
+- **Account Lockout**: Temporary suspension for suspicious activity
 
-## Future Enhancements
+### Input Validation & Sanitization
+- **Server-Side Validation**: All inputs validated before processing
+- **SQL Injection Protection**: JPA/Hibernate parameterized queries
+- **XSS Prevention**: Input sanitization and output encoding
+- **CSRF Protection**: Spring Security CSRF tokens
+- **CORS Configuration**: Restricted cross-origin access
 
-- File sharing via secure links with expiration
-- File preview functionality for images and documents
-- Drag and drop upload interface
-- Upload progress bars
-- File categorization and search functionality
-- Persistent database (PostgreSQL/MySQL)
-- Cloud storage integration (AWS S3, Google Cloud Storage)
-- File versioning and history
-- User roles and permissions
-- Email notifications for file sharing
+### Security Monitoring & Auditing
+- **Security Event Logging**: Dedicated `security.log` file
+- **Authentication Tracking**: All login attempts and failures
+- **File Operation Auditing**: Complete audit trail for file access
+- **Suspicious Activity Detection**: Automated monitoring and alerting
+- **Log Integrity**: Structured logging with timestamps and user context
+
+## Project Structure
+
+```
+filesharingapp/
+├── src/main/java/com/cloud/computing/filesharingapp/
+│   ├── config/          # Configuration classes
+│   ├── controller/      # REST API controllers
+│   ├── dto/            # Data Transfer Objects
+│   ├── entity/         # JPA entities
+│   ├── exception/      # Custom exceptions
+│   ├── repository/     # Data access layer
+│   ├── security/       # Security configuration
+│   └── service/        # Business logic layer
+├── frontend/
+│   ├── src/
+│   │   ├── components/ # React components
+│   │   ├── context/    # React context providers
+│   │   └── utils/      # Utility functions
+│   └── public/         # Static assets
+├── logs/               # Application log files
+├── uploads/            # User uploaded files
+├── test-uploads/       # Test file storage
+└── .github/workflows/  # CI/CD pipeline
+```
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_URL` | Database connection URL | `jdbc:h2:mem:testdb` |
+| `JWT_SECRET` | JWT signing secret (Base64) | Required |
+| `EMAIL_USERNAME` | SMTP username | Required for email |
+| `EMAIL_PASSWORD` | SMTP password/app password | Required for email |
+| `MAX_FILE_SIZE` | Maximum upload size | `10MB` |
+| `VERIFICATION_EXPIRY_MINUTES` | Code expiry time | `15` |
+| `VERIFICATION_MAX_CODES_PER_HOUR` | Rate limit | `5` |
+
+See `.env.example` for complete configuration options.
+
+## Contributing
+
+1. **Fork the repository**
+2. **Create feature branch**: `git checkout -b feature/amazing-feature`
+3. **Run tests**: `mvn test && cd frontend && npm test`
+4. **Commit changes**: `git commit -m 'Add amazing feature'`
+5. **Push to branch**: `git push origin feature/amazing-feature`
+6. **Open Pull Request**
+
+### Development Guidelines
+- Follow existing code style and patterns
+- Add tests for new functionality
+- Update documentation as needed
+- Ensure all CI checks pass
+- Use meaningful commit messages
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Architecture Highlights
+
+### Backend Architecture
+- **Layered Architecture**: Controller → Service → Repository pattern
+- **Dependency Injection**: Spring IoC container management
+- **Exception Handling**: Global exception handler with custom exceptions
+- **Data Transfer Objects**: Clean API contracts with DTOs
+- **Entity Relationships**: JPA entities with proper associations
+- **Security Filters**: Custom JWT and rate limiting filters
+
+### Frontend Architecture  
+- **Component-Based**: Modular React components with hooks
+- **Context API**: Centralized authentication state management
+- **Error Boundaries**: Graceful error handling and recovery
+- **Form Validation**: Client-side validation with server confirmation
+- **Responsive Design**: Mobile-first CSS with flexbox/grid
+- **Accessibility**: WCAG compliant with proper ARIA labels
+
+### Testing Strategy
+- **Unit Testing**: Isolated testing with comprehensive mocking
+- **Integration Testing**: Component interaction validation
+- **Security Testing**: Authentication and authorization verification
+- **Accessibility Testing**: Screen reader and keyboard navigation
+- **Coverage Goals**: 40%+ coverage with quality over quantity focus
+
+## Performance & Scalability
+
+### Current Optimizations
+- **Database Indexing**: Optimized queries with proper indexes
+- **File Storage**: UUID-based naming prevents conflicts
+- **Log Rotation**: Automatic cleanup prevents disk space issues
+- **Rate Limiting**: Prevents resource exhaustion attacks
+- **Connection Pooling**: Efficient database connection management
+
+### Scalability Considerations
+- **Stateless Design**: JWT tokens enable horizontal scaling
+- **Database Migration**: Easy switch from H2 to production databases
+- **File Storage**: Ready for cloud storage integration (S3, GCS)
+- **Microservices Ready**: Modular design supports service extraction
+- **Container Ready**: Prepared for Docker/Kubernetes deployment
+
+## Support
+
+For questions, issues, or contributions:
+- **Issues**: Use GitHub Issues for bug reports and feature requests
+- **Documentation**: Check the wiki for detailed documentation  
+- **Security**: Report security issues privately via email
+- **Testing**: Run the comprehensive test suite before contributing
+- **Code Style**: Follow existing patterns and conventions
