@@ -4,6 +4,7 @@ import com.cloud.computing.filesharingapp.dto.ShareRequest;
 import com.cloud.computing.filesharingapp.dto.ShareResponse;
 import com.cloud.computing.filesharingapp.entity.FileEntity;
 import com.cloud.computing.filesharingapp.entity.FileShare;
+import com.cloud.computing.filesharingapp.entity.ShareAccessType;
 import com.cloud.computing.filesharingapp.entity.SharePermission;
 import com.cloud.computing.filesharingapp.entity.User;
 import com.cloud.computing.filesharingapp.repository.FileRepository;
@@ -25,8 +26,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 /**
  * Comprehensive test suite for FileSharingService.
@@ -50,6 +52,9 @@ class FileSharingServiceTest {
 
     @Mock
     private FileRepository fileRepository;
+
+    @Mock
+    private ShareAccessService shareAccessService;
 
     @InjectMocks
     private FileSharingService fileSharingService;
@@ -79,6 +84,10 @@ class FileSharingServiceTest {
 
         // Set base URL for URL generation
         ReflectionTestUtils.setField(fileSharingService, "baseUrl", "http://localhost:8080");
+        
+        // Mock ShareAccessService to allow access by default (lenient to avoid unnecessary stubbing errors)
+        lenient().when(shareAccessService.validateAccess(any(FileShare.class), anyString(), any(ShareAccessType.class)))
+            .thenReturn(ShareAccessService.AccessValidationResult.allowed());
     }
 
     @Nested
@@ -288,12 +297,13 @@ class FileSharingServiceTest {
             when(fileShareRepository.save(testShare)).thenReturn(testShare);
 
             // When
-            boolean result = fileSharingService.recordShareAccess("test-token-123");
+            boolean result = fileSharingService.recordShareAccess("test-token-123", "192.168.1.1", "TestBrowser/1.0", ShareAccessType.VIEW);
 
             // Then
             assertTrue(result);
             assertEquals(6, testShare.getAccessCount());
             verify(fileShareRepository).save(testShare);
+            verify(shareAccessService).logAccess(testShare, "192.168.1.1", "TestBrowser/1.0", ShareAccessType.VIEW);
         }
 
         @Test
@@ -303,11 +313,12 @@ class FileSharingServiceTest {
             when(fileShareRepository.findByShareToken("invalid-token")).thenReturn(Optional.empty());
 
             // When
-            boolean result = fileSharingService.recordShareAccess("invalid-token");
+            boolean result = fileSharingService.recordShareAccess("invalid-token", "192.168.1.1", "TestBrowser/1.0", ShareAccessType.VIEW);
 
             // Then
             assertFalse(result);
             verify(fileShareRepository, never()).save(any());
+            verify(shareAccessService, never()).logAccess(any(), any(), any(), any());
         }
     }
 
@@ -580,11 +591,12 @@ class FileSharingServiceTest {
             when(fileShareRepository.save(testShare)).thenReturn(testShare);
 
             // When
-            boolean result = fileSharingService.recordShareAccess("test-token-123");
+            boolean result = fileSharingService.recordShareAccess("test-token-123", "192.168.1.1", "TestBrowser/1.0", ShareAccessType.DOWNLOAD);
 
             // Then
             assertTrue(result);
             assertEquals(10, testShare.getAccessCount());
+            verify(shareAccessService).logAccess(testShare, "192.168.1.1", "TestBrowser/1.0", ShareAccessType.DOWNLOAD);
             
             // Subsequent validation should fail due to max access reached
             Optional<FileShare> validationResult = fileSharingService.validateShareToken("test-token-123");

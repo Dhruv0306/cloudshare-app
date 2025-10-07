@@ -4,6 +4,7 @@ import com.cloud.computing.filesharingapp.dto.ShareRequest;
 import com.cloud.computing.filesharingapp.dto.ShareResponse;
 import com.cloud.computing.filesharingapp.entity.FileEntity;
 import com.cloud.computing.filesharingapp.entity.FileShare;
+import com.cloud.computing.filesharingapp.entity.ShareAccessType;
 import com.cloud.computing.filesharingapp.entity.SharePermission;
 import com.cloud.computing.filesharingapp.entity.User;
 import com.cloud.computing.filesharingapp.repository.FileRepository;
@@ -50,6 +51,9 @@ public class FileSharingService {
 
     @Autowired
     private FileRepository fileRepository;
+
+    @Autowired
+    private ShareAccessService shareAccessService;
 
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
@@ -160,16 +164,57 @@ public class FileSharingService {
     }
 
     /**
-     * Records an access to a shared file and increments the access count.
+     * Validates share access with comprehensive security checks.
+     * 
+     * <p>This method performs both token validation and security checks including:
+     * <ul>
+     *   <li>Standard token and share validation</li>
+     *   <li>IP-based rate limiting</li>
+     *   <li>Permission validation for the requested access type</li>
+     *   <li>Suspicious activity detection</li>
+     * </ul>
+     * 
+     * @param shareToken the share token to validate
+     * @param accessorIp the IP address of the accessor
+     * @param accessType the type of access requested
+     * @return ShareAccessValidationResult containing validation outcome and share details
+     */
+    public ShareAccessValidationResult validateShareAccess(String shareToken, String accessorIp, ShareAccessType accessType) {
+        logger.debug("Validating share access for token: {} from IP: {} for {}", shareToken, accessorIp, accessType);
+
+        // First validate the token
+        Optional<FileShare> shareOptional = validateShareToken(shareToken);
+        if (shareOptional.isEmpty()) {
+            return ShareAccessValidationResult.invalid("Share not found, expired, or invalid");
+        }
+
+        FileShare share = shareOptional.get();
+
+        // Perform security validation
+        ShareAccessService.AccessValidationResult securityValidation = 
+            shareAccessService.validateAccess(share, accessorIp, accessType);
+
+        if (!securityValidation.isAllowed()) {
+            return ShareAccessValidationResult.denied(securityValidation.getReason(), securityValidation.getDenialType());
+        }
+
+        return ShareAccessValidationResult.allowed(share);
+    }
+
+    /**
+     * Records an access to a shared file with comprehensive logging and security checks.
      * 
      * <p>This method should be called whenever a shared file is accessed
-     * to maintain accurate usage statistics and enforce access limits.
+     * to maintain accurate usage statistics, enforce access limits, and log security events.
      * 
      * @param shareToken the token of the share being accessed
+     * @param accessorIp the IP address of the accessor
+     * @param userAgent the user agent string from the request
+     * @param accessType the type of access (VIEW or DOWNLOAD)
      * @return true if access was recorded successfully, false if share is invalid
      */
-    public boolean recordShareAccess(String shareToken) {
-        logger.debug("Recording access for share token: {}", shareToken);
+    public boolean recordShareAccess(String shareToken, String accessorIp, String userAgent, ShareAccessType accessType) {
+        logger.debug("Recording {} access for share token: {} from IP: {}", accessType, shareToken, accessorIp);
 
         Optional<FileShare> shareOptional = validateShareToken(shareToken);
         if (shareOptional.isEmpty()) {
@@ -177,13 +222,42 @@ public class FileSharingService {
         }
 
         FileShare share = shareOptional.get();
+        
+        // Validate access with security checks
+        ShareAccessService.AccessValidationResult validation = 
+            shareAccessService.validateAccess(share, accessorIp, accessType);
+        
+        if (!validation.isAllowed()) {
+            logger.warn("Access denied for share token: {} from IP: {} - {}", 
+                       shareToken, accessorIp, validation.getReason());
+            return false;
+        }
+
+        // Log the access
+        shareAccessService.logAccess(share, accessorIp, userAgent, accessType);
+        
+        // Increment access count
         share.incrementAccessCount();
         fileShareRepository.save(share);
 
-        logger.info("Share access recorded - ID: {}, new count: {}", 
-                   share.getId(), share.getAccessCount());
+        logger.info("Share access recorded - ID: {}, new count: {}, type: {}, IP: {}", 
+                   share.getId(), share.getAccessCount(), accessType, accessorIp);
         
         return true;
+    }
+
+    /**
+     * Records an access to a shared file and increments the access count.
+     * 
+     * <p>This method is deprecated. Use the overloaded version with IP and user agent for security.
+     * 
+     * @param shareToken the token of the share being accessed
+     * @return true if access was recorded successfully, false if share is invalid
+     * @deprecated Use {@link #recordShareAccess(String, String, String, ShareAccessType)} instead
+     */
+    @Deprecated
+    public boolean recordShareAccess(String shareToken) {
+        return recordShareAccess(shareToken, "unknown", "unknown", ShareAccessType.VIEW);
     }
 
     /**
@@ -362,5 +436,40 @@ public class FileSharingService {
      */
     private String buildShareUrl(String shareToken) {
         return baseUrl + "/api/shares/" + shareToken;
+    }
+
+    /**
+     * Result of share access validation containing outcome and details.
+     */
+    public static class ShareAccessValidationResult {
+        private final boolean allowed;
+        private final String reason;
+        private final ShareAccessService.AccessDenialType denialType;
+        private final FileShare fileShare;
+
+        private ShareAccessValidationResult(boolean allowed, String reason, 
+                                          ShareAccessService.AccessDenialType denialType, FileShare fileShare) {
+            this.allowed = allowed;
+            this.reason = reason;
+            this.denialType = denialType;
+            this.fileShare = fileShare;
+        }
+
+        public static ShareAccessValidationResult allowed(FileShare fileShare) {
+            return new ShareAccessValidationResult(true, null, null, fileShare);
+        }
+
+        public static ShareAccessValidationResult invalid(String reason) {
+            return new ShareAccessValidationResult(false, reason, ShareAccessService.AccessDenialType.PERMISSION_DENIED, null);
+        }
+
+        public static ShareAccessValidationResult denied(String reason, ShareAccessService.AccessDenialType denialType) {
+            return new ShareAccessValidationResult(false, reason, denialType, null);
+        }
+
+        public boolean isAllowed() { return allowed; }
+        public String getReason() { return reason; }
+        public ShareAccessService.AccessDenialType getDenialType() { return denialType; }
+        public FileShare getFileShare() { return fileShare; }
     }
 }

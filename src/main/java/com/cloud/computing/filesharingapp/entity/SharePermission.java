@@ -23,5 +23,23 @@ public enum SharePermission {
      * This permission level provides full access to the shared file,
      * allowing users to both preview and download the content.
      */
-    DOWNLOAD
+    DOWNLOAD;
+
+    /**
+     * Checks if this permission level allows downloading files.
+     * 
+     * @return true if download is allowed, false otherwise
+     */
+    public boolean allowsDownload() {
+        return this == DOWNLOAD;
+    }
+
+    /**
+     * Checks if this permission level allows viewing files.
+     * 
+     * @return true if viewing is allowed (always true for all permission levels)
+     */
+    public boolean allowsView() {
+        return true;
+    }
 }
