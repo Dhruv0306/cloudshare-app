@@ -12,28 +12,57 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
+  // Logout function (defined early so it can be used in interceptor)
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('userInfo');
+    setToken(null);
+    setCurrentUser(null);
+    delete axios.defaults.headers.common['Authorization'];
+  };
+
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setToken(token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      // Try to get user info from localStorage or validate token with server
-      const userInfo = localStorage.getItem('userInfo');
-      if (userInfo) {
-        try {
-          setCurrentUser(JSON.parse(userInfo));
-        } catch (error) {
-          console.error('Error parsing user info from localStorage:', error);
-          // If parsing fails, clear the invalid data
-          localStorage.removeItem('userInfo');
-          localStorage.removeItem('token');
-          setToken(null);
+    // Set up axios response interceptor to handle 401 errors globally
+    const responseInterceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401 && token) {
+          // Token is invalid/expired, logout user
+          console.log('Token expired, logging out user');
+          logout();
         }
+        return Promise.reject(error);
+      }
+    );
+
+    const storedToken = localStorage.getItem('token');
+    const storedUserInfo = localStorage.getItem('userInfo');
+    
+    if (storedToken && storedUserInfo) {
+      try {
+        const userInfo = JSON.parse(storedUserInfo);
+        
+        // Set token and headers
+        setToken(storedToken);
+        setCurrentUser(userInfo);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+      } catch (error) {
+        console.error('Error parsing user info from localStorage:', error);
+        // If parsing fails, clear the invalid data
+        localStorage.removeItem('userInfo');
+        localStorage.removeItem('token');
+        setToken(null);
+        setCurrentUser(null);
       }
     }
+    
     setLoading(false);
-  }, []);
+
+    // Cleanup interceptor on unmount
+    return () => {
+      axios.interceptors.response.eject(responseInterceptor);
+    };
+  }, [token]);
 
   const login = async (username, password) => {
     try {
@@ -76,14 +105,6 @@ export const AuthProvider = ({ children }) => {
         error: error.response?.data?.message || 'Signup failed' 
       };
     }
-  };
-
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userInfo');
-    setToken(null);
-    setCurrentUser(null);
-    delete axios.defaults.headers.common['Authorization'];
   };
 
   const verifyEmail = async (email, verificationCode) => {

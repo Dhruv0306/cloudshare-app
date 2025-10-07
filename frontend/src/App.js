@@ -13,11 +13,14 @@ function FileManager() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, token } = useAuth();
 
   useEffect(() => {
-    fetchFiles();
-  }, []);
+    // Only fetch files if user is authenticated and token is available
+    if (currentUser && token) {
+      fetchFiles();
+    }
+  }, [currentUser, token]);
 
   const fetchFiles = async () => {
     try {
@@ -27,6 +30,7 @@ function FileManager() {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching files:', error);
+      // 401 errors are now handled globally by the axios interceptor
       setMessage('Error fetching files');
       setMessageType('error');
       setFiles([]); // Ensure files is always an array
@@ -193,9 +197,10 @@ function FileManager() {
 
 function AuthWrapper() {
   const [isLogin, setIsLogin] = useState(true);
-  const { token } = useAuth();
+  const { token, currentUser } = useAuth();
 
-  if (token) {
+  // Only show FileManager if BOTH token and currentUser exist
+  if (token && currentUser) {
     return <FileManager />;
   }
 
