@@ -3,7 +3,8 @@ package com.cloud.computing.filesharingapp.entity;
 /**
  * Enumeration representing the different types of access to shared files.
  * 
- * <p>This enum is used for logging and tracking how shared files are accessed
+ * <p>
+ * This enum is used for logging and tracking how shared files are accessed
  * by recipients through share links.
  * 
  * @author File Sharing App Team
@@ -11,9 +12,17 @@ package com.cloud.computing.filesharingapp.entity;
  * @since 1.0
  */
 public enum ShareAccessType {
-    /** User viewed the shared file information or preview */
+    /**
+     * User viewed the shared file information or preview.
+     * This access type is logged when a user visits the share link
+     * and views file metadata or preview content without downloading.
+     */
     VIEW,
-    
-    /** User downloaded the shared file */
+
+    /**
+     * User downloaded the shared file.
+     * This access type is logged when a user successfully downloads
+     * the shared file to their local device.
+     */
     DOWNLOAD
 }

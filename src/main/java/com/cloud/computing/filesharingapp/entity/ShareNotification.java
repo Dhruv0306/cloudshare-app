@@ -89,6 +89,10 @@ public class ShareNotification {
 
     /**
      * Marks the notification as successfully delivered.
+     * 
+     * <p>This method should be called when email delivery confirmation
+     * is received from the email service provider. It updates the delivery
+     * status to prevent retry attempts and maintain accurate delivery statistics.
      */
     public void markAsDelivered() {
         this.delivered = true;

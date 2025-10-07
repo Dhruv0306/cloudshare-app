@@ -125,9 +125,19 @@ public interface ShareNotificationRepository extends JpaRepository<ShareNotifica
     /**
      * Gets notification statistics by delivery status within a time period.
      * 
-     * @param since the start of the time period
-     * @param until the end of the time period
-     * @return List of delivery status counts
+     * <p>This method provides analytics on email notification delivery success rates
+     * within a specified time range. Useful for monitoring email service health
+     * and identifying delivery issues.
+     * 
+     * <p>Returns an array where:
+     * <ul>
+     *   <li>Index 0: Delivery status (Boolean - true for delivered, false for failed)</li>
+     *   <li>Index 1: Count of notifications (Long)</li>
+     * </ul>
+     * 
+     * @param since the start of the time period (inclusive)
+     * @param until the end of the time period (inclusive)
+     * @return List of Object arrays containing delivery status and counts
      */
     @Query("SELECT sn.delivered, COUNT(sn) FROM ShareNotification sn " +
            "WHERE sn.sentAt BETWEEN :since AND :until " +

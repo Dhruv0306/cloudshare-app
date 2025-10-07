@@ -11,9 +11,17 @@ package com.cloud.computing.filesharingapp.entity;
  * @since 1.0
  */
 public enum SharePermission {
-    /** Recipients can only view the file but cannot download it */
+    /** 
+     * Recipients can only view the file but cannot download it.
+     * This permission level allows users to preview file content
+     * without giving them the ability to save a local copy.
+     */
     VIEW_ONLY,
     
-    /** Recipients can both view and download the file */
+    /** 
+     * Recipients can both view and download the file.
+     * This permission level provides full access to the shared file,
+     * allowing users to both preview and download the content.
+     */
     DOWNLOAD
 }

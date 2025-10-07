@@ -122,57 +122,117 @@ public class FileShare {
     /**
      * Checks if the share is currently valid (active and not expired).
      * 
-     * @return true if the share is valid, false otherwise
+     * <p>A share is considered valid if all of the following conditions are met:
+     * <ul>
+     *   <li>The share is marked as active</li>
+     *   <li>The share has not expired (if expiration is set)</li>
+     *   <li>The access count has not reached the maximum limit (if limit is set)</li>
+     * </ul>
+     * 
+     * @return true if the share is valid and can be accessed, false otherwise
      */
     public boolean isValid() {
+        // Check if share is active
         if (!active) {
             return false;
         }
+        
+        // Check if share has expired
         if (expiresAt != null && LocalDateTime.now().isAfter(expiresAt)) {
             return false;
         }
+        
+        // Check if maximum access count has been reached
         if (maxAccess != null && accessCount >= maxAccess) {
             return false;
         }
+        
         return true;
     }
 
     /**
      * Increments the access count for this share.
+     * 
+     * <p>This method should be called each time the shared file is accessed
+     * to maintain accurate usage statistics and enforce access limits.
+     * 
+     * <p>Note: This method does not check if the maximum access limit has been
+     * reached. Use {@link #isValid()} to verify share validity before access.
      */
     public void incrementAccessCount() {
         this.accessCount++;
     }
 
     // Getters and Setters
+    
+    /**
+     * Gets the unique identifier for this file share.
+     * 
+     * @return the share ID
+     */
     public Long getId() {
         return id;
     }
 
+    /**
+     * Sets the unique identifier for this file share.
+     * 
+     * @param id the share ID to set
+     */
     public void setId(Long id) {
         this.id = id;
     }
 
+    /**
+     * Gets the file being shared.
+     * 
+     * @return the shared file entity
+     */
     public FileEntity getFile() {
         return file;
     }
 
+    /**
+     * Sets the file being shared.
+     * 
+     * @param file the file entity to share
+     */
     public void setFile(FileEntity file) {
         this.file = file;
     }
 
+    /**
+     * Gets the user who created this share.
+     * 
+     * @return the share owner
+     */
     public User getOwner() {
         return owner;
     }
 
+    /**
+     * Sets the user who created this share.
+     * 
+     * @param owner the share owner to set
+     */
     public void setOwner(User owner) {
         this.owner = owner;
     }
 
+    /**
+     * Gets the unique share token for accessing this share.
+     * 
+     * @return the share token
+     */
     public String getShareToken() {
         return shareToken;
     }
 
+    /**
+     * Sets the unique share token for accessing this share.
+     * 
+     * @param shareToken the share token to set
+     */
     public void setShareToken(String shareToken) {
         this.shareToken = shareToken;
     }

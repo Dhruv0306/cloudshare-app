@@ -110,10 +110,20 @@ public interface ShareAccessRepository extends JpaRepository<ShareAccess, Long> 
     /**
      * Gets access statistics for a file share within a time period.
      * 
+     * <p>This method provides analytics data showing how many times a shared file
+     * was viewed versus downloaded within a specific time range. Useful for
+     * generating usage reports and understanding user behavior.
+     * 
+     * <p>Returns an array where:
+     * <ul>
+     *   <li>Index 0: Access type (ShareAccessType enum)</li>
+     *   <li>Index 1: Count of accesses (Long)</li>
+     * </ul>
+     * 
      * @param fileShare the file share to analyze
-     * @param since the start of the time period
-     * @param until the end of the time period
-     * @return List of access counts grouped by access type
+     * @param since the start of the time period (inclusive)
+     * @param until the end of the time period (inclusive)
+     * @return List of Object arrays containing access types and their counts
      */
     @Query("SELECT sa.accessType, COUNT(sa) FROM ShareAccess sa " +
            "WHERE sa.fileShare = :fileShare AND sa.accessedAt BETWEEN :since AND :until " +
@@ -149,10 +159,20 @@ public interface ShareAccessRepository extends JpaRepository<ShareAccess, Long> 
     /**
      * Finds suspicious access patterns (multiple accesses from same IP in short time).
      * 
+     * <p>This method helps identify potential abuse or automated attacks by detecting
+     * IP addresses that have made an unusually high number of access attempts within
+     * a specified time window. The results can be used for rate limiting or security alerts.
+     * 
+     * <p>Returns an array where:
+     * <ul>
+     *   <li>Index 0: IP address (String)</li>
+     *   <li>Index 1: Access count (Long)</li>
+     * </ul>
+     * 
      * @param accessorIp the IP address to check
-     * @param since the time window to check
+     * @param since the time window to check (accesses after this time)
      * @param minCount the minimum number of accesses to be considered suspicious
-     * @return List of IP addresses with suspicious access patterns
+     * @return List of Object arrays containing IP addresses and their access counts
      */
     @Query("SELECT sa.accessorIp, COUNT(sa) FROM ShareAccess sa " +
            "WHERE sa.accessorIp = :accessorIp AND sa.accessedAt > :since " +

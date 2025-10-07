@@ -96,6 +96,10 @@ public interface FileShareRepository extends JpaRepository<FileShare, Long> {
     /**
      * Finds all shares that have expired but are still marked as active.
      * 
+     * <p>This method is useful for cleanup operations to identify shares that
+     * should be deactivated due to expiration. Only shares with a set expiration
+     * time are considered.
+     * 
      * @param currentTime the current timestamp to compare against
      * @return List of expired but active FileShare objects
      */
@@ -104,6 +108,10 @@ public interface FileShareRepository extends JpaRepository<FileShare, Long> {
     
     /**
      * Finds all shares that have reached their maximum access count but are still active.
+     * 
+     * <p>This method identifies shares that should be deactivated because they have
+     * reached their configured access limit. Only shares with a set maximum access
+     * count are considered.
      * 
      * @return List of FileShare objects that have exceeded their access limit
      */
