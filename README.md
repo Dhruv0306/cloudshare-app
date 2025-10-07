@@ -1,6 +1,6 @@
 # File Sharing App
 
-A secure, full-stack file sharing application built with Spring Boot (backend) and React (frontend), featuring comprehensive email verification, advanced security measures, file sharing system with token-based access, and robust testing coverage.
+A secure, full-stack file sharing application built with Spring Boot (backend) and React (frontend), featuring comprehensive email verification, advanced security measures, complete file sharing system with token-based access, and robust testing coverage.
 
 ## Features
 
@@ -13,7 +13,7 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 - **Password Security**: Real-time password strength validation and requirements
 - **File Security**: Path traversal protection and UUID-based file naming
 
-### File Sharing Features (Implemented)
+### File Sharing Features (Backend Complete)
 - **Secure Share Links**: UUID-based tokens for unpredictable, secure file access
 - **Permission Control**: View-only or download permissions for shared files  
 - **Access Limits**: Optional maximum access count and expiration dates
@@ -21,6 +21,9 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 - **Share Management**: Create, revoke, and update permissions for file shares
 - **Cleanup Operations**: Automated cleanup of expired and inactive shares
 - **Security Validation**: Token validation with expiration and permission checks
+- **Rate Limiting**: IP-based rate limiting to prevent abuse and suspicious activity detection
+- **Access Analytics**: Detailed statistics and reporting for share usage patterns
+- **Audit Trail**: Complete logging of all share operations for security compliance
 
 ### Advanced Security
 - **Rate Limiting**: Protection against brute force attacks and spam
@@ -75,12 +78,13 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 ## Current Implementation Status
 
 ### ✅ Completed Features
-- **User Authentication System**: Registration, login, JWT tokens
-- **Email Verification**: 6-digit codes with rate limiting and expiration
-- **File Management**: Upload, download, list, delete with security
-- **File Sharing Backend**: Complete service layer with entities and repositories
-- **Security Framework**: JWT authentication, rate limiting, audit logging
-- **Testing Suite**: 32+ backend tests, 41 frontend tests with good coverage
+- **User Authentication System**: Registration, login, JWT tokens with comprehensive security
+- **Email Verification**: 6-digit codes with rate limiting and expiration management
+- **File Management**: Upload, download, list, delete with user isolation and security
+- **File Sharing Backend**: Complete service layer with entities, repositories, and security controls
+- **Share Access Control**: Token validation, permission management, and access tracking
+- **Security Framework**: JWT authentication, IP-based rate limiting, audit logging, and suspicious activity detection
+- **Testing Suite**: 566+ backend tests, 41 frontend tests with comprehensive coverage
 - **CI/CD Pipeline**: GitHub Actions with automated testing and security scanning
 
 ### 🚧 In Progress / Planned
@@ -148,13 +152,14 @@ The frontend will start on `http://localhost:3000`
 - `DELETE /api/files/{id}` - Delete user's file
 
 ### File Sharing (Backend Implementation Complete)
-- **Core Service**: FileSharingService with secure UUID token generation
-- **Data Models**: FileShare, ShareAccess, and ShareNotification entities
-- **Repository Layer**: Custom JPA queries for share management and analytics
-- **Share Operations**: Create, validate, revoke, and cleanup shares
-- **Access Control**: Permission-based validation (VIEW_ONLY, DOWNLOAD)
-- **Security Features**: Token validation, expiration checks, access limits
-- **Audit Trail**: Comprehensive logging of all share operations
+- **Core Services**: FileSharingService and ShareAccessService with comprehensive functionality
+- **Data Models**: FileShare, ShareAccess, and ShareNotification entities with proper indexing
+- **Repository Layer**: Custom JPA queries for share management, analytics, and reporting
+- **Share Operations**: Create, validate, revoke, cleanup, and permission management
+- **Access Control**: Permission-based validation (VIEW_ONLY, DOWNLOAD) with real-time checks
+- **Security Features**: Token validation, expiration checks, access limits, and rate limiting
+- **Access Analytics**: Detailed statistics, usage patterns, and suspicious activity detection
+- **Audit Trail**: Comprehensive logging of all share operations with IP and user agent tracking
 
 **Note**: REST API endpoints and frontend components are planned for future implementation.
 
@@ -236,8 +241,11 @@ The file sharing system backend is fully implemented with comprehensive features
 - **Expiration Management**: Configure optional expiration dates
 - **Access Limits**: Set maximum number of accesses per share
 - **Access Tracking**: Log all access attempts with IP and user agent
+- **Rate Limiting**: IP-based rate limiting to prevent abuse
+- **Security Monitoring**: Suspicious activity detection and automated response
 - **Share Management**: Revoke, update permissions, and cleanup expired shares
 - **Security Validation**: Token validation with comprehensive checks
+- **Access Analytics**: Detailed statistics and usage pattern analysis
 - **Audit Trail**: Complete logging of all share operations
 
 **Note**: Frontend components and REST API endpoints for file sharing are planned for future implementation.
@@ -330,12 +338,12 @@ open coverage/lcov-report/index.html
 
 ### Test Coverage Summary
 
-#### Backend Testing (566 Tests Passing)
+#### Backend Testing (566+ Tests Passing)
 - **Entity Tests**: User, FileEntity, FileShare, ShareAccess, ShareNotification validation
 - **Security Tests**: JWT utilities, UserPrincipal, authentication, rate limiting
-- **Service Tests**: FileService, FileSharingService, EmailVerificationService with comprehensive scenarios
+- **Service Tests**: FileService, FileSharingService, ShareAccessService, EmailVerificationService with comprehensive scenarios
 - **Repository Tests**: Custom queries for file sharing, email verification, and analytics
-- **Integration Tests**: Full application context and controller testing
+- **Integration Tests**: Full application context and controller testing with real database
 - **Performance Tests**: Repository performance and query optimization validation
 - **Coverage Areas**: 
   - ✅ JWT token lifecycle and validation
@@ -347,6 +355,9 @@ open coverage/lcov-report/index.html
   - ✅ Access tracking and analytics queries
   - ✅ Email verification system
   - ✅ Share cleanup and maintenance operations
+  - ✅ IP-based rate limiting and abuse prevention
+  - ✅ Suspicious activity detection and reporting
+  - ✅ Share access statistics and analytics
 
 #### Frontend Testing (41 Tests)
 - **Component Tests**: Login (5), Signup (10), EmailVerification (16)
@@ -421,6 +432,20 @@ Files are stored in the `uploads/` directory in the project root. Each file is g
 
 ### Core Components Implemented
 
+#### FileSharingService
+- **Share Creation**: Secure UUID-based token generation with configurable permissions
+- **Share Validation**: Real-time token validation with expiration and permission checks
+- **Share Management**: Create, revoke, update permissions, and cleanup operations
+- **Access Control**: Comprehensive permission validation (VIEW_ONLY, DOWNLOAD)
+- **Owner Validation**: Strict user ownership checks for all share operations
+
+#### ShareAccessService  
+- **Access Logging**: Comprehensive tracking of all share access attempts
+- **Rate Limiting**: IP-based rate limiting to prevent abuse (configurable limits)
+- **Security Monitoring**: Suspicious activity detection and automated response
+- **Access Analytics**: Detailed statistics and usage pattern analysis
+- **Access Validation**: Real-time permission and security checks
+
 #### FileShare Entity
 - **Unique Share Tokens**: UUID-based tokens for secure, unpredictable access
 - **Permission Levels**: VIEW_ONLY (preview only) or DOWNLOAD (full access)
@@ -491,6 +516,8 @@ share_notifications (
 - **Expiration Control**: Automatic validation of share expiration dates
 - **Access Limits**: Enforcement of maximum access count per share
 - **Ownership Validation**: Strict user ownership checks for share management
+- **Rate Limiting**: IP-based rate limiting with configurable thresholds
+- **Suspicious Activity Detection**: Automated monitoring and response to unusual patterns
 - **Audit Trail**: Complete logging for security and compliance
 - **Cleanup Operations**: Automated removal of expired and inactive shares
 
@@ -647,6 +674,13 @@ The file sharing system backend is fully implemented with the following componen
 3. **Email Integration**: Connect notification system with EmailService
 4. **Public Access Routes**: Implement token-based file access
 5. **Analytics Dashboard**: Create usage statistics interface
+
+### Recent Implementation Progress
+The file sharing system has made significant progress with the completion of:
+- **ShareAccessService**: Complete implementation with rate limiting and security monitoring
+- **Access Analytics**: Detailed statistics and reporting capabilities
+- **Security Enhancements**: Suspicious activity detection and IP-based controls
+- **Comprehensive Testing**: 566+ backend tests covering all sharing functionality
 
 ## Support
 
