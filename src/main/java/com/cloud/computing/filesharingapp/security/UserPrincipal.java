@@ -8,6 +8,25 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.Collections;
 
+/**
+ * Spring Security UserDetails implementation for the file sharing application.
+ * 
+ * <p>This class wraps the User entity to provide Spring Security with the
+ * necessary authentication and authorization information. It implements
+ * additional security checks beyond basic authentication:
+ * <ul>
+ *   <li>Email verification requirement for account activation</li>
+ *   <li>Account status validation (ACTIVE, PENDING, SUSPENDED, etc.)</li>
+ *   <li>Integration with JWT token generation</li>
+ * </ul>
+ * 
+ * <p>The {@code isEnabled()} method enforces that users must have both
+ * verified their email and have an ACTIVE account status to authenticate.
+ * 
+ * @author File Sharing App Team
+ * @version 1.0
+ * @since 1.0
+ */
 public class UserPrincipal implements UserDetails {
     private Long id;
     private String username;
@@ -16,6 +35,16 @@ public class UserPrincipal implements UserDetails {
     private boolean emailVerified;
     private AccountStatus accountStatus;
     
+    /**
+     * Constructor for creating a UserPrincipal with all required fields.
+     * 
+     * @param id the user's unique identifier
+     * @param username the user's username
+     * @param email the user's email address
+     * @param password the user's encrypted password
+     * @param emailVerified whether the user's email has been verified
+     * @param accountStatus the current status of the user's account
+     */
     public UserPrincipal(Long id, String username, String email, String password, boolean emailVerified, AccountStatus accountStatus) {
         this.id = id;
         this.username = username;
@@ -25,6 +54,12 @@ public class UserPrincipal implements UserDetails {
         this.accountStatus = accountStatus;
     }
     
+    /**
+     * Factory method to create a UserPrincipal from a User entity.
+     * 
+     * @param user the User entity to convert
+     * @return UserPrincipal instance for Spring Security
+     */
     public static UserPrincipal create(User user) {
         return new UserPrincipal(
                 user.getId(),
@@ -82,6 +117,20 @@ public class UserPrincipal implements UserDetails {
         return true;
     }
     
+    /**
+     * Determines if the user account is enabled for authentication.
+     * 
+     * <p>This method enforces the application's security policy by requiring:
+     * <ul>
+     *   <li>Email verification must be completed</li>
+     *   <li>Account status must be ACTIVE</li>
+     * </ul>
+     * 
+     * <p>Users with unverified emails or non-ACTIVE status (PENDING, SUSPENDED, etc.)
+     * will be unable to authenticate even with correct credentials.
+     * 
+     * @return true if the user can authenticate, false otherwise
+     */
     @Override
     public boolean isEnabled() {
         // Only allow login for verified users with ACTIVE status

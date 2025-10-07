@@ -19,6 +19,25 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Comparator;
 
+/**
+ * Main Spring Boot application class for the File Sharing Application.
+ * 
+ * <p>This application provides secure file upload, download, and sharing capabilities
+ * with user authentication, email verification, and comprehensive security features.
+ * 
+ * <p>Key features include:
+ * <ul>
+ *   <li>JWT-based authentication and authorization</li>
+ *   <li>Email verification for user registration</li>
+ *   <li>Rate limiting and security auditing</li>
+ *   <li>File upload/download with user isolation</li>
+ *   <li>Automated log file cleanup</li>
+ * </ul>
+ * 
+ * @author File Sharing App Team
+ * @version 1.0
+ * @since 1.0
+ */
 @SpringBootApplication
 @EnableScheduling
 public class FilesharingappApplication implements CommandLineRunner {
@@ -29,25 +48,50 @@ public class FilesharingappApplication implements CommandLineRunner {
 	private FileService fileService;
 
 	static {
-		// Load environment variables from .env file
+		// Load environment variables from .env file during class initialization
 		loadEnvironmentVariables();
 	}
 
+	/**
+	 * Main entry point for the Spring Boot application.
+	 * 
+	 * @param args command line arguments passed to the application
+	 */
 	public static void main(String[] args) {
 		SpringApplication.run(FilesharingappApplication.class, args);
 	}
 
+	/**
+	 * Executes initialization tasks after the Spring context is loaded.
+	 * 
+	 * <p>This method performs the following startup tasks:
+	 * <ul>
+	 *   <li>Initializes the file service and creates upload directories</li>
+	 *   <li>Performs cleanup of old log files to manage disk space</li>
+	 * </ul>
+	 * 
+	 * @param args command line arguments (not used)
+	 * @throws Exception if initialization fails
+	 */
 	@Override
 	public void run(String... args) throws Exception {
-		// Initialize file service
+		// Initialize file service and create necessary directories
 		if (fileService != null) {
 			fileService.init();
 		}
 		
-		// Clean up old log files on startup
+		// Clean up old log files on startup to manage disk space
 		cleanupLogFiles();
 	}
 
+	/**
+	 * Loads environment variables from the .env file into system properties.
+	 * 
+	 * <p>This method attempts to load configuration from a .env file in the current
+	 * directory. If the file is missing or malformed, the application continues
+	 * with default configuration values. System properties take precedence over
+	 * .env file values to allow runtime overrides.
+	 */
 	private static void loadEnvironmentVariables() {
 		try {
 			Dotenv dotenv = Dotenv.configure()
@@ -69,6 +113,20 @@ public class FilesharingappApplication implements CommandLineRunner {
 		}
 	}
 
+	/**
+	 * Performs cleanup of old log files to prevent excessive disk usage.
+	 * 
+	 * <p>This method:
+	 * <ul>
+	 *   <li>Creates the logs directory if it doesn't exist</li>
+	 *   <li>Identifies all log files (*.log, *.log.gz, *.log.N)</li>
+	 *   <li>Keeps only the 10 most recent log files</li>
+	 *   <li>Deletes older log files to manage disk space</li>
+	 * </ul>
+	 * 
+	 * <p>The cleanup is performed safely with proper error handling to ensure
+	 * application startup is not affected by log management issues.
+	 */
 	private void cleanupLogFiles() {
 		try {
 			String logPath = System.getProperty("logging.file.path", "logs");

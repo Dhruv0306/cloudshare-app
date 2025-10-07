@@ -23,6 +23,26 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * REST controller for authentication and user management operations.
+ * 
+ * <p>This controller provides endpoints for:
+ * <ul>
+ *   <li>User registration with email verification</li>
+ *   <li>User authentication and JWT token generation</li>
+ *   <li>Email verification workflow</li>
+ *   <li>Password strength validation</li>
+ *   <li>Verification code resending</li>
+ * </ul>
+ * 
+ * <p>The controller implements a secure registration flow that requires
+ * email verification before users can access protected resources. It includes
+ * comprehensive logging for security auditing and debugging purposes.
+ * 
+ * @author File Sharing App Team
+ * @version 1.0
+ * @since 1.0
+ */
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
 @RequestMapping("/api/auth")
@@ -48,6 +68,22 @@ public class AuthController {
     @Autowired
     PasswordStrengthService passwordStrengthService;
 
+    /**
+     * Authenticates a user and returns a JWT token.
+     * 
+     * <p>This endpoint performs the following validations:
+     * <ul>
+     *   <li>Verifies user credentials against the database</li>
+     *   <li>Ensures the user's email has been verified</li>
+     *   <li>Generates a JWT token for authenticated sessions</li>
+     * </ul>
+     * 
+     * <p>Users with unverified emails are rejected and prompted to complete
+     * the email verification process before logging in.
+     * 
+     * @param loginRequest the login credentials (username and password)
+     * @return ResponseEntity containing JWT token and user info or error message
+     */
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
         logger.info("Login attempt for username: {}", loginRequest.getUsername());
@@ -83,6 +119,23 @@ public class AuthController {
         }
     }
 
+    /**
+     * Registers a new user account with email verification.
+     * 
+     * <p>This endpoint performs the following operations:
+     * <ul>
+     *   <li>Validates username and email uniqueness</li>
+     *   <li>Validates password strength requirements</li>
+     *   <li>Creates user account with PENDING status</li>
+     *   <li>Sends email verification code</li>
+     * </ul>
+     * 
+     * <p>New users cannot access protected resources until they verify
+     * their email address using the sent verification code.
+     * 
+     * @param signUpRequest the registration details (username, email, password)
+     * @return ResponseEntity with success message or error details
+     */
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@Valid @RequestBody SignupRequest signUpRequest) {
         logger.info("Registration attempt for username: {} and email: {}", signUpRequest.getUsername(),
@@ -140,6 +193,20 @@ public class AuthController {
         }
     }
 
+    /**
+     * Verifies a user's email address using the provided verification code.
+     * 
+     * <p>This endpoint validates the 6-digit verification code sent to the
+     * user's email address. Upon successful verification:
+     * <ul>
+     *   <li>User's email verification status is set to true</li>
+     *   <li>Account status is changed to ACTIVE</li>
+     *   <li>User can now log in and access protected resources</li>
+     * </ul>
+     * 
+     * @param verifyRequest the verification details (email and code)
+     * @return ResponseEntity with success message or error details
+     */
     @PostMapping("/verify-email")
     public ResponseEntity<?> verifyEmail(@Valid @RequestBody VerifyEmailRequest verifyRequest) {
         logger.info("Email verification attempt for email: {}, code length: {}",
@@ -158,6 +225,21 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Email verified successfully! You can now log in."));
     }
 
+    /**
+     * Resends the email verification code to a user.
+     * 
+     * <p>This endpoint allows users to request a new verification code if:
+     * <ul>
+     *   <li>The original code has expired</li>
+     *   <li>The email was not received</li>
+     *   <li>The code was lost or deleted</li>
+     * </ul>
+     * 
+     * <p>Rate limiting is applied to prevent abuse of this endpoint.
+     * 
+     * @param resendRequest the request containing the user's email address
+     * @return ResponseEntity with success message or error details
+     */
     @PostMapping("/resend-verification")
     public ResponseEntity<?> resendVerificationCode(@Valid @RequestBody ResendVerificationRequest resendRequest) {
         logger.info("Resend verification code request for email: {}", resendRequest.getEmail());
@@ -170,6 +252,23 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Verification code sent successfully! Please check your email."));
     }
 
+    /**
+     * Evaluates the strength of a password and provides feedback.
+     * 
+     * <p>This endpoint analyzes password strength based on:
+     * <ul>
+     *   <li>Length requirements</li>
+     *   <li>Character complexity (uppercase, lowercase, numbers, symbols)</li>
+     *   <li>Common password patterns</li>
+     *   <li>Dictionary word detection</li>
+     * </ul>
+     * 
+     * <p>The response includes a strength score and specific recommendations
+     * for improving password security.
+     * 
+     * @param passwordRequest the request containing the password to evaluate
+     * @return ResponseEntity with password strength analysis
+     */
     @PostMapping("/check-password-strength")
     public ResponseEntity<PasswordStrengthResponse> checkPasswordStrength(
             @Valid @RequestBody CheckPasswordStrengthRequest passwordRequest) {
@@ -186,6 +285,16 @@ public class AuthController {
         }
     }
 
+    /**
+     * Retrieves the email address for a user (for verification purposes only).
+     * 
+     * <p>This endpoint is used during the verification flow to help users
+     * identify which email address needs verification. It only returns email
+     * addresses for unverified users to maintain privacy and security.
+     * 
+     * @param username the username to look up
+     * @return ResponseEntity with email address or error message
+     */
     @GetMapping("/user-email/{username}")
     public ResponseEntity<?> getUserEmail(@PathVariable String username) {
         logger.info("Get user email request for username: {}", username);
@@ -216,6 +325,16 @@ public class AuthController {
         }
     }
 
+    /**
+     * Debug endpoint for troubleshooting email verification issues.
+     * 
+     * <p><strong>Note:</strong> This endpoint should be removed in production.
+     * It's used for debugging payload structure and data type issues during
+     * development and testing.
+     * 
+     * @param payload the raw request payload for analysis
+     * @return ResponseEntity with payload analysis information
+     */
     @PostMapping("/debug-verify")
     public ResponseEntity<?> debugVerifyEmail(@RequestBody Map<String, Object> payload) {
         logger.info("Debug verification endpoint called with payload: {}", payload);

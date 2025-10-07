@@ -19,6 +19,25 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * REST controller for file management operations.
+ * 
+ * <p>This controller provides endpoints for authenticated users to:
+ * <ul>
+ *   <li>Upload files to their personal storage</li>
+ *   <li>Download their uploaded files</li>
+ *   <li>List all their files</li>
+ *   <li>Retrieve specific file metadata</li>
+ *   <li>Delete their files</li>
+ * </ul>
+ * 
+ * <p>All operations are user-scoped, ensuring users can only access their own files.
+ * The controller includes comprehensive logging for security auditing and debugging.
+ * 
+ * @author File Sharing App Team
+ * @version 1.0
+ * @since 1.0
+ */
 @RestController
 @RequestMapping("/api/files")
 @CrossOrigin(origins = "http://localhost:3000")
@@ -32,6 +51,17 @@ public class FileController {
     @Autowired
     private UserRepository userRepository;
     
+    /**
+     * Uploads a file for the authenticated user.
+     * 
+     * <p>This endpoint accepts multipart file uploads and stores them securely
+     * with user isolation. Each file is assigned a unique identifier to prevent
+     * naming conflicts and unauthorized access.
+     * 
+     * @param file the multipart file to upload
+     * @param authentication the current user's authentication context
+     * @return ResponseEntity containing the created FileEntity or error message
+     */
     @PostMapping("/upload")
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file, Authentication authentication) {
         UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
@@ -54,6 +84,17 @@ public class FileController {
         }
     }
     
+    /**
+     * Downloads a file by its stored filename for the authenticated user.
+     * 
+     * <p>This endpoint retrieves files that belong to the authenticated user only.
+     * The response includes appropriate headers for file download with the original
+     * filename and content type.
+     * 
+     * @param fileName the stored filename (UUID-prefixed) of the file to download
+     * @param authentication the current user's authentication context
+     * @return ResponseEntity containing the file resource or 404 if not found/unauthorized
+     */
     @GetMapping("/download/{fileName}")
     public ResponseEntity<Resource> downloadFile(@PathVariable String fileName, Authentication authentication) {
         UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
@@ -90,6 +131,16 @@ public class FileController {
         }
     }
     
+    /**
+     * Retrieves all files belonging to the authenticated user.
+     * 
+     * <p>Returns a list of FileEntity objects containing metadata for all files
+     * uploaded by the current user. This includes file names, sizes, upload dates,
+     * and other relevant information.
+     * 
+     * @param authentication the current user's authentication context
+     * @return ResponseEntity containing a list of the user's files
+     */
     @GetMapping
     public ResponseEntity<List<FileEntity>> getUserFiles(Authentication authentication) {
         UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
@@ -110,6 +161,16 @@ public class FileController {
         }
     }
     
+    /**
+     * Retrieves a specific file by its ID for the authenticated user.
+     * 
+     * <p>Returns the FileEntity metadata for a file with the specified ID,
+     * but only if the file belongs to the authenticated user.
+     * 
+     * @param id the unique identifier of the file
+     * @param authentication the current user's authentication context
+     * @return ResponseEntity containing the FileEntity or 404 if not found/unauthorized
+     */
     @GetMapping("/{id}")
     public ResponseEntity<FileEntity> getUserFileById(@PathVariable Long id, Authentication authentication) {
         try {
@@ -124,6 +185,17 @@ public class FileController {
         }
     }
     
+    /**
+     * Deletes a file by its ID for the authenticated user.
+     * 
+     * <p>Permanently removes both the file record from the database and the
+     * physical file from storage. Only files belonging to the authenticated
+     * user can be deleted.
+     * 
+     * @param id the unique identifier of the file to delete
+     * @param authentication the current user's authentication context
+     * @return ResponseEntity with success message or error details
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteUserFile(@PathVariable Long id, Authentication authentication) {
         UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
