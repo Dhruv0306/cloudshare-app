@@ -277,34 +277,74 @@ public class ShareResponse {
             this.fileSize = fileSize;
         }
 
+        /**
+         * Gets the file identifier.
+         * 
+         * @return the file ID
+         */
         public Long getFileId() {
             return fileId;
         }
 
+        /**
+         * Sets the file identifier.
+         * 
+         * @param fileId the file ID to set
+         */
         public void setFileId(Long fileId) {
             this.fileId = fileId;
         }
 
+        /**
+         * Gets the original file name.
+         * 
+         * @return the original file name
+         */
         public String getOriginalFileName() {
             return originalFileName;
         }
 
+        /**
+         * Sets the original file name.
+         * 
+         * @param originalFileName the original file name to set
+         */
         public void setOriginalFileName(String originalFileName) {
             this.originalFileName = originalFileName;
         }
 
+        /**
+         * Gets the file content type.
+         * 
+         * @return the file content type (MIME type)
+         */
         public String getContentType() {
             return contentType;
         }
 
+        /**
+         * Sets the file content type.
+         * 
+         * @param contentType the file content type to set
+         */
         public void setContentType(String contentType) {
             this.contentType = contentType;
         }
 
+        /**
+         * Gets the file size in bytes.
+         * 
+         * @return the file size in bytes
+         */
         public Long getFileSize() {
             return fileSize;
         }
 
+        /**
+         * Sets the file size in bytes.
+         * 
+         * @param fileSize the file size in bytes to set
+         */
         public void setFileSize(Long fileSize) {
             this.fileSize = fileSize;
         }
