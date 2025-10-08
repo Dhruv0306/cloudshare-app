@@ -193,3 +193,126 @@ export const validateEmailVerificationForm = (formData) => {
   
   return { isValid, errors };
 };
+
+/**
+ * Validates multiple email addresses separated by commas
+ * @param {string} emailList - Comma-separated email addresses
+ * @returns {object} - { isValid: boolean, message: string, validEmails: array }
+ */
+export const validateEmailList = (emailList) => {
+  if (!emailList || emailList.trim() === '') {
+    return { isValid: false, message: 'Email addresses are required', validEmails: [] };
+  }
+  
+  const emails = emailList.split(',').map(email => email.trim()).filter(email => email);
+  const validEmails = [];
+  const invalidEmails = [];
+  
+  if (emails.length === 0) {
+    return { isValid: false, message: 'Please enter at least one email address', validEmails: [] };
+  }
+  
+  if (emails.length > 10) {
+    return { isValid: false, message: 'Maximum 10 email addresses allowed', validEmails: [] };
+  }
+  
+  for (const email of emails) {
+    const validation = validateEmail(email);
+    if (validation.isValid) {
+      validEmails.push(email);
+    } else {
+      invalidEmails.push(email);
+    }
+  }
+  
+  if (invalidEmails.length > 0) {
+    return { 
+      isValid: false, 
+      message: `Invalid email addresses: ${invalidEmails.join(', ')}`, 
+      validEmails 
+    };
+  }
+  
+  return { isValid: true, message: '', validEmails };
+};
+
+/**
+ * Validates share expiration date
+ * @param {string} expirationDate - ISO date string
+ * @returns {object} - { isValid: boolean, message: string }
+ */
+export const validateShareExpiration = (expirationDate) => {
+  if (!expirationDate) {
+    return { isValid: false, message: 'Expiration date is required' };
+  }
+  
+  const expDate = new Date(expirationDate);
+  const now = new Date();
+  
+  if (isNaN(expDate.getTime())) {
+    return { isValid: false, message: 'Invalid date format' };
+  }
+  
+  if (expDate <= now) {
+    return { isValid: false, message: 'Expiration date must be in the future' };
+  }
+  
+  // Check if expiration is more than 1 year in the future
+  const oneYearFromNow = new Date();
+  oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+  
+  if (expDate > oneYearFromNow) {
+    return { isValid: false, message: 'Expiration date cannot be more than 1 year in the future' };
+  }
+  
+  return { isValid: true, message: '' };
+};
+
+/**
+ * Validates file sharing form data
+ * @param {object} formData - Share form data
+ * @returns {object} - { isValid: boolean, errors: object }
+ */
+export const validateShareForm = (formData) => {
+  const errors = {};
+  let isValid = true;
+  
+  // Validate permission
+  if (!formData.permission || !['VIEW_ONLY', 'DOWNLOAD'].includes(formData.permission)) {
+    errors.permission = 'Valid permission is required';
+    isValid = false;
+  }
+  
+  // Validate expiration if provided
+  if (formData.expiresAt) {
+    const expirationValidation = validateShareExpiration(formData.expiresAt);
+    if (!expirationValidation.isValid) {
+      errors.expiresAt = expirationValidation.message;
+      isValid = false;
+    }
+  }
+  
+  // Validate email recipients if notification is enabled
+  if (formData.sendNotification) {
+    if (!formData.recipientEmails || formData.recipientEmails.length === 0) {
+      errors.recipientEmails = 'Email recipients are required when sending notifications';
+      isValid = false;
+    } else {
+      // Validate each email in the array
+      const invalidEmails = [];
+      for (const email of formData.recipientEmails) {
+        const emailValidation = validateEmail(email);
+        if (!emailValidation.isValid) {
+          invalidEmails.push(email);
+        }
+      }
+      
+      if (invalidEmails.length > 0) {
+        errors.recipientEmails = `Invalid email addresses: ${invalidEmails.join(', ')}`;
+        isValid = false;
+      }
+    }
+  }
+  
+  return { isValid, errors };
+};
