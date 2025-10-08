@@ -114,9 +114,9 @@ describe('Signup Component', () => {
     
     await waitFor(() => {
       expect(screen.getByText('Verify Your Email')).toBeInTheDocument();
-      expect(screen.getByText('test@example.com')).toBeInTheDocument();
-      expect(screen.getByLabelText(/verification code/i)).toBeInTheDocument();
     });
+    expect(screen.getByText('test@example.com')).toBeInTheDocument();
+    expect(screen.getByLabelText(/verification code/i)).toBeInTheDocument();
   });
 
   test('shows error message on failed signup', async () => {

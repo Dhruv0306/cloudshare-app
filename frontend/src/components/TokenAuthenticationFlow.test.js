@@ -284,9 +284,9 @@ describe('Token-based Authentication Flow', () => {
       
       await waitFor(() => {
         expect(screen.getByText('File Sharing App')).toBeInTheDocument();
-        expect(screen.getByText('Welcome, testuser!')).toBeInTheDocument();
-        expect(axios.get).toHaveBeenCalledWith('/api/files');
       });
+      expect(screen.getByText('Welcome, testuser!')).toBeInTheDocument();
+      expect(axios.get).toHaveBeenCalledWith('/api/files');
     });
 
     test('transitions from file manager to login screen when user logs out', async () => {

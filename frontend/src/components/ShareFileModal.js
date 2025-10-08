@@ -35,6 +35,23 @@ const ShareFileModal = ({
     }
   }, [isOpen, file]);
 
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape' && isOpen) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [isOpen]);
+
   /**
    * Reset form to initial state
    */

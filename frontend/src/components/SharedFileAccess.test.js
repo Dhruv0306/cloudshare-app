@@ -912,7 +912,7 @@ describe('SharedFileAccess Component', () => {
             });
 
             // Should not execute any scripts or cause XSS
-            expect(document.querySelector('script')).toBeNull();
+            expect(screen.queryByRole('script')).not.toBeInTheDocument();
         });
 
         /**

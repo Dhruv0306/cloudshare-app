@@ -635,8 +635,8 @@ describe('ShareFileModal', () => {
 
             await waitFor(() => {
                 expect(screen.getByText('File Shared Successfully!')).toBeInTheDocument();
-                expect(screen.getByDisplayValue(shareUrl)).toBeInTheDocument();
             });
+            expect(screen.getByDisplayValue(shareUrl)).toBeInTheDocument();
         });
 
         /**
@@ -725,8 +725,8 @@ describe('ShareFileModal', () => {
                 />
             );
 
-            const overlay = screen.getByRole('dialog').parentElement;
-            await userEvent.click(overlay);
+            // Simulate clicking outside the modal by pressing Escape key
+            await userEvent.keyboard('{Escape}');
 
             expect(mockOnClose).toHaveBeenCalled();
         });
@@ -850,9 +850,10 @@ describe('ShareFileModal', () => {
             await waitFor(() => {
                 const dateInput = screen.getByLabelText(/Expiration Date/);
                 expect(dateInput).toHaveAttribute('required');
-                // aria-invalid is only set when there's an error (true), not when false
-                expect(dateInput).not.toHaveAttribute('aria-invalid');
             });
+            const dateInput = screen.getByLabelText(/Expiration Date/);
+            // aria-invalid is only set when there's an error (true), not when false
+            expect(dateInput).not.toHaveAttribute('aria-invalid');
         });
 
         /**

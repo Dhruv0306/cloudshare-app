@@ -68,9 +68,9 @@ describe('AuthWrapper Component', () => {
       
       await waitFor(() => {
         expect(screen.getByText('File Sharing App')).toBeInTheDocument();
-        expect(screen.getByText('Welcome, testuser!')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
       });
+      expect(screen.getByText('Welcome, testuser!')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument();
     });
 
     test('renders Login when token is missing but currentUser exists', async () => {
@@ -85,9 +85,9 @@ describe('AuthWrapper Component', () => {
       
       await waitFor(() => {
         expect(screen.getByRole('heading', { name: /login/i })).toBeInTheDocument();
-        expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
       });
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
       
       expect(screen.queryByText('File Sharing App')).not.toBeInTheDocument();
     });
@@ -100,9 +100,9 @@ describe('AuthWrapper Component', () => {
       
       await waitFor(() => {
         expect(screen.getByRole('heading', { name: /login/i })).toBeInTheDocument();
-        expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
       });
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
       
       expect(screen.queryByText('File Sharing App')).not.toBeInTheDocument();
     });
@@ -115,9 +115,9 @@ describe('AuthWrapper Component', () => {
       
       await waitFor(() => {
         expect(screen.getByRole('heading', { name: /login/i })).toBeInTheDocument();
-        expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
-        expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
       });
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
       
       expect(screen.queryByText('File Sharing App')).not.toBeInTheDocument();
     });
@@ -166,9 +166,9 @@ describe('AuthWrapper Component', () => {
       
       await waitFor(() => {
         expect(screen.getByText('File Sharing App')).toBeInTheDocument();
-        // Should handle missing username gracefully
-        expect(screen.getByText('Welcome, !')).toBeInTheDocument();
       });
+      // Should handle missing username gracefully
+      expect(screen.getByText('Welcome, !')).toBeInTheDocument();
     });
 
     test('handles currentUser with missing properties', async () => {
@@ -179,8 +179,8 @@ describe('AuthWrapper Component', () => {
       
       await waitFor(() => {
         expect(screen.getByText('File Sharing App')).toBeInTheDocument();
-        expect(screen.getByText('Welcome, !')).toBeInTheDocument();
       });
+      expect(screen.getByText('Welcome, !')).toBeInTheDocument();
     });
   });
 
@@ -205,8 +205,8 @@ describe('AuthWrapper Component', () => {
       
       await waitFor(() => {
         expect(screen.getByText('File Sharing App')).toBeInTheDocument();
-        expect(screen.getByText('Welcome, testuser!')).toBeInTheDocument();
       });
+      expect(screen.getByText('Welcome, testuser!')).toBeInTheDocument();
       
       expect(screen.queryByRole('heading', { name: /login/i })).not.toBeInTheDocument();
     });
