@@ -140,6 +140,7 @@ public class WebSecurityConfig {
                     .requestMatchers("/api/auth/resend-verification").permitAll()
                     .requestMatchers("/api/auth/check-password-strength").permitAll()
                     .requestMatchers("/api/auth/user-email/**").permitAll()
+                    .requestMatchers("/api/files/shared/**").permitAll()
                     .requestMatchers("/api/test/**").permitAll()
                     .requestMatchers("/h2-console/**").permitAll()
                     .anyRequest().authenticated()

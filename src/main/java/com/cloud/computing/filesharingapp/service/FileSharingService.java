@@ -430,6 +430,18 @@ public class FileSharingService {
     }
 
     /**
+     * Retrieves a FileShare entity by ID for a specific user.
+     * 
+     * @param shareId the ID of the share to retrieve
+     * @param owner the user who should own the share
+     * @return Optional containing the FileShare entity if found and owned by user
+     */
+    public Optional<FileShare> getFileShareById(Long shareId, User owner) {
+        logger.debug("Retrieving FileShare entity ID: {} for user: {}", shareId, owner.getUsername());
+        return fileShareRepository.findByIdAndOwner(shareId, owner);
+    }
+
+    /**
      * Builds a complete share URL from a share token.
      * 
      * @param shareToken the share token
