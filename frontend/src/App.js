@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import Signup from './components/Signup';
 import ErrorBoundary from './components/ErrorBoundary';
+import SharedFileAccessPage from './components/SharedFileAccessPage';
 import './components/ErrorBoundary.css';
 
 function FileManager() {
@@ -214,9 +216,19 @@ function AuthWrapper() {
 function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <AuthWrapper />
-      </AuthProvider>
+      <Router>
+        <Routes>
+          {/* Public route for shared file access */}
+          <Route path="/shared/:token" element={<SharedFileAccessPage />} />
+          
+          {/* Main application routes */}
+          <Route path="/*" element={
+            <AuthProvider>
+              <AuthWrapper />
+            </AuthProvider>
+          } />
+        </Routes>
+      </Router>
     </ErrorBoundary>
   );
 }

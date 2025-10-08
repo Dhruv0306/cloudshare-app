@@ -2,6 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import axios from 'axios';
 
+import App from '../App';
+
 // Mock axios
 jest.mock('axios', () => ({
   get: jest.fn(),
@@ -32,8 +34,6 @@ jest.mock('../context/AuthContext', () => ({
   AuthProvider: ({ children }) => children,
   useAuth: () => mockAuthContext
 }));
-
-import App from '../App';
 
 describe('Token-based Authentication Flow', () => {
   beforeEach(() => {
