@@ -1,6 +1,6 @@
 # File Sharing App
 
-A secure, full-stack file sharing application built with Spring Boot (backend) and React (frontend), featuring comprehensive email verification, advanced security measures, complete file sharing system with token-based access, and robust testing coverage.
+A secure, full-stack file sharing application built with Spring Boot (backend) and React (frontend), featuring comprehensive email verification, advanced security measures, complete file sharing system with token-based access, email notifications, and robust testing coverage.
 
 ## Features
 
@@ -19,6 +19,7 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 - **Access Limits**: Optional maximum access count and expiration dates
 - **Access Tracking**: Comprehensive logging of all share access attempts with IP and user agent
 - **Share Management**: Create, revoke, and update permissions for file shares
+- **Email Notifications**: Automated email notifications for share recipients with delivery tracking
 - **Cleanup Operations**: Automated cleanup of expired and inactive shares
 - **Security Validation**: Token validation with expiration and permission checks
 - **Rate Limiting**: IP-based rate limiting to prevent abuse and suspicious activity detection
@@ -83,16 +84,16 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 - **File Management**: Upload, download, list, delete with user isolation and security
 - **File Sharing Backend**: Complete service layer with entities, repositories, and security controls
 - **Share Access Control**: Token validation, permission management, and access tracking
+- **Email Notification System**: Automated notifications with delivery tracking and retry mechanisms
 - **Security Framework**: JWT authentication, IP-based rate limiting, audit logging, and suspicious activity detection
-- **Testing Suite**: 566+ backend tests, 41 frontend tests with comprehensive coverage
+- **Testing Suite**: 566+ backend tests, 96 frontend tests with comprehensive coverage
 - **CI/CD Pipeline**: GitHub Actions with automated testing and security scanning
 
 ### 🚧 In Progress / Planned
 - **File Sharing API Endpoints**: REST controllers for share operations
-- **File Sharing Frontend**: React components for share management
-- **Email Notifications**: Integration with sharing system
-- **Share Analytics Dashboard**: Usage statistics and reporting
-- **Advanced Security**: Enhanced rate limiting and monitoring
+- **File Sharing Frontend**: React components for share management and public access
+- **Share Analytics Dashboard**: Usage statistics and reporting interface
+- **Advanced Security**: Enhanced rate limiting and monitoring features
 
 ## Getting Started
 
@@ -241,6 +242,7 @@ The file sharing system backend is fully implemented with comprehensive features
 - **Expiration Management**: Configure optional expiration dates
 - **Access Limits**: Set maximum number of accesses per share
 - **Access Tracking**: Log all access attempts with IP and user agent
+- **Email Notifications**: Automated notifications with delivery tracking and retry mechanisms
 - **Rate Limiting**: IP-based rate limiting to prevent abuse
 - **Security Monitoring**: Suspicious activity detection and automated response
 - **Share Management**: Revoke, update permissions, and cleanup expired shares
@@ -291,7 +293,7 @@ This project includes a comprehensive CI/CD pipeline using GitHub Actions that a
 
 1. **CI Pipeline** (`.github/workflows/ci.yml`)
    - **Backend Testing**: Maven tests with JaCoCo coverage reporting
-   - **Frontend Testing**: Jest tests with 57.94% coverage
+   - **Frontend Testing**: Jest tests with 58.48% coverage
    - **Security Scanning**: Trivy vulnerability scanner
    - **Test Reporting**: JUnit test reports and coverage uploads
    - **Build Validation**: Frontend build verification
@@ -341,8 +343,8 @@ open coverage/lcov-report/index.html
 #### Backend Testing (566+ Tests Passing)
 - **Entity Tests**: User, FileEntity, FileShare, ShareAccess, ShareNotification validation
 - **Security Tests**: JWT utilities, UserPrincipal, authentication, rate limiting
-- **Service Tests**: FileService, FileSharingService, ShareAccessService, EmailVerificationService with comprehensive scenarios
-- **Repository Tests**: Custom queries for file sharing, email verification, and analytics
+- **Service Tests**: FileService, FileSharingService, ShareAccessService, ShareNotificationService, EmailVerificationService with comprehensive scenarios
+- **Repository Tests**: Custom queries for file sharing, email verification, notifications, and analytics
 - **Integration Tests**: Full application context and controller testing with real database
 - **Performance Tests**: Repository performance and query optimization validation
 - **Coverage Areas**: 
@@ -358,11 +360,13 @@ open coverage/lcov-report/index.html
   - ✅ IP-based rate limiting and abuse prevention
   - ✅ Suspicious activity detection and reporting
   - ✅ Share access statistics and analytics
+  - ✅ Email notification system with delivery tracking
+  - ✅ HTML email templates and retry mechanisms
 
-#### Frontend Testing (41 Tests)
-- **Component Tests**: Login (5), Signup (10), EmailVerification (16)
-- **Integration Tests**: App flow (3), Password strength (3), Form validation (4)
-- **Coverage**: 57.94% overall with 40%+ threshold requirements
+#### Frontend Testing (96 Tests)
+- **Component Tests**: Login, Signup, EmailVerification, AuthWrapper, PasswordStrength
+- **Integration Tests**: App flow, Token authentication, Form validation, File operations
+- **Coverage**: 58.48% overall with 40%+ threshold requirements
 - **Coverage Areas**:
   - ✅ User authentication flows
   - ✅ Email verification process
@@ -370,6 +374,8 @@ open coverage/lcov-report/index.html
   - ✅ Password strength validation
   - ✅ Accessibility features
   - ✅ Loading states and async operations
+  - ✅ Token authentication flow
+  - ✅ File operations and error boundaries
 
 ### Test Quality Features
 - **Isolation**: Each test runs independently with proper setup/teardown
@@ -462,10 +468,12 @@ Files are stored in the `uploads/` directory in the project root. Each file is g
 - **Analytics Support**: Data foundation for usage statistics and reporting
 
 #### ShareNotification System
-- **Email Integration**: Framework for automated notifications to share recipients
-- **Delivery Tracking**: Confirmation of successful email delivery status
-- **Notification History**: Complete audit trail of all notifications sent
+- **Email Integration**: Complete automated notifications to share recipients with HTML templates
+- **Delivery Tracking**: Confirmation of successful email delivery status with retry mechanisms
+- **Notification History**: Complete audit trail of all notifications sent with timestamps
 - **Unique Tracking IDs**: UUID-based tracking for each notification
+- **Template System**: HTML email templates with file details and access links
+- **Retry Logic**: Automatic retry for failed email deliveries
 
 ### Database Design (Implemented)
 The file sharing system uses three interconnected tables with proper indexing:
