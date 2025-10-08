@@ -13,13 +13,15 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 - **Password Security**: Real-time password strength validation and requirements
 - **File Security**: Path traversal protection and UUID-based file naming
 
-### File Sharing Features (Backend Complete)
+### File Sharing Features (Complete Implementation)
 - **Secure Share Links**: UUID-based tokens for unpredictable, secure file access
 - **Permission Control**: View-only or download permissions for shared files  
 - **Access Limits**: Optional maximum access count and expiration dates
 - **Access Tracking**: Comprehensive logging of all share access attempts with IP and user agent
 - **Share Management**: Create, revoke, and update permissions for file shares
 - **Email Notifications**: Automated email notifications for share recipients with delivery tracking
+- **REST API Endpoints**: Complete API for share operations and public file access
+- **Public File Access**: Token-based public endpoints for shared file viewing and downloading
 - **Cleanup Operations**: Automated cleanup of expired and inactive shares
 - **Security Validation**: Token validation with expiration and permission checks
 - **Rate Limiting**: IP-based rate limiting to prevent abuse and suspicious activity detection
@@ -82,18 +84,19 @@ A secure, full-stack file sharing application built with Spring Boot (backend) a
 - **User Authentication System**: Registration, login, JWT tokens with comprehensive security
 - **Email Verification**: 6-digit codes with rate limiting and expiration management
 - **File Management**: Upload, download, list, delete with user isolation and security
-- **File Sharing Backend**: Complete service layer with entities, repositories, and security controls
+- **File Sharing System**: Complete backend and API implementation with all endpoints
 - **Share Access Control**: Token validation, permission management, and access tracking
 - **Email Notification System**: Automated notifications with delivery tracking and retry mechanisms
+- **Public File Access**: Token-based endpoints for public file viewing and downloading
+- **Share Management API**: Complete REST endpoints for creating, updating, and revoking shares
 - **Security Framework**: JWT authentication, IP-based rate limiting, audit logging, and suspicious activity detection
-- **Testing Suite**: 566+ backend tests, 96 frontend tests with comprehensive coverage
+- **Testing Suite**: 40 backend test files, 8 frontend test files with comprehensive coverage
 - **CI/CD Pipeline**: GitHub Actions with automated testing and security scanning
 
 ### 🚧 In Progress / Planned
-- **File Sharing API Endpoints**: REST controllers for share operations
 - **File Sharing Frontend**: React components for share management and public access
 - **Share Analytics Dashboard**: Usage statistics and reporting interface
-- **Advanced Security**: Enhanced rate limiting and monitoring features
+- **Enhanced UI/UX**: Modern interface for file sharing features
 
 ## Getting Started
 
@@ -152,7 +155,14 @@ The frontend will start on `http://localhost:3000`
 - `GET /api/files/download/{fileName}` - Download user's file
 - `DELETE /api/files/{id}` - Delete user's file
 
-### File Sharing (Backend Implementation Complete)
+### File Sharing (Complete Implementation)
+- **POST /api/files/{fileId}/share** - Create new file shares with permissions and expiration
+- **GET /api/files/shared/{token}** - Public endpoint for accessing shared files
+- **GET /api/files/shared/{token}/download** - Public endpoint for downloading shared files
+- **GET /api/files/{fileId}/shares** - View all shares for a specific file
+- **PUT /api/files/shares/{shareId}** - Update share permissions
+- **DELETE /api/files/shares/{shareId}** - Revoke file shares
+- **GET /api/files/my-shares** - Dashboard view of user's shared files
 - **Core Services**: FileSharingService and ShareAccessService with comprehensive functionality
 - **Data Models**: FileShare, ShareAccess, and ShareNotification entities with proper indexing
 - **Repository Layer**: Custom JPA queries for share management, analytics, and reporting
@@ -161,8 +171,6 @@ The frontend will start on `http://localhost:3000`
 - **Security Features**: Token validation, expiration checks, access limits, and rate limiting
 - **Access Analytics**: Detailed statistics, usage patterns, and suspicious activity detection
 - **Audit Trail**: Comprehensive logging of all share operations with IP and user agent tracking
-
-**Note**: REST API endpoints and frontend components are planned for future implementation.
 
 ### System & Maintenance
 - `GET /api/test/logs` - Test logging functionality (development)
@@ -235,14 +243,16 @@ Once logged in and verified, you can:
 - **Delete Files**: Remove files you no longer need
 - **File Security**: Only you can access your files
 
-### File Sharing (Backend Implementation Complete)
-The file sharing system backend is fully implemented with comprehensive features:
+### File Sharing (Complete Implementation)
+The file sharing system is fully implemented with comprehensive backend and API features:
 - **Share Creation**: Generate secure UUID-based tokens for any file
 - **Permission Control**: Set VIEW_ONLY or DOWNLOAD permissions
 - **Expiration Management**: Configure optional expiration dates
 - **Access Limits**: Set maximum number of accesses per share
 - **Access Tracking**: Log all access attempts with IP and user agent
 - **Email Notifications**: Automated notifications with delivery tracking and retry mechanisms
+- **Public Access API**: Token-based endpoints for public file viewing and downloading
+- **Share Management API**: Complete REST endpoints for creating, updating, and revoking shares
 - **Rate Limiting**: IP-based rate limiting to prevent abuse
 - **Security Monitoring**: Suspicious activity detection and automated response
 - **Share Management**: Revoke, update permissions, and cleanup expired shares
@@ -250,7 +260,7 @@ The file sharing system backend is fully implemented with comprehensive features
 - **Access Analytics**: Detailed statistics and usage pattern analysis
 - **Audit Trail**: Complete logging of all share operations
 
-**Note**: Frontend components and REST API endpoints for file sharing are planned for future implementation.
+**Note**: Frontend components for file sharing are planned for future implementation.
 
 ### Password Security System
 The application includes a comprehensive password strength evaluation system:
@@ -301,7 +311,7 @@ This project includes a comprehensive CI/CD pipeline using GitHub Actions that a
 
 ### Running Tests Locally
 
-#### Backend Tests (566 Tests Passing)
+#### Backend Tests (40 Test Files)
 ```bash
 # Run all backend tests
 mvn test
@@ -320,7 +330,7 @@ mvn test -Dtest="*ControllerTest"    # Controller integration tests
 open target/site/jacoco/index.html
 ```
 
-#### Frontend Tests
+#### Frontend Tests (8 Test Files)
 ```bash
 cd frontend
 
@@ -340,7 +350,7 @@ open coverage/lcov-report/index.html
 
 ### Test Coverage Summary
 
-#### Backend Testing (566+ Tests Passing)
+#### Backend Testing (40 Test Files)
 - **Entity Tests**: User, FileEntity, FileShare, ShareAccess, ShareNotification validation
 - **Security Tests**: JWT utilities, UserPrincipal, authentication, rate limiting
 - **Service Tests**: FileService, FileSharingService, ShareAccessService, ShareNotificationService, EmailVerificationService with comprehensive scenarios
@@ -363,10 +373,10 @@ open coverage/lcov-report/index.html
   - ✅ Email notification system with delivery tracking
   - ✅ HTML email templates and retry mechanisms
 
-#### Frontend Testing (96 Tests)
+#### Frontend Testing (8 Test Files)
 - **Component Tests**: Login, Signup, EmailVerification, AuthWrapper, PasswordStrength
 - **Integration Tests**: App flow, Token authentication, Form validation, File operations
-- **Coverage**: 58.48% overall with 40%+ threshold requirements
+- **Coverage**: 40%+ threshold requirements with comprehensive test scenarios
 - **Coverage Areas**:
   - ✅ User authentication flows
   - ✅ Email verification process
@@ -434,7 +444,7 @@ Files are stored in the `uploads/` directory in the project root. Each file is g
 - **IP-based Monitoring**: Track access patterns by IP address
 - **User Agent Analysis**: Browser and client identification for security
 
-## File Sharing System Architecture (Backend Complete)
+## File Sharing System Architecture (Complete Implementation)
 
 ### Core Components Implemented
 
@@ -646,8 +656,17 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## File Sharing Implementation Details
 
-### Current Backend Implementation
-The file sharing system backend is fully implemented with the following components:
+### Current Implementation Status
+The file sharing system is fully implemented with comprehensive backend services and REST API endpoints:
+
+#### REST API Endpoints (Complete)
+- **POST /api/files/{fileId}/share** - Create new file shares with permissions and expiration
+- **GET /api/files/shared/{token}** - Public endpoint for accessing shared files (no auth required)
+- **GET /api/files/shared/{token}/download** - Public endpoint for downloading shared files
+- **GET /api/files/{fileId}/shares** - View all shares for a specific file
+- **PUT /api/files/shares/{shareId}** - Update share permissions
+- **DELETE /api/files/shares/{shareId}** - Revoke file shares
+- **GET /api/files/my-shares** - Dashboard view of user's shared files
 
 #### Service Layer (`FileSharingService`)
 - **Share Creation**: `createShare()` with UUID token generation
@@ -655,7 +674,7 @@ The file sharing system backend is fully implemented with the following componen
 - **Permission Management**: `updateSharePermission()` for access control
 - **Share Revocation**: `revokeShare()` and `revokeAllSharesForFile()`
 - **Cleanup Operations**: `cleanupExpiredShares()` for maintenance
-- **Access Tracking**: `recordShareAccess()` for audit trails
+- **Access Tracking**: `recordShareAccess()` for analytics and securityrdShareAccess()` for audit trails
 
 #### Data Models
 - **FileShare**: Core entity with token, permissions, expiration, access limits
