@@ -129,29 +129,37 @@ public class WebSecurityConfig {
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // Configure CORS to allow frontend requests from different origins
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            // Disable CSRF as we use stateless JWT authentication
             .csrf(csrf -> csrf.disable())
+            // Set custom authentication entry point for unauthorized requests
             .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
+            // Configure stateless session management for JWT-based authentication
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            // Define public endpoints that don't require authentication
             .authorizeHttpRequests(auth -> 
-                auth.requestMatchers("/api/auth/signin").permitAll()
-                    .requestMatchers("/api/auth/signup").permitAll()
-                    .requestMatchers("/api/auth/verify-email").permitAll()
-                    .requestMatchers("/api/auth/resend-verification").permitAll()
-                    .requestMatchers("/api/auth/check-password-strength").permitAll()
-                    .requestMatchers("/api/auth/user-email/**").permitAll()
-                    .requestMatchers("/api/files/shared/**").permitAll()
-                    .requestMatchers("/api/test/**").permitAll()
-                    .requestMatchers("/h2-console/**").permitAll()
-                    .anyRequest().authenticated()
+                auth.requestMatchers("/api/auth/signin").permitAll()                    // Login endpoint
+                    .requestMatchers("/api/auth/signup").permitAll()                   // Registration endpoint
+                    .requestMatchers("/api/auth/verify-email").permitAll()             // Email verification
+                    .requestMatchers("/api/auth/resend-verification").permitAll()      // Resend verification
+                    .requestMatchers("/api/auth/check-password-strength").permitAll()  // Password strength check
+                    .requestMatchers("/api/auth/user-email/**").permitAll()            // User email lookup
+                    .requestMatchers("/api/files/shared/**").permitAll()               // Public file sharing endpoints
+                    .requestMatchers("/api/test/**").permitAll()                       // Test endpoints
+                    .requestMatchers("/h2-console/**").permitAll()                     // H2 database console
+                    .anyRequest().authenticated()                                       // All other requests require authentication
             );
         
-        // Authentication provider is automatically configured
+        // Configure security filter chain in the correct order:
+        // 1. Rate limiting filter - prevents request flooding and abuse
         http.addFilterBefore(rateLimitingFilter(), UsernamePasswordAuthenticationFilter.class);
+        // 2. JWT authentication filter - validates JWT tokens and sets authentication context
         http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
+        // 3. Email verification filter - ensures users have verified their email for protected endpoints
         http.addFilterAfter(emailVerificationFilter(), AuthTokenFilter.class);
         
-        // For H2 Console
+        // Allow H2 console to be embedded in frames (for development only)
         http.headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()));
         
         return http.build();

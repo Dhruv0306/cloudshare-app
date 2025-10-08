@@ -182,7 +182,7 @@ public class FileSharingService {
     public ShareAccessValidationResult validateShareAccess(String shareToken, String accessorIp, ShareAccessType accessType) {
         logger.debug("Validating share access for token: {} from IP: {} for {}", shareToken, accessorIp, accessType);
 
-        // First validate the token - checks basic share validity (active, not expired, under access limit)
+        // Step 1: Basic token validation - checks if share exists, is active, not expired, and under access limit
         Optional<FileShare> shareOptional = validateShareToken(shareToken);
         if (shareOptional.isEmpty()) {
             return ShareAccessValidationResult.invalid("Share not found, expired, or invalid");
@@ -190,7 +190,8 @@ public class FileSharingService {
 
         FileShare share = shareOptional.get();
 
-        // Perform comprehensive security validation including rate limiting and suspicious activity detection
+        // Step 2: Advanced security validation - performs IP-based rate limiting, 
+        // suspicious activity detection, and permission checks for the requested access type
         ShareAccessService.AccessValidationResult securityValidation = 
             shareAccessService.validateAccess(share, accessorIp, accessType);
 
@@ -198,6 +199,7 @@ public class FileSharingService {
             return ShareAccessValidationResult.denied(securityValidation.getReason(), securityValidation.getDenialType());
         }
 
+        // All validations passed - access is allowed
         return ShareAccessValidationResult.allowed(share);
     }
 
@@ -216,7 +218,7 @@ public class FileSharingService {
     public boolean recordShareAccess(String shareToken, String accessorIp, String userAgent, ShareAccessType accessType) {
         logger.debug("Recording {} access for share token: {} from IP: {}", accessType, shareToken, accessorIp);
 
-        // Validate the share token first
+        // Step 1: Validate the share token exists and is still valid
         Optional<FileShare> shareOptional = validateShareToken(shareToken);
         if (shareOptional.isEmpty()) {
             return false;
@@ -224,7 +226,7 @@ public class FileSharingService {
 
         FileShare share = shareOptional.get();
         
-        // Perform comprehensive security validation before allowing access
+        // Step 2: Perform security checks including rate limiting and suspicious activity detection
         ShareAccessService.AccessValidationResult validation = 
             shareAccessService.validateAccess(share, accessorIp, accessType);
         
@@ -234,10 +236,10 @@ public class FileSharingService {
             return false;
         }
 
-        // Log the access attempt for security monitoring and analytics
+        // Step 3: Log the access attempt for security monitoring, analytics, and audit trails
         shareAccessService.logAccess(share, accessorIp, userAgent, accessType);
         
-        // Increment the share's access counter and persist the change
+        // Step 4: Increment the share's access counter to track usage and enforce limits
         share.incrementAccessCount();
         fileShareRepository.save(share);
 
@@ -382,10 +384,10 @@ public class FileSharingService {
 
         LocalDateTime now = LocalDateTime.now();
         
-        // Deactivate expired shares
+        // Phase 1: Deactivate shares that have passed their expiration date
         int expiredCount = fileShareRepository.deactivateExpiredShares(now);
         
-        // Deactivate shares that have reached max access
+        // Phase 2: Deactivate shares that have reached their maximum access count limit
         int maxAccessCount = fileShareRepository.deactivateMaxAccessReachedShares();
         
         int totalCleaned = expiredCount + maxAccessCount;
@@ -468,21 +470,59 @@ public class FileSharingService {
             this.fileShare = fileShare;
         }
 
+        /**
+         * Creates a validation result indicating that access is allowed.
+         * 
+         * @param fileShare the FileShare entity that access is allowed for
+         * @return ShareAccessValidationResult indicating allowed access
+         */
         public static ShareAccessValidationResult allowed(FileShare fileShare) {
             return new ShareAccessValidationResult(true, null, null, fileShare);
         }
 
+        /**
+         * Creates a validation result indicating that the share is invalid.
+         * 
+         * @param reason the reason why the share is invalid
+         * @return ShareAccessValidationResult indicating invalid share
+         */
         public static ShareAccessValidationResult invalid(String reason) {
             return new ShareAccessValidationResult(false, reason, ShareAccessService.AccessDenialType.PERMISSION_DENIED, null);
         }
 
+        /**
+         * Creates a validation result indicating that access is denied.
+         * 
+         * @param reason the reason for access denial
+         * @param denialType the type of denial (rate limited, permission denied, etc.)
+         * @return ShareAccessValidationResult indicating denied access
+         */
         public static ShareAccessValidationResult denied(String reason, ShareAccessService.AccessDenialType denialType) {
             return new ShareAccessValidationResult(false, reason, denialType, null);
         }
 
+        /**
+         * Checks if access is allowed.
+         * @return true if access is allowed, false otherwise
+         */
         public boolean isAllowed() { return allowed; }
+        
+        /**
+         * Gets the reason for access denial.
+         * @return the denial reason, or null if access is allowed
+         */
         public String getReason() { return reason; }
+        
+        /**
+         * Gets the type of access denial.
+         * @return the denial type, or null if access is allowed
+         */
         public ShareAccessService.AccessDenialType getDenialType() { return denialType; }
+        
+        /**
+         * Gets the FileShare entity if access is allowed.
+         * @return the FileShare entity, or null if access is denied
+         */
         public FileShare getFileShare() { return fileShare; }
     }
 }
