@@ -1,5 +1,6 @@
 package com.cloud.computing.filesharingapp.service;
 
+import com.cloud.computing.filesharingapp.dto.FileSharingStats;
 import com.cloud.computing.filesharingapp.dto.ShareRequest;
 import com.cloud.computing.filesharingapp.dto.ShareResponse;
 import com.cloud.computing.filesharingapp.entity.FileEntity;
@@ -441,6 +442,61 @@ public class FileSharingService {
     public Optional<FileShare> getFileShareById(Long shareId, User owner) {
         logger.debug("Retrieving FileShare entity ID: {} for user: {}", shareId, owner.getUsername());
         return fileShareRepository.findByIdAndOwner(shareId, owner);
+    }
+
+    /**
+     * Gets sharing statistics for a specific file.
+     * 
+     * @param fileId the ID of the file
+     * @param owner the user who owns the file
+     * @return FileSharingStats containing sharing information for the file
+     */
+    public FileSharingStats getFileSharingStats(Long fileId, User owner) {
+        logger.debug("Getting sharing stats for file ID: {} by user: {}", fileId, owner.getUsername());
+        
+        // Verify user owns the file
+        Optional<FileEntity> fileOptional = fileRepository.findByIdAndOwner(fileId, owner);
+        if (fileOptional.isEmpty()) {
+            return new FileSharingStats(); // Return empty stats if file not found
+        }
+        
+        FileEntity file = fileOptional.get();
+        List<FileShare> shares = fileShareRepository.findByFileOrderByCreatedAtDesc(file);
+        
+        FileSharingStats stats = new FileSharingStats();
+        stats.setFileId(fileId);
+        stats.setTotalShares(shares.size());
+        
+        int activeShares = 0;
+        int totalAccessCount = 0;
+        LocalDateTime lastSharedAt = null;
+        LocalDateTime lastAccessedAt = null;
+        
+        for (FileShare share : shares) {
+            if (share.isActive()) {
+                activeShares++;
+            }
+            totalAccessCount += share.getAccessCount();
+            
+            if (lastSharedAt == null || share.getCreatedAt().isAfter(lastSharedAt)) {
+                lastSharedAt = share.getCreatedAt();
+            }
+            
+            // Get last access time from share access service
+            LocalDateTime shareLastAccess = shareAccessService.getLastAccessTime(share);
+            if (shareLastAccess != null && (lastAccessedAt == null || shareLastAccess.isAfter(lastAccessedAt))) {
+                lastAccessedAt = shareLastAccess;
+            }
+        }
+        
+        stats.setActiveShares(activeShares);
+        stats.setTotalAccessCount(totalAccessCount);
+        stats.setLastSharedAt(lastSharedAt);
+        stats.setLastAccessedAt(lastAccessedAt);
+        stats.setHasActiveShares(activeShares > 0);
+        stats.setShared(shares.size() > 0);
+        
+        return stats;
     }
 
     /**

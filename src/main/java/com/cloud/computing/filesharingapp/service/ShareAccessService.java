@@ -221,6 +221,24 @@ public class ShareAccessService {
     }
 
     /**
+     * Gets the last access time for a specific file share.
+     * 
+     * @param fileShare the file share to check
+     * @return LocalDateTime of the last access, or null if never accessed
+     */
+    public LocalDateTime getLastAccessTime(FileShare fileShare) {
+        logger.debug("Getting last access time for share ID: {}", fileShare.getId());
+        
+        List<ShareAccess> accesses = shareAccessRepository.findByFileShareOrderByAccessedAtDesc(fileShare);
+        
+        if (accesses.isEmpty()) {
+            return null;
+        }
+        
+        return accesses.get(0).getAccessedAt();
+    }
+
+    /**
      * Detects and reports suspicious access patterns.
      * 
      * @param accessorIp the IP address to check (optional, null for all IPs)

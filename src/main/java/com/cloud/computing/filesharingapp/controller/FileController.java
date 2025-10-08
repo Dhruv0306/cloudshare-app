@@ -1,5 +1,6 @@
 package com.cloud.computing.filesharingapp.controller;
 
+import com.cloud.computing.filesharingapp.dto.FileResponse;
 import com.cloud.computing.filesharingapp.dto.MessageResponse;
 import com.cloud.computing.filesharingapp.dto.ShareRequest;
 import com.cloud.computing.filesharingapp.dto.ShareResponse;
@@ -159,18 +160,18 @@ public class FileController {
     }
 
     /**
-     * Retrieves all files belonging to the authenticated user.
+     * Retrieves all files belonging to the authenticated user with sharing information.
      * 
      * <p>
-     * Returns a list of FileEntity objects containing metadata for all files
+     * Returns a list of FileResponse objects containing metadata for all files
      * uploaded by the current user. This includes file names, sizes, upload dates,
-     * and other relevant information.
+     * sharing status indicators, share counts, and activity tracking.
      * 
      * @param authentication the current user's authentication context
-     * @return ResponseEntity containing a list of the user's files
+     * @return ResponseEntity containing a list of the user's files with sharing info
      */
     @GetMapping
-    public ResponseEntity<List<FileEntity>> getUserFiles(Authentication authentication) {
+    public ResponseEntity<List<FileResponse>> getUserFiles(Authentication authentication) {
         UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
         logger.debug("File list request from user: {} (ID: {})", userPrincipal.getUsername(), userPrincipal.getId());
 
@@ -178,9 +179,9 @@ public class FileController {
             User user = userRepository.findById(userPrincipal.getId())
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            List<FileEntity> files = fileService.getUserFiles(user);
+            List<FileResponse> files = fileService.getUserFilesWithSharingInfo(user);
 
-            logger.info("Retrieved {} files for user: {}", files.size(), userPrincipal.getUsername());
+            logger.info("Retrieved {} files with sharing info for user: {}", files.size(), userPrincipal.getUsername());
 
             return ResponseEntity.ok(files);
         } catch (Exception ex) {
@@ -191,25 +192,26 @@ public class FileController {
     }
 
     /**
-     * Retrieves a specific file by its ID for the authenticated user.
+     * Retrieves a specific file by its ID for the authenticated user with sharing information.
      * 
      * <p>
-     * Returns the FileEntity metadata for a file with the specified ID,
+     * Returns the FileResponse metadata for a file with the specified ID,
+     * including sharing status, share counts, and activity tracking,
      * but only if the file belongs to the authenticated user.
      * 
      * @param id             the unique identifier of the file
      * @param authentication the current user's authentication context
-     * @return ResponseEntity containing the FileEntity or 404 if not
+     * @return ResponseEntity containing the FileResponse or 404 if not
      *         found/unauthorized
      */
     @GetMapping("/{id}")
-    public ResponseEntity<FileEntity> getUserFileById(@PathVariable Long id, Authentication authentication) {
+    public ResponseEntity<FileResponse> getUserFileById(@PathVariable Long id, Authentication authentication) {
         try {
             UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
             User user = userRepository.findById(userPrincipal.getId())
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            Optional<FileEntity> file = fileService.getUserFileById(id, user);
+            Optional<FileResponse> file = fileService.getUserFileByIdWithSharingInfo(id, user);
             return file.map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
         } catch (Exception ex) {
             return ResponseEntity.badRequest().build();

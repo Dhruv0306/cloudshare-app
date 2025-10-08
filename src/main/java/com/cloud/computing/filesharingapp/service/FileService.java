@@ -1,5 +1,7 @@
 package com.cloud.computing.filesharingapp.service;
 
+import com.cloud.computing.filesharingapp.dto.FileResponse;
+import com.cloud.computing.filesharingapp.dto.FileSharingStats;
 import com.cloud.computing.filesharingapp.entity.FileEntity;
 import com.cloud.computing.filesharingapp.entity.User;
 import com.cloud.computing.filesharingapp.repository.FileRepository;
@@ -49,6 +51,9 @@ public class FileService {
 
     @Autowired
     private FileRepository fileRepository;
+
+    @Autowired
+    private FileSharingService fileSharingService;
 
     @Value("${file.upload-dir:uploads}")
     private String uploadDir;
@@ -184,6 +189,45 @@ public class FileService {
     }
 
     /**
+     * Retrieves all files belonging to a specific user with sharing information.
+     * 
+     * <p>This method returns enhanced file information including:
+     * <ul>
+     *   <li>Basic file metadata</li>
+     *   <li>Sharing status indicators</li>
+     *   <li>Share count and activity tracking</li>
+     *   <li>File permissions and capabilities</li>
+     * </ul>
+     * 
+     * @param user the user whose files to retrieve
+     * @return List of FileResponse objects with sharing information
+     */
+    public List<FileResponse> getUserFilesWithSharingInfo(User user) {
+        logger.debug("Retrieving files with sharing info for user: {} (ID: {})", user.getUsername(), user.getId());
+        
+        List<FileEntity> files = fileRepository.findByOwner(user);
+        
+        return files.stream()
+                .map(file -> buildFileResponseWithSharingInfo(file, user))
+                .toList();
+    }
+
+    /**
+     * Retrieves a specific file by its ID with sharing information.
+     * 
+     * @param id the unique identifier of the file
+     * @param user the user who should own the file
+     * @return Optional containing the FileResponse with sharing info if found and owned by user
+     */
+    public Optional<FileResponse> getUserFileByIdWithSharingInfo(Long id, User user) {
+        logger.debug("Retrieving file ID: {} with sharing info for user: {}", id, user.getUsername());
+        
+        Optional<FileEntity> fileOptional = fileRepository.findByIdAndOwner(id, user);
+        
+        return fileOptional.map(file -> buildFileResponseWithSharingInfo(file, user));
+    }
+
+    /**
      * Retrieves a file by its ID (admin function).
      * 
      * @param id the unique identifier of the file
@@ -255,6 +299,7 @@ public class FileService {
      * It performs the following operations:
      * <ul>
      *   <li>Verifies the user owns the file</li>
+     *   <li>Automatically revokes all associated shares</li>
      *   <li>Removes the physical file from storage</li>
      *   <li>Removes the database record</li>
      *   <li>Logs all operations for security auditing</li>
@@ -271,6 +316,13 @@ public class FileService {
         if (fileEntity.isPresent()) {
             FileEntity entity = fileEntity.get();
             try {
+                // First, revoke all associated shares for this file
+                int revokedShares = fileSharingService.revokeAllSharesForFile(id, user);
+                if (revokedShares > 0) {
+                    logger.info("Revoked {} shares for file ID: {} before deletion", revokedShares, id);
+                }
+                
+                // Delete the physical file
                 Path filePath = Paths.get(entity.getFilePath());
                 boolean deleted = Files.deleteIfExists(filePath);
                 
@@ -280,6 +332,7 @@ public class FileService {
                     logger.warn("Physical file not found (may have been already deleted): {}", filePath);
                 }
                 
+                // Delete the database record (cascade delete will handle shares)
                 fileRepository.deleteById(id);
                 logger.info("File record deleted from database - ID: {}, original name: {}", 
                            id, entity.getOriginalFileName());
@@ -292,5 +345,40 @@ public class FileService {
             logger.warn("File not found or access denied - ID: {}, user: {}", id, user.getUsername());
             throw new RuntimeException("File not found or access denied");
         }
+    }
+
+    /**
+     * Builds a FileResponse with sharing information from a FileEntity.
+     * 
+     * @param fileEntity the FileEntity to convert
+     * @param user the user who owns the file
+     * @return FileResponse with sharing information populated
+     */
+    private FileResponse buildFileResponseWithSharingInfo(FileEntity fileEntity, User user) {
+        FileResponse response = new FileResponse(fileEntity);
+        
+        try {
+            // Get sharing statistics for this file
+            FileSharingStats stats = fileSharingService.getFileSharingStats(fileEntity.getId(), user);
+            
+            // Populate sharing information
+            response.setShared(stats.isShared());
+            response.setShareCount(stats.getActiveShares());
+            response.setTotalAccessCount(stats.getTotalAccessCount());
+            response.setLastSharedAt(stats.getLastSharedAt());
+            response.setLastAccessedAt(stats.getLastAccessedAt());
+            response.setHasActiveShares(stats.isHasActiveShares());
+            
+            // File capabilities (all true for owner)
+            response.setCanShare(true);
+            response.setCanDelete(true);
+            response.setCanDownload(true);
+            
+        } catch (Exception ex) {
+            logger.warn("Failed to get sharing info for file ID: {} - {}", fileEntity.getId(), ex.getMessage());
+            // Continue with default values if sharing info fails
+        }
+        
+        return response;
     }
 }
