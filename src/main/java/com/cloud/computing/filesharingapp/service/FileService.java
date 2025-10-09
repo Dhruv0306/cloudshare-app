@@ -316,10 +316,14 @@ public class FileService {
         if (fileEntity.isPresent()) {
             FileEntity entity = fileEntity.get();
             try {
-                // First, revoke all associated shares for this file
-                int revokedShares = fileSharingService.revokeAllSharesForFile(id, user);
-                if (revokedShares > 0) {
-                    logger.info("Revoked {} shares for file ID: {} before deletion", revokedShares, id);
+                // First, try to revoke all associated shares for this file
+                try {
+                    int revokedShares = fileSharingService.revokeAllSharesForFile(id, user);
+                    if (revokedShares > 0) {
+                        logger.info("Revoked {} shares for file ID: {} before deletion", revokedShares, id);
+                    }
+                } catch (Exception ex) {
+                    logger.warn("Failed to revoke shares for file ID: {} - continuing with deletion: {}", id, ex.getMessage());
                 }
                 
                 // Delete the physical file

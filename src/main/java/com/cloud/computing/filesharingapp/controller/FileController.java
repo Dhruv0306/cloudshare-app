@@ -6,7 +6,7 @@ import com.cloud.computing.filesharingapp.dto.ShareRequest;
 import com.cloud.computing.filesharingapp.dto.ShareResponse;
 import com.cloud.computing.filesharingapp.entity.FileEntity;
 import com.cloud.computing.filesharingapp.entity.FileShare;
-import com.cloud.computing.filesharingapp.entity.ShareAccessType;
+
 import com.cloud.computing.filesharingapp.entity.SharePermission;
 import com.cloud.computing.filesharingapp.entity.User;
 import com.cloud.computing.filesharingapp.repository.UserRepository;
@@ -14,21 +14,18 @@ import com.cloud.computing.filesharingapp.security.UserPrincipal;
 import com.cloud.computing.filesharingapp.service.FileService;
 import com.cloud.computing.filesharingapp.service.FileSharingService;
 import com.cloud.computing.filesharingapp.service.ShareNotificationService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -160,7 +157,8 @@ public class FileController {
     }
 
     /**
-     * Retrieves all files belonging to the authenticated user with sharing information.
+     * Retrieves all files belonging to the authenticated user with sharing
+     * information.
      * 
      * <p>
      * Returns a list of FileResponse objects containing metadata for all files
@@ -168,7 +166,8 @@ public class FileController {
      * sharing status indicators, share counts, and activity tracking.
      * 
      * @param authentication the current user's authentication context
-     * @return ResponseEntity containing a list of the user's files with sharing info
+     * @return ResponseEntity containing a list of the user's files with sharing
+     *         info
      */
     @GetMapping
     public ResponseEntity<List<FileResponse>> getUserFiles(Authentication authentication) {
@@ -192,7 +191,8 @@ public class FileController {
     }
 
     /**
-     * Retrieves a specific file by its ID for the authenticated user with sharing information.
+     * Retrieves a specific file by its ID for the authenticated user with sharing
+     * information.
      * 
      * <p>
      * Returns the FileResponse metadata for a file with the specified ID,
@@ -313,144 +313,6 @@ public class FileController {
                     ex);
             return ResponseEntity.badRequest()
                     .body(new MessageResponse("Could not create file share: " + ex.getMessage()));
-        }
-    }
-
-    /**
-     * Accesses a shared file by its share token (public endpoint).
-     * 
-     * <p>
-     * This endpoint allows anyone with a valid share token to access file
-     * information
-     * and preview content. It performs comprehensive validation including token
-     * validity,
-     * expiration checks, and security controls.
-     * 
-     * @param token   the share token
-     * @param request the HTTP request for IP extraction
-     * @return ResponseEntity containing file information or error details
-     */
-    @GetMapping("/shared/{token}")
-    public ResponseEntity<?> accessSharedFile(@PathVariable String token, HttpServletRequest request) {
-        String clientIp = getClientIpAddress(request);
-        logger.info("Accessing shared file with token: {} from IP: {}", token, clientIp);
-
-        try {
-            // Validate share access with comprehensive security checks
-            FileSharingService.ShareAccessValidationResult validation = fileSharingService.validateShareAccess(token,
-                    clientIp, ShareAccessType.VIEW);
-
-            if (!validation.isAllowed()) {
-                logger.warn("Share access denied for token: {} from IP: {} - {}",
-                        token, clientIp, validation.getReason());
-                return ResponseEntity.status(getHttpStatusForDenial(validation.getDenialType()))
-                        .body(new MessageResponse(validation.getReason()));
-            }
-
-            FileShare share = validation.getFileShare();
-
-            // Record the access for analytics and security monitoring
-            String userAgent = request.getHeader("User-Agent");
-            boolean accessRecorded = fileSharingService.recordShareAccess(token, clientIp, userAgent,
-                    ShareAccessType.VIEW);
-
-            if (!accessRecorded) {
-                logger.error("Failed to record share access for token: {}", token);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body(new MessageResponse("Failed to process share access"));
-            }
-
-            // Build response with file information
-            SharedFileAccessResponse response = new SharedFileAccessResponse(
-                    share.getFile().getId(),
-                    share.getFile().getOriginalFileName(),
-                    share.getFile().getContentType(),
-                    share.getFile().getFileSize(),
-                    share.getPermission(),
-                    share.getExpiresAt());
-
-            logger.info("Shared file accessed successfully - file: {}, permission: {}",
-                    share.getFile().getOriginalFileName(), share.getPermission());
-
-            return ResponseEntity.ok(response);
-        } catch (Exception ex) {
-            logger.error("Failed to access shared file with token: {} - {}", token, ex.getMessage(), ex);
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse("Could not access shared file: " + ex.getMessage()));
-        }
-    }
-
-    /**
-     * Downloads a shared file by its share token (public endpoint).
-     * 
-     * <p>
-     * This endpoint allows users with valid download permissions to download shared
-     * files.
-     * It performs comprehensive validation including permission checks and security
-     * controls.
-     * 
-     * @param token   the share token
-     * @param request the HTTP request for IP extraction
-     * @return ResponseEntity containing the file resource or error details
-     */
-    @GetMapping("/shared/{token}/download")
-    public ResponseEntity<?> downloadSharedFile(@PathVariable String token, HttpServletRequest request) {
-        String clientIp = getClientIpAddress(request);
-        logger.info("Downloading shared file with token: {} from IP: {}", token, clientIp);
-
-        try {
-            // Validate share access with download permission check
-            FileSharingService.ShareAccessValidationResult validation = fileSharingService.validateShareAccess(token,
-                    clientIp, ShareAccessType.DOWNLOAD);
-
-            if (!validation.isAllowed()) {
-                logger.warn("Share download denied for token: {} from IP: {} - {}",
-                        token, clientIp, validation.getReason());
-                return ResponseEntity.status(getHttpStatusForDenial(validation.getDenialType()))
-                        .body(new MessageResponse(validation.getReason()));
-            }
-
-            FileShare share = validation.getFileShare();
-
-            // Check if the share permission allows downloads
-            if (!share.getPermission().allowsDownload()) {
-                logger.warn("Download not allowed for share token: {} - permission: {}",
-                        token, share.getPermission());
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(new MessageResponse("Download not permitted for this share"));
-            }
-
-            // Record the download access
-            String userAgent = request.getHeader("User-Agent");
-            boolean accessRecorded = fileSharingService.recordShareAccess(token, clientIp, userAgent,
-                    ShareAccessType.DOWNLOAD);
-
-            if (!accessRecorded) {
-                logger.error("Failed to record share download for token: {}", token);
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body(new MessageResponse("Failed to process share download"));
-            }
-
-            // Load and serve the file
-            FileEntity file = share.getFile();
-            Resource resource = fileService.loadFileAsResource(file.getFileName());
-            String contentType = file.getContentType();
-            if (contentType == null) {
-                contentType = "application/octet-stream";
-            }
-
-            logger.info("Shared file downloaded successfully - file: {}, size: {} bytes",
-                    file.getOriginalFileName(), file.getFileSize());
-
-            return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(contentType))
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"" + file.getOriginalFileName() + "\"")
-                    .body(resource);
-        } catch (Exception ex) {
-            logger.error("Failed to download shared file with token: {} - {}", token, ex.getMessage(), ex);
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse("Could not download shared file: " + ex.getMessage()));
         }
     }
 
@@ -601,193 +463,9 @@ public class FileController {
 
     // ========== HELPER METHODS ==========
 
-    /**
-     * Extracts the client IP address from the HTTP request.
-     * 
-     * @param request the HTTP request
-     * @return the client IP address
-     */
-    private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
 
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isEmpty()) {
-            return xRealIp;
-        }
-
-        return request.getRemoteAddr();
-    }
-
-    /**
-     * Maps access denial types to appropriate HTTP status codes.
-     * 
-     * @param denialType the type of access denial
-     * @return the appropriate HTTP status code
-     */
-    private HttpStatus getHttpStatusForDenial(
-            com.cloud.computing.filesharingapp.service.ShareAccessService.AccessDenialType denialType) {
-        if (denialType == null) {
-            return HttpStatus.BAD_REQUEST;
-        }
-
-        return switch (denialType) {
-            case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
-            case PERMISSION_DENIED -> HttpStatus.FORBIDDEN;
-            case SUSPICIOUS_ACTIVITY -> HttpStatus.FORBIDDEN;
-        };
-    }
 
     // ========== INNER CLASSES ==========
-
-    /**
-     * Response DTO for shared file access information.
-     * 
-     * <p>
-     * This class encapsulates all the information needed to display
-     * a shared file to users accessing it via a share token, including
-     * file metadata and permission details.
-     */
-    public static class SharedFileAccessResponse {
-        private Long fileId;
-        private String originalFileName;
-        private String contentType;
-        private Long fileSize;
-        private SharePermission permission;
-        private LocalDateTime expiresAt;
-
-        /**
-         * Constructs a new SharedFileAccessResponse with the specified parameters.
-         * 
-         * @param fileId           the unique identifier of the file
-         * @param originalFileName the original name of the file
-         * @param contentType      the MIME type of the file
-         * @param fileSize         the size of the file in bytes
-         * @param permission       the permission level for this share
-         * @param expiresAt        the expiration date/time of the share
-         */
-        public SharedFileAccessResponse(Long fileId, String originalFileName, String contentType,
-                Long fileSize, SharePermission permission, LocalDateTime expiresAt) {
-            this.fileId = fileId;
-            this.originalFileName = originalFileName;
-            this.contentType = contentType;
-            this.fileSize = fileSize;
-            this.permission = permission;
-            this.expiresAt = expiresAt;
-        }
-
-        // Getters and setters with documentation
-
-        /**
-         * Gets the unique identifier of the file.
-         * 
-         * @return the file ID
-         */
-        public Long getFileId() {
-            return fileId;
-        }
-
-        /**
-         * Sets the unique identifier of the file.
-         * 
-         * @param fileId the file ID to set
-         */
-        public void setFileId(Long fileId) {
-            this.fileId = fileId;
-        }
-
-        /**
-         * Gets the original filename as uploaded by the user.
-         * 
-         * @return the original filename
-         */
-        public String getOriginalFileName() {
-            return originalFileName;
-        }
-
-        /**
-         * Sets the original filename.
-         * 
-         * @param originalFileName the original filename to set
-         */
-        public void setOriginalFileName(String originalFileName) {
-            this.originalFileName = originalFileName;
-        }
-
-        /**
-         * Gets the MIME content type of the file.
-         * 
-         * @return the content type
-         */
-        public String getContentType() {
-            return contentType;
-        }
-
-        /**
-         * Sets the MIME content type of the file.
-         * 
-         * @param contentType the content type to set
-         */
-        public void setContentType(String contentType) {
-            this.contentType = contentType;
-        }
-
-        /**
-         * Gets the size of the file in bytes.
-         * 
-         * @return the file size
-         */
-        public Long getFileSize() {
-            return fileSize;
-        }
-
-        /**
-         * Sets the size of the file in bytes.
-         * 
-         * @param fileSize the file size to set
-         */
-        public void setFileSize(Long fileSize) {
-            this.fileSize = fileSize;
-        }
-
-        /**
-         * Gets the permission level for this share.
-         * 
-         * @return the share permission
-         */
-        public SharePermission getPermission() {
-            return permission;
-        }
-
-        /**
-         * Sets the permission level for this share.
-         * 
-         * @param permission the share permission to set
-         */
-        public void setPermission(SharePermission permission) {
-            this.permission = permission;
-        }
-
-        /**
-         * Gets the expiration date/time of the share.
-         * 
-         * @return the expiration date/time, or null if no expiration
-         */
-        public LocalDateTime getExpiresAt() {
-            return expiresAt;
-        }
-
-        /**
-         * Sets the expiration date/time of the share.
-         * 
-         * @param expiresAt the expiration date/time to set
-         */
-        public void setExpiresAt(LocalDateTime expiresAt) {
-            this.expiresAt = expiresAt;
-        }
-    }
 
     /**
      * Request DTO for updating share permissions.

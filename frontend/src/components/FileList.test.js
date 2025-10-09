@@ -377,6 +377,113 @@ describe('FileList Component', () => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
       });
     });
+
+    it('reloads share information after share creation', async () => {
+      mockedAxios.get.mockResolvedValue({ data: mockShares });
+      mockedAxios.post.mockResolvedValue({
+        data: { shareToken: 'new-token', shareUrl: 'http://example.com/shared/new-token' }
+      });
+
+      const { rerender } = render(<FileList {...mockProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('document1.pdf')).toBeInTheDocument();
+      });
+
+      // Wait for initial share loading to complete
+      await waitFor(() => {
+        expect(mockedAxios.get).toHaveBeenCalledWith('/api/files/1/shares');
+        expect(mockedAxios.get).toHaveBeenCalledWith('/api/files/2/shares');
+      });
+
+      // Clear previous calls to test reload behavior
+      mockedAxios.get.mockClear();
+
+      // Simulate file update by re-rendering with a new files array (same content, new reference)
+      // This simulates what happens when onFileUpdate is called and the parent fetches files again
+      const updatedFiles = [...mockFiles]; // Create new array reference
+      rerender(<FileList {...mockProps} files={updatedFiles} />);
+
+      // The component should reload share information when files prop changes
+      await waitFor(() => {
+        expect(mockedAxios.get).toHaveBeenCalledWith('/api/files/1/shares');
+        expect(mockedAxios.get).toHaveBeenCalledWith('/api/files/2/shares');
+      });
+    });
+  });
+
+  describe('Share Activity Indicators', () => {
+    it('displays last shared timestamp when available', async () => {
+      const mockSharesWithActivity = [
+        {
+          shareId: 1,
+          shareToken: 'token1',
+          permission: 'DOWNLOAD',
+          createdAt: '2023-10-01T12:00:00Z',
+          active: true
+        }
+      ];
+
+      mockedAxios.get.mockImplementation((url) => {
+        if (url.includes('/1/')) {
+          return Promise.resolve({ data: mockSharesWithActivity });
+        }
+        return Promise.resolve({ data: [] });
+      });
+
+      render(<FileList {...mockProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('document1.pdf')).toBeInTheDocument();
+      });
+
+      // Should show last shared activity
+      await waitFor(() => {
+        expect(screen.getByText(/Last shared:/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows loading state for shares', async () => {
+      // Mock delayed response
+      mockedAxios.get.mockImplementation(() => 
+        new Promise(resolve => setTimeout(() => resolve({ data: [] }), 100))
+      );
+
+      render(<FileList {...mockProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Loading shares...')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('File Styling Based on Share Status', () => {
+    it('applies shared styling to files with active shares', async () => {
+      render(<FileList {...mockProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('document1.pdf')).toBeInTheDocument();
+      });
+
+      // Find the file item and check if it has the shared class
+      const fileItem = screen.getByText('document1.pdf').closest('.file-item');
+      await waitFor(() => {
+        expect(fileItem).toHaveClass('shared');
+      });
+    });
+
+    it('does not apply shared styling to files without shares', async () => {
+      mockedAxios.get.mockImplementation(() => Promise.resolve({ data: [] }));
+
+      render(<FileList {...mockProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('document1.pdf')).toBeInTheDocument();
+      });
+
+      const fileItem = screen.getByText('document1.pdf').closest('.file-item');
+      expect(fileItem).not.toHaveClass('shared');
+    });
   });
 
   describe('Responsive Design', () => {

@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -50,13 +51,12 @@ class FileServiceTest {
     void setUp() {
         testUser = new User("testuser", "test@example.com", "password123");
         testUser.setId(1L);
-        
+
         mockFile = new MockMultipartFile(
-            "file",
-            "test.txt",
-            "text/plain",
-            "Hello World".getBytes()
-        );
+                "file",
+                "test.txt",
+                "text/plain",
+                "Hello World".getBytes());
 
         // Set the upload directory to temp directory
         ReflectionTestUtils.setField(fileService, "uploadDir", tempDir.toString());
@@ -76,9 +76,10 @@ class FileServiceTest {
     void testStoreFile() throws IOException {
         // Given
         fileService.init();
-        FileEntity savedEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 11L, tempDir.resolve("uuid_test.txt").toString(), testUser);
+        FileEntity savedEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 11L,
+                tempDir.resolve("uuid_test.txt").toString(), testUser);
         savedEntity.setId(1L);
-        
+
         when(fileRepository.save(any(FileEntity.class))).thenReturn(savedEntity);
 
         // When
@@ -90,7 +91,7 @@ class FileServiceTest {
         assertEquals("text/plain", result.getContentType());
         assertEquals(11L, result.getFileSize());
         assertEquals(testUser, result.getOwner());
-        
+
         verify(fileRepository).save(any(FileEntity.class));
     }
 
@@ -99,17 +100,16 @@ class FileServiceTest {
         // Given
         fileService.init();
         MockMultipartFile maliciousFile = new MockMultipartFile(
-            "file",
-            "../../../malicious.txt",
-            "text/plain",
-            "Malicious content".getBytes()
-        );
+                "file",
+                "../../../malicious.txt",
+                "text/plain",
+                "Malicious content".getBytes());
 
         // When & Then
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
             fileService.storeFile(maliciousFile, testUser);
         });
-        
+
         assertTrue(exception.getMessage().contains("Invalid file name"));
     }
 
@@ -119,7 +119,7 @@ class FileServiceTest {
         FileEntity file1 = new FileEntity("uuid1_file1.txt", "file1.txt", "text/plain", 1024L, "/path1", testUser);
         FileEntity file2 = new FileEntity("uuid2_file2.txt", "file2.txt", "text/plain", 2048L, "/path2", testUser);
         List<FileEntity> expectedFiles = Arrays.asList(file1, file2);
-        
+
         when(fileRepository.findByOwner(testUser)).thenReturn(expectedFiles);
 
         // When
@@ -136,7 +136,7 @@ class FileServiceTest {
         // Given
         Long fileId = 1L;
         FileEntity expectedFile = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, "/path", testUser);
-        
+
         when(fileRepository.findByIdAndOwner(fileId, testUser)).thenReturn(Optional.of(expectedFile));
 
         // When
@@ -153,7 +153,7 @@ class FileServiceTest {
         // Given
         String fileName = "uuid_test.txt";
         FileEntity expectedFile = new FileEntity(fileName, "test.txt", "text/plain", 1024L, "/path", testUser);
-        
+
         when(fileRepository.findByFileNameAndOwner(fileName, testUser)).thenReturn(Optional.of(expectedFile));
 
         // When
@@ -192,7 +192,7 @@ class FileServiceTest {
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
             fileService.loadFileAsResource(fileName);
         });
-        
+
         assertTrue(exception.getMessage().contains("File not found"));
     }
 
@@ -204,10 +204,11 @@ class FileServiceTest {
         String fileName = "test.txt";
         Path filePath = tempDir.resolve(fileName);
         Files.write(filePath, "Hello World".getBytes());
-        
-        FileEntity fileEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, filePath.toString(), testUser);
+
+        FileEntity fileEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, filePath.toString(),
+                testUser);
         fileEntity.setId(fileId);
-        
+
         when(fileRepository.findByIdAndOwner(fileId, testUser)).thenReturn(Optional.of(fileEntity));
 
         // When
@@ -229,7 +230,7 @@ class FileServiceTest {
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
             fileService.deleteUserFile(fileId, testUser);
         });
-        
+
         assertTrue(exception.getMessage().contains("File not found or access denied"));
         verify(fileRepository).findByIdAndOwner(fileId, testUser);
         verify(fileRepository, never()).deleteById(any());
@@ -243,10 +244,10 @@ class FileServiceTest {
         FileEntity file1 = createTestFileEntity(1L, "file1.txt");
         FileEntity file2 = createTestFileEntity(2L, "file2.txt");
         List<FileEntity> files = Arrays.asList(file1, file2);
-        
+
         FileSharingStats stats1 = createTestSharingStats(1L, true, 2, 5);
         FileSharingStats stats2 = createTestSharingStats(2L, false, 0, 0);
-        
+
         when(fileRepository.findByOwner(testUser)).thenReturn(files);
         when(fileSharingService.getFileSharingStats(1L, testUser)).thenReturn(stats1);
         when(fileSharingService.getFileSharingStats(2L, testUser)).thenReturn(stats2);
@@ -256,7 +257,7 @@ class FileServiceTest {
 
         // Then
         assertEquals(2, result.size());
-        
+
         FileResponse response1 = result.get(0);
         assertEquals(1L, response1.getId());
         assertEquals("file1.txt", response1.getOriginalFileName());
@@ -267,7 +268,7 @@ class FileServiceTest {
         assertTrue(response1.isCanShare());
         assertTrue(response1.isCanDelete());
         assertTrue(response1.isCanDownload());
-        
+
         FileResponse response2 = result.get(1);
         assertEquals(2L, response2.getId());
         assertEquals("file2.txt", response2.getOriginalFileName());
@@ -275,7 +276,7 @@ class FileServiceTest {
         assertEquals(0, response2.getShareCount());
         assertEquals(0, response2.getTotalAccessCount());
         assertFalse(response2.isHasActiveShares());
-        
+
         verify(fileRepository).findByOwner(testUser);
         verify(fileSharingService).getFileSharingStats(1L, testUser);
         verify(fileSharingService).getFileSharingStats(2L, testUser);
@@ -286,10 +287,10 @@ class FileServiceTest {
         // Given
         FileEntity file = createTestFileEntity(1L, "test.txt");
         List<FileEntity> files = Arrays.asList(file);
-        
+
         when(fileRepository.findByOwner(testUser)).thenReturn(files);
         when(fileSharingService.getFileSharingStats(1L, testUser))
-            .thenThrow(new RuntimeException("Sharing service error"));
+                .thenThrow(new RuntimeException("Sharing service error"));
 
         // When
         List<FileResponse> result = fileService.getUserFilesWithSharingInfo(testUser);
@@ -308,7 +309,7 @@ class FileServiceTest {
         assertTrue(response.isCanShare());
         assertTrue(response.isCanDelete());
         assertTrue(response.isCanDownload());
-        
+
         verify(fileRepository).findByOwner(testUser);
         verify(fileSharingService).getFileSharingStats(1L, testUser);
     }
@@ -319,7 +320,7 @@ class FileServiceTest {
         Long fileId = 1L;
         FileEntity file = createTestFileEntity(fileId, "test.txt");
         FileSharingStats stats = createTestSharingStats(fileId, true, 3, 10);
-        
+
         when(fileRepository.findByIdAndOwner(fileId, testUser)).thenReturn(Optional.of(file));
         when(fileSharingService.getFileSharingStats(fileId, testUser)).thenReturn(stats);
 
@@ -335,7 +336,7 @@ class FileServiceTest {
         assertEquals(3, response.getShareCount());
         assertEquals(10, response.getTotalAccessCount());
         assertTrue(response.isHasActiveShares());
-        
+
         verify(fileRepository).findByIdAndOwner(fileId, testUser);
         verify(fileSharingService).getFileSharingStats(fileId, testUser);
     }
@@ -363,10 +364,11 @@ class FileServiceTest {
         String fileName = "test.txt";
         Path filePath = tempDir.resolve(fileName);
         Files.write(filePath, "Hello World".getBytes());
-        
-        FileEntity fileEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, filePath.toString(), testUser);
+
+        FileEntity fileEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, filePath.toString(),
+                testUser);
         fileEntity.setId(fileId);
-        
+
         when(fileRepository.findByIdAndOwner(fileId, testUser)).thenReturn(Optional.of(fileEntity));
         when(fileSharingService.revokeAllSharesForFile(fileId, testUser)).thenReturn(3);
 
@@ -388,10 +390,11 @@ class FileServiceTest {
         String fileName = "test.txt";
         Path filePath = tempDir.resolve(fileName);
         Files.write(filePath, "Hello World".getBytes());
-        
-        FileEntity fileEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, filePath.toString(), testUser);
+
+        FileEntity fileEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, filePath.toString(),
+                testUser);
         fileEntity.setId(fileId);
-        
+
         when(fileRepository.findByIdAndOwner(fileId, testUser)).thenReturn(Optional.of(fileEntity));
         when(fileSharingService.revokeAllSharesForFile(fileId, testUser)).thenReturn(0);
 
@@ -413,17 +416,213 @@ class FileServiceTest {
         String fileName = "nonexistent.txt";
         Path filePath = tempDir.resolve(fileName);
         // Note: not creating the physical file
-        
-        FileEntity fileEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, filePath.toString(), testUser);
+
+        FileEntity fileEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, filePath.toString(),
+                testUser);
         fileEntity.setId(fileId);
-        
+
         when(fileRepository.findByIdAndOwner(fileId, testUser)).thenReturn(Optional.of(fileEntity));
         when(fileSharingService.revokeAllSharesForFile(fileId, testUser)).thenReturn(0);
 
         // When
         fileService.deleteUserFile(fileId, testUser);
 
-        // Then - should still delete database record even if physical file doesn't exist
+        // Then - should still delete database record even if physical file doesn't
+        // exist
+        verify(fileRepository).findByIdAndOwner(fileId, testUser);
+        verify(fileSharingService).revokeAllSharesForFile(fileId, testUser);
+        verify(fileRepository).deleteById(fileId);
+    }
+
+    /**
+     * Test enhanced file response creation with sharing statistics
+     */
+    @Test
+    void testFileResponseCreationWithSharingStats() {
+        // Given
+        FileEntity file = createTestFileEntity(1L, "test.txt");
+        FileSharingStats stats = createTestSharingStats(1L, true, 2, 10);
+        stats.setLastSharedAt(LocalDateTime.now().minusHours(2));
+        stats.setLastAccessedAt(LocalDateTime.now().minusMinutes(30));
+
+        when(fileRepository.findByIdAndOwner(1L, testUser)).thenReturn(Optional.of(file));
+        when(fileSharingService.getFileSharingStats(1L, testUser)).thenReturn(stats);
+
+        // When
+        Optional<FileResponse> responseOpt = fileService.getUserFileByIdWithSharingInfo(1L, testUser);
+
+        // Then
+        assertTrue(responseOpt.isPresent());
+        FileResponse response = responseOpt.get();
+        assertEquals(1L, response.getId());
+        assertEquals("test.txt", response.getOriginalFileName());
+        assertTrue(response.isShared());
+        assertEquals(2, response.getShareCount());
+        assertEquals(10, response.getTotalAccessCount());
+        assertTrue(response.isHasActiveShares());
+        assertNotNull(response.getLastSharedAt());
+        assertNotNull(response.getLastAccessedAt());
+
+        // Verify capabilities are set correctly for owner
+        assertTrue(response.isCanShare());
+        assertTrue(response.isCanDelete());
+        assertTrue(response.isCanDownload());
+    }
+
+    /**
+     * Test file response creation with null sharing stats
+     */
+    @Test
+    void testFileResponseCreationWithNullSharingStats() {
+        // Given
+        FileEntity file = createTestFileEntity(1L, "test.txt");
+        when(fileRepository.findByIdAndOwner(1L, testUser)).thenReturn(Optional.of(file));
+        when(fileSharingService.getFileSharingStats(1L, testUser)).thenReturn(null);
+
+        // When
+        Optional<FileResponse> responseOpt = fileService.getUserFileByIdWithSharingInfo(1L, testUser);
+
+        // Then
+        assertTrue(responseOpt.isPresent());
+        FileResponse response = responseOpt.get();
+        assertEquals(1L, response.getId());
+        assertEquals("test.txt", response.getOriginalFileName());
+        assertFalse(response.isShared());
+        assertEquals(0, response.getShareCount());
+        assertEquals(0, response.getTotalAccessCount());
+        assertFalse(response.isHasActiveShares());
+
+        // Capabilities should still be true for owner
+        assertTrue(response.isCanShare());
+        assertTrue(response.isCanDelete());
+        assertTrue(response.isCanDownload());
+    }
+
+    /**
+     * Test bulk file operations with sharing info
+     */
+    @Test
+    void testGetUserFilesWithSharingInfoLargeDataset() {
+        // Given - Create a larger dataset to test performance
+        List<FileEntity> files = new ArrayList<>();
+        for (int i = 1; i <= 10; i++) {
+            files.add(createTestFileEntity((long) i, "file" + i + ".txt"));
+        }
+
+        when(fileRepository.findByOwner(testUser)).thenReturn(files);
+
+        // Mock sharing stats for some files
+        for (int i = 1; i <= 10; i++) {
+            boolean isShared = i % 2 == 0; // Even numbered files are shared
+            int shareCount = isShared ? i / 2 : 0;
+            FileSharingStats stats = createTestSharingStats((long) i, isShared, shareCount, shareCount * 3);
+            when(fileSharingService.getFileSharingStats((long) i, testUser)).thenReturn(stats);
+        }
+
+        // When
+        List<FileResponse> result = fileService.getUserFilesWithSharingInfo(testUser);
+
+        // Then
+        assertEquals(10, result.size());
+
+        // Verify shared files have correct stats
+        for (int i = 0; i < result.size(); i++) {
+            FileResponse response = result.get(i);
+            long fileId = response.getId();
+            boolean shouldBeShared = fileId % 2 == 0;
+
+            assertEquals(shouldBeShared, response.isShared());
+            if (shouldBeShared) {
+                assertTrue(response.getShareCount() > 0);
+                assertTrue(response.getTotalAccessCount() > 0);
+            } else {
+                assertEquals(0, response.getShareCount());
+                assertEquals(0, response.getTotalAccessCount());
+            }
+        }
+
+        verify(fileRepository).findByOwner(testUser);
+        // Verify sharing service was called for each file
+        for (int i = 1; i <= 10; i++) {
+            verify(fileSharingService).getFileSharingStats((long) i, testUser);
+        }
+    }
+
+    /**
+     * Test error handling when sharing service throws exception for some files
+     */
+    @Test
+    void testGetUserFilesWithSharingInfoPartialFailure() {
+        // Given
+        FileEntity file1 = createTestFileEntity(1L, "file1.txt");
+        FileEntity file2 = createTestFileEntity(2L, "file2.txt");
+        FileEntity file3 = createTestFileEntity(3L, "file3.txt");
+        List<FileEntity> files = Arrays.asList(file1, file2, file3);
+
+        when(fileRepository.findByOwner(testUser)).thenReturn(files);
+
+        // Mock sharing service to succeed for some files and fail for others
+        when(fileSharingService.getFileSharingStats(1L, testUser))
+                .thenReturn(createTestSharingStats(1L, true, 2, 5));
+        when(fileSharingService.getFileSharingStats(2L, testUser))
+                .thenThrow(new RuntimeException("Service unavailable"));
+        when(fileSharingService.getFileSharingStats(3L, testUser))
+                .thenReturn(createTestSharingStats(3L, false, 0, 0));
+
+        // When
+        List<FileResponse> result = fileService.getUserFilesWithSharingInfo(testUser);
+
+        // Then
+        assertEquals(3, result.size());
+
+        // File 1 should have sharing info
+        FileResponse response1 = result.get(0);
+        assertTrue(response1.isShared());
+        assertEquals(2, response1.getShareCount());
+
+        // File 2 should have default values due to service failure
+        FileResponse response2 = result.get(1);
+        assertFalse(response2.isShared());
+        assertEquals(0, response2.getShareCount());
+
+        // File 3 should have correct no-sharing info
+        FileResponse response3 = result.get(2);
+        assertFalse(response3.isShared());
+        assertEquals(0, response3.getShareCount());
+
+        verify(fileRepository).findByOwner(testUser);
+        verify(fileSharingService).getFileSharingStats(1L, testUser);
+        verify(fileSharingService).getFileSharingStats(2L, testUser);
+        verify(fileSharingService).getFileSharingStats(3L, testUser);
+    }
+
+    /**
+     * Test file deletion with sharing service failure
+     */
+    @Test
+    void testDeleteUserFileWithSharingServiceFailure() throws IOException {
+        // Given
+        fileService.init();
+        Long fileId = 1L;
+        String fileName = "test.txt";
+        Path filePath = tempDir.resolve(fileName);
+        Files.write(filePath, "Hello World".getBytes());
+
+        FileEntity fileEntity = new FileEntity("uuid_test.txt", "test.txt", "text/plain", 1024L, filePath.toString(),
+                testUser);
+        fileEntity.setId(fileId);
+
+        when(fileRepository.findByIdAndOwner(fileId, testUser)).thenReturn(Optional.of(fileEntity));
+        when(fileSharingService.revokeAllSharesForFile(fileId, testUser))
+                .thenThrow(new RuntimeException("Sharing service error"));
+
+        // When & Then - Should still proceed with file deletion even if sharing service
+        // fails
+        assertDoesNotThrow(() -> fileService.deleteUserFile(fileId, testUser));
+
+        // Physical file should be deleted
+        assertFalse(Files.exists(filePath));
+
         verify(fileRepository).findByIdAndOwner(fileId, testUser);
         verify(fileSharingService).revokeAllSharesForFile(fileId, testUser);
         verify(fileRepository).deleteById(fileId);
@@ -433,33 +632,33 @@ class FileServiceTest {
 
     private FileEntity createTestFileEntity(Long id, String originalFileName) {
         FileEntity entity = new FileEntity(
-            "uuid_" + originalFileName,
-            originalFileName,
-            "text/plain",
-            1024L,
-            "/path/to/" + originalFileName,
-            testUser
-        );
+                "uuid_" + originalFileName,
+                originalFileName,
+                "text/plain",
+                1024L,
+                "/path/to/" + originalFileName,
+                testUser);
         entity.setId(id);
         entity.setUploadTime(LocalDateTime.now());
         return entity;
     }
 
-    private FileSharingStats createTestSharingStats(Long fileId, boolean isShared, int activeShares, int totalAccessCount) {
+    private FileSharingStats createTestSharingStats(Long fileId, boolean isShared, int activeShares,
+            int totalAccessCount) {
         FileSharingStats stats = new FileSharingStats();
         stats.setFileId(fileId);
         stats.setShared(isShared);
         stats.setActiveShares(activeShares);
         stats.setTotalAccessCount(totalAccessCount);
         stats.setHasActiveShares(activeShares > 0);
-        
+
         if (isShared) {
             stats.setLastSharedAt(LocalDateTime.now().minusHours(1));
         }
         if (totalAccessCount > 0) {
             stats.setLastAccessedAt(LocalDateTime.now().minusMinutes(30));
         }
-        
+
         return stats;
     }
 }

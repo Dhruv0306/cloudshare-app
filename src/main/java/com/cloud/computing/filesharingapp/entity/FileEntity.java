@@ -85,6 +85,27 @@ public class FileEntity {
         this.uploadTime = LocalDateTime.now();
     }
     
+    /**
+     * Constructor for testing purposes that allows null values.
+     * 
+     * @param fileName the stored filename (UUID-prefixed)
+     * @param originalFileName the original filename from upload
+     * @param contentType the MIME content type
+     * @param fileSize the file size in bytes
+     * @param filePath the full storage path
+     * @param owner the user who owns this file
+     * @param uploadTime the upload timestamp (can be null for testing)
+     */
+    public FileEntity(String fileName, String originalFileName, String contentType, Long fileSize, String filePath, User owner, LocalDateTime uploadTime) {
+        this.fileName = fileName;
+        this.originalFileName = originalFileName;
+        this.contentType = contentType;
+        this.fileSize = fileSize;
+        this.filePath = filePath;
+        this.owner = owner;
+        this.uploadTime = uploadTime;
+    }
+    
     // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }

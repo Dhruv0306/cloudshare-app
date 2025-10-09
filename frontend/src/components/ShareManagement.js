@@ -247,8 +247,8 @@ const ShareManagement = () => {
     if (filters.searchTerm) {
       const searchLower = filters.searchTerm.toLowerCase();
       filtered = filtered.filter(share =>
-        share.file.originalFileName.toLowerCase().includes(searchLower) ||
-        share.shareToken.toLowerCase().includes(searchLower)
+        (share.file?.originalFileName?.toLowerCase().includes(searchLower)) ||
+        (share.shareToken?.toLowerCase().includes(searchLower))
       );
     }
 
@@ -258,8 +258,8 @@ const ShareManagement = () => {
       
       switch (sortBy) {
         case 'fileName':
-          aValue = a.file.originalFileName.toLowerCase();
-          bValue = b.file.originalFileName.toLowerCase();
+          aValue = (a.file?.originalFileName || '').toLowerCase();
+          bValue = (b.file?.originalFileName || '').toLowerCase();
           break;
         case 'accessCount':
           aValue = a.accessCount || 0;
@@ -596,13 +596,13 @@ const ShareManagement = () => {
                         
                         <div className="share-file-info">
                           <div className="file-name-row">
-                            <span className="file-name">{share.file.originalFileName}</span>
+                            <span className="file-name">{share.file?.originalFileName || 'Unknown File'}</span>
                             <div className={`status-badge ${status.className}`}>
                               {status.label}
                             </div>
                           </div>
                           <div className="share-details">
-                            <span className="file-size">{formatFileSize(share.file.fileSize)}</span>
+                            <span className="file-size">{formatFileSize(share.file?.fileSize || 0)}</span>
                             <span className="separator">•</span>
                             <span className="permission-info">
                               {share.permission === 'VIEW_ONLY' ? '👁️ View Only' : '⬇️ Download'}

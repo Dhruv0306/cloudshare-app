@@ -11,7 +11,7 @@ const mockedAxios = axios;
 // Mock data - using current date + future dates to ensure active status
 const now = new Date();
 const futureDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
-const recentDate = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000); // 2 days ago
+const todayDate = new Date(); // Today's date for filtering tests
 
 const mockSharedFiles = [
   {
@@ -19,7 +19,7 @@ const mockSharedFiles = [
     shareToken: 'abc123',
     permission: 'DOWNLOAD',
     active: true,
-    createdAt: recentDate.toISOString(),
+    createdAt: todayDate.toISOString(), // Created today to pass date filters
     expiresAt: futureDate.toISOString(), // Future date to make it active
     accessCount: 5,
     file: {
@@ -360,6 +360,94 @@ describe('ShareManagement Component', () => {
         `${window.location.origin}/shared/abc123`
       );
     });
+  });
+
+  /**
+   * Test bulk operations error handling
+   */
+  test('handles bulk revoke errors gracefully', async () => {
+    mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
+    mockedAxios.delete.mockRejectedValue(new Error('Network error'));
+    
+    // Mock window.confirm and alert
+    window.confirm = jest.fn(() => true);
+    window.alert = jest.fn();
+    
+    render(<ShareManagement />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('document.pdf')).toBeInTheDocument();
+    });
+    
+    // Select a share
+    const checkboxes = screen.getAllByRole('checkbox');
+    const firstShareCheckbox = checkboxes[1]; // Skip "Select All" checkbox
+    fireEvent.click(firstShareCheckbox);
+    
+    await waitFor(() => {
+      expect(screen.getByText(/1 share selected/)).toBeInTheDocument();
+    });
+    
+    // Click bulk revoke
+    const bulkRevokeButton = screen.getByText('🚫 Revoke Selected');
+    fireEvent.click(bulkRevokeButton);
+    
+    await waitFor(() => {
+      expect(window.alert).toHaveBeenCalledWith('Some shares could not be revoked. Please try again.');
+    });
+  });
+
+  /**
+   * Test access history loading
+   */
+  test('loads access history when expanding share details', async () => {
+    mockedAxios.get
+      .mockResolvedValueOnce({ data: mockSharedFiles })
+      .mockResolvedValueOnce({ data: mockAccessHistory });
+    
+    render(<ShareManagement />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('document.pdf')).toBeInTheDocument();
+    });
+    
+    // Click details button to expand
+    const detailsButtons = screen.getAllByTitle('Show details');
+    fireEvent.click(detailsButtons[0]);
+    
+    await waitFor(() => {
+      expect(screen.getByText('Recent Access History')).toBeInTheDocument();
+    });
+    
+    // Check if access history items are displayed
+    expect(screen.getByText('192.168.1.1')).toBeInTheDocument();
+    expect(screen.getByText('10.0.0.1')).toBeInTheDocument();
+  });
+
+  /**
+   * Test date range filtering
+   */
+  test('filters shares by date range', async () => {
+    mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
+    
+    render(<ShareManagement />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('document.pdf')).toBeInTheDocument();
+    });
+    
+    // Filter by today (should show recent share)
+    const dateFilter = screen.getByLabelText('Date Range:');
+    fireEvent.change(dateFilter, { target: { value: 'today' } });
+    
+    // Should show the recent share
+    expect(screen.getByText('document.pdf')).toBeInTheDocument();
+    
+    // Filter by week
+    fireEvent.change(dateFilter, { target: { value: 'week' } });
+    
+    // Should still show the recent share
+    expect(screen.getByText('document.pdf')).toBeInTheDocument();
   });
 
   /**

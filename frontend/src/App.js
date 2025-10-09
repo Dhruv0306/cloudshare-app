@@ -6,6 +6,8 @@ import Login from './components/Login';
 import Signup from './components/Signup';
 import ErrorBoundary from './components/ErrorBoundary';
 import SharedFileAccessPage from './components/SharedFileAccessPage';
+import SecureShareRoute from './components/SecureShareRoute';
+import './components/SecureShareRoute.css';
 import FileList from './components/FileList';
 import ShareManagement from './components/ShareManagement';
 import './components/ErrorBoundary.css';
@@ -234,8 +236,11 @@ function App() {
     <ErrorBoundary>
       <Router>
         <Routes>
-          {/* Public route for shared file access */}
-          <Route path="/shared/:token" element={<SharedFileAccessPage />} />
+          {/* Public route for shared file access with enhanced security */}
+          <Route path="/shared/:token" element={<SecureShareRoute />} />
+          
+          {/* Legacy route for backward compatibility */}
+          <Route path="/share/:token" element={<SharedFileAccessPage />} />
           
           {/* Main application routes */}
           <Route path="/*" element={

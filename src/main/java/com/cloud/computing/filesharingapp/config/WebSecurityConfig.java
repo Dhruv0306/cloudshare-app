@@ -4,6 +4,8 @@ import com.cloud.computing.filesharingapp.security.AuthEntryPointJwt;
 import com.cloud.computing.filesharingapp.security.AuthTokenFilter;
 import com.cloud.computing.filesharingapp.security.EmailVerificationFilter;
 import com.cloud.computing.filesharingapp.security.RateLimitingFilter;
+import com.cloud.computing.filesharingapp.security.ShareRateLimitingFilter;
+import com.cloud.computing.filesharingapp.security.ShareTokenValidationFilter;
 import com.cloud.computing.filesharingapp.security.UserDetailsServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -89,6 +91,26 @@ public class WebSecurityConfig {
     }
     
     /**
+     * Creates the share token validation filter bean.
+     * 
+     * @return ShareTokenValidationFilter instance for validating share tokens on public endpoints
+     */
+    @Bean
+    public ShareTokenValidationFilter shareTokenValidationFilter() {
+        return new ShareTokenValidationFilter();
+    }
+    
+    /**
+     * Creates the share rate limiting filter bean.
+     * 
+     * @return ShareRateLimitingFilter instance for rate limiting share endpoints
+     */
+    @Bean
+    public ShareRateLimitingFilter shareRateLimitingFilter() {
+        return new ShareRateLimitingFilter();
+    }
+    
+    /**
      * Creates the authentication manager bean.
      * 
      * @param authConfig the authentication configuration
@@ -152,11 +174,15 @@ public class WebSecurityConfig {
             );
         
         // Configure security filter chain in the correct order:
-        // 1. Rate limiting filter - prevents request flooding and abuse
+        // 1. General rate limiting filter - prevents request flooding and abuse
         http.addFilterBefore(rateLimitingFilter(), UsernamePasswordAuthenticationFilter.class);
-        // 2. JWT authentication filter - validates JWT tokens and sets authentication context
+        // 2. Share-specific rate limiting filter - enhanced rate limiting for public share endpoints
+        http.addFilterBefore(shareRateLimitingFilter(), UsernamePasswordAuthenticationFilter.class);
+        // 3. Share token validation filter - validates share tokens for public endpoints
+        http.addFilterBefore(shareTokenValidationFilter(), UsernamePasswordAuthenticationFilter.class);
+        // 4. JWT authentication filter - validates JWT tokens and sets authentication context
         http.addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
-        // 3. Email verification filter - ensures users have verified their email for protected endpoints
+        // 5. Email verification filter - ensures users have verified their email for protected endpoints
         http.addFilterAfter(emailVerificationFilter(), AuthTokenFilter.class);
         
         // Allow H2 console to be embedded in frames (for development only)
