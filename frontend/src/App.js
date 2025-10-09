@@ -6,6 +6,7 @@ import Login from './components/Login';
 import Signup from './components/Signup';
 import ErrorBoundary from './components/ErrorBoundary';
 import SharedFileAccessPage from './components/SharedFileAccessPage';
+import FileList from './components/FileList';
 import './components/ErrorBoundary.css';
 
 function FileManager() {
@@ -112,17 +113,7 @@ function FileManager() {
     }
   };
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString();
-  };
 
   return (
     <div className="container">
@@ -161,37 +152,13 @@ function FileManager() {
 
       <div className="files-section">
         <h2>Uploaded Files</h2>
-        {loading ? (
-          <div className="loading">Loading files...</div>
-        ) : files.length === 0 ? (
-          <div className="loading">No files uploaded yet</div>
-        ) : (
-          Array.isArray(files) && files.map((file) => (
-            <div key={file.id} className="file-item">
-              <div className="file-info">
-                <div className="file-name">{file.originalFileName}</div>
-                <div className="file-details">
-                  Size: {formatFileSize(file.fileSize)} |
-                  Uploaded: {formatDate(file.uploadTime)}
-                </div>
-              </div>
-              <div className="file-actions">
-                <button
-                  className="download-btn"
-                  onClick={() => handleDownload(file.fileName, file.originalFileName)}
-                >
-                  Download
-                </button>
-                <button
-                  className="delete-btn"
-                  onClick={() => handleDelete(file.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
-        )}
+        <FileList
+          files={files}
+          onFileUpdate={fetchFiles}
+          onDownload={handleDownload}
+          onDelete={handleDelete}
+          loading={loading}
+        />
       </div>
     </div>
   );
