@@ -18,6 +18,7 @@ const SharedFileAccess = ({ shareToken }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [accessLogged, setAccessLogged] = useState(false);
 
   /**
@@ -82,6 +83,8 @@ const SharedFileAccess = ({ shareToken }) => {
    * Load shared file information from the API
    */
   const loadSharedFile = useCallback(async () => {
+    if (!shareToken) return;
+    
     try {
       setLoading(true);
       setError(null);
@@ -90,17 +93,19 @@ const SharedFileAccess = ({ shareToken }) => {
       setShareData(response.data);
 
       // Log the access if not already logged
-      if (!accessLogged) {
-        try {
-          await axios.post(`/api/files/shared/${shareToken}/access`, {
+      setAccessLogged(prevLogged => {
+        if (!prevLogged) {
+          // Log access asynchronously without blocking
+          axios.post(`/api/files/shared/${shareToken}/access`, {
             accessType: 'VIEW'
+          }).catch(err => {
+            // Access logging failure shouldn't prevent file access
+            console.warn('Failed to log file access:', err);
           });
-        } catch (err) {
-          // Access logging failure shouldn't prevent file access
-          console.warn('Failed to log file access:', err);
+          return true;
         }
-        setAccessLogged(true);
-      }
+        return prevLogged;
+      });
 
       // Show info about file access
       if (response.data.permission === 'VIEW_ONLY') {
@@ -116,7 +121,7 @@ const SharedFileAccess = ({ shareToken }) => {
     } catch (err) {
       console.error('Error loading shared file:', err);
       
-      // Handle API errors inline to avoid dependency issues
+      // Handle API errors
       if (err.response) {
         switch (err.response.status) {
           case 404:
@@ -166,7 +171,7 @@ const SharedFileAccess = ({ shareToken }) => {
     } finally {
       setLoading(false);
     }
-  }, [shareToken, accessLogged, handleSharingError, showInfo]);
+  }, [shareToken, handleSharingError, showInfo]);
 
   // Load shared file data on component mount
   useEffect(() => {
@@ -179,7 +184,8 @@ const SharedFileAccess = ({ shareToken }) => {
       });
       setLoading(false);
     }
-  }, [shareToken, loadSharedFile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareToken]); // Only depend on shareToken to prevent infinite loops
 
   /**
    * Handle file download with enhanced feedback
