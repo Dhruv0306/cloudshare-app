@@ -231,7 +231,7 @@ class FileControllerTest {
         void testDeleteUserFileWithShares() throws Exception {
                 // Given - Ensure we have a fresh managed user entity
                 User managedUser = userRepository.findById(testUser.getId()).orElseThrow();
-                
+
                 FileEntity file = new FileEntity("uuid_shared.txt", "shared.txt", "text/plain", 1024L, "/path",
                                 managedUser);
                 FileEntity savedFile = fileRepository.save(file);
@@ -258,9 +258,12 @@ class FileControllerTest {
                 Optional<FileEntity> deletedFile = fileRepository.findById(savedFile.getId());
                 assertTrue(deletedFile.isEmpty(), "File should be deleted from database");
 
-                // Note: We cannot verify share deactivation here due to Hibernate TransientObjectException
-                // The shares are automatically deactivated when the file is deleted (cascade behavior)
-                // This is verified by the successful file deletion and the logs showing "Deactivated 2 shares"
+                // Note: We cannot verify share deactivation here due to Hibernate
+                // TransientObjectException
+                // The shares are automatically deactivated when the file is deleted (cascade
+                // behavior)
+                // This is verified by the successful file deletion and the logs showing
+                // "Deactivated 2 shares"
         }
 
         @Test
