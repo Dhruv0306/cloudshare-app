@@ -412,17 +412,27 @@ describe('SharedFileAccess Component', () => {
                 expect(screen.getByRole('button', { name: /Download File/i })).toBeInTheDocument();
             });
 
-            // Mock a slow download response
-            const mockBlob = new Blob(['file content'], { type: 'application/pdf' });
-            mockedAxios.get.mockImplementation(() =>
-                new Promise(resolve => setTimeout(() => resolve({ data: mockBlob }), 100))
-            );
+            // Mock a slow download response - need to mock both the initial load and download endpoints
+            mockedAxios.get.mockImplementation((url) => {
+                if (url.includes('/download')) {
+                    // Mock slow download response
+                    return new Promise(resolve => 
+                        setTimeout(() => resolve({ 
+                            data: new Blob(['file content'], { type: 'application/pdf' }) 
+                        }), 100)
+                    );
+                }
+                // Return the initial file data for the first call
+                return Promise.resolve({ data: mockShareData });
+            });
 
             const downloadButton = screen.getByRole('button', { name: /Download File/i });
             fireEvent.click(downloadButton);
 
-            // Check for loading state
-            expect(screen.getByText('Downloading...')).toBeInTheDocument();
+            // Check for loading state - the button text should change to "Downloading..."
+            await waitFor(() => {
+                expect(screen.getByText('Downloading...')).toBeInTheDocument();
+            });
             expect(downloadButton).toBeDisabled();
         });
 
