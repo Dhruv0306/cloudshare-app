@@ -532,11 +532,16 @@ describe('App Component', () => {
 
       render(<App />);
 
+      // Wait for files to load first
       await waitFor(() => {
-        const downloadButton = screen.getByRole('button', { name: /download/i });
-        fireEvent.click(downloadButton);
+        expect(screen.getByText('test.txt')).toBeInTheDocument();
       });
 
+      // Click download button
+      const downloadButton = screen.getByRole('button', { name: /download/i });
+      fireEvent.click(downloadButton);
+
+      // Wait for error message to appear
       await waitFor(() => {
         expect(screen.getByText('Error downloading file')).toBeInTheDocument();
       }, { timeout: 3000 });
