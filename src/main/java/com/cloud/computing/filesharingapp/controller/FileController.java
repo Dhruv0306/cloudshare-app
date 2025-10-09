@@ -14,6 +14,7 @@ import com.cloud.computing.filesharingapp.security.UserPrincipal;
 import com.cloud.computing.filesharingapp.service.FileService;
 import com.cloud.computing.filesharingapp.service.FileSharingService;
 import com.cloud.computing.filesharingapp.service.ShareNotificationService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -271,7 +272,8 @@ public class FileController {
     @PostMapping("/{fileId}/share")
     public ResponseEntity<?> createFileShare(@PathVariable Long fileId,
             @Valid @RequestBody ShareRequest shareRequest,
-            Authentication authentication) {
+            Authentication authentication,
+            HttpServletRequest request) {
         UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
         logger.info("Creating share for file ID: {} by user: {} (ID: {})",
                 fileId, userPrincipal.getUsername(), userPrincipal.getId());
@@ -280,7 +282,11 @@ public class FileController {
             User user = userRepository.findById(userPrincipal.getId())
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
-            ShareResponse shareResponse = fileSharingService.createShare(fileId, shareRequest, user);
+            // Extract client IP and user agent for enhanced security
+            String clientIp = getClientIpAddress(request);
+            String userAgent = request.getHeader("User-Agent");
+
+            ShareResponse shareResponse = fileSharingService.createShare(fileId, shareRequest, user, clientIp, userAgent);
 
             // Send email notifications if requested
             if (shareRequest.isSendNotification() && shareRequest.getRecipientEmails() != null
@@ -462,6 +468,36 @@ public class FileController {
     }
 
     // ========== HELPER METHODS ==========
+
+    /**
+     * Extracts the client IP address from the HTTP request.
+     * 
+     * <p>This method checks various headers to determine the real client IP address,
+     * accounting for proxies and load balancers that may be in front of the application.
+     * 
+     * @param request the HTTP servlet request
+     * @return the client IP address
+     */
+    private String getClientIpAddress(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty() && !"unknown".equalsIgnoreCase(xForwardedFor)) {
+            // X-Forwarded-For can contain multiple IPs, take the first one
+            return xForwardedFor.split(",")[0].trim();
+        }
+        
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isEmpty() && !"unknown".equalsIgnoreCase(xRealIp)) {
+            return xRealIp;
+        }
+        
+        String xForwardedProto = request.getHeader("X-Forwarded-Proto");
+        if (xForwardedProto != null && !xForwardedProto.isEmpty() && !"unknown".equalsIgnoreCase(xForwardedProto)) {
+            return xForwardedProto;
+        }
+        
+        // Fall back to remote address
+        return request.getRemoteAddr();
+    }
 
 
 

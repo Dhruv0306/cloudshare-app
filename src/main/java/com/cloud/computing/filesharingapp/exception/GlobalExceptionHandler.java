@@ -131,6 +131,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles Spring Security authorization exceptions (access denied).
+     * 
+     * @param ex the authorization exception
+     * @return ResponseEntity with 403 Forbidden status
+     */
+    @ExceptionHandler(org.springframework.security.authorization.AuthorizationDeniedException.class)
+    public ResponseEntity<?> handleAuthorizationDeniedException(org.springframework.security.authorization.AuthorizationDeniedException ex) {
+        logger.warn("Authorization denied: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new MessageResponse("Error: Access denied"));
+    }
+
+    /**
      * Handles all other unexpected exceptions as a fallback.
      * 
      * <p>This method ensures that no unhandled exceptions leak sensitive

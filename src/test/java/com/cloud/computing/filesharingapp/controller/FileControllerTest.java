@@ -8,6 +8,8 @@ import com.cloud.computing.filesharingapp.repository.FileShareRepository;
 import com.cloud.computing.filesharingapp.repository.UserRepository;
 import com.cloud.computing.filesharingapp.security.UserPrincipal;
 import com.cloud.computing.filesharingapp.service.FileSharingService;
+import com.cloud.computing.filesharingapp.service.RateLimitingService;
+import com.cloud.computing.filesharingapp.service.AdvancedSecurityService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +44,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureWebMvc
 @ActiveProfiles("test")
 @Transactional
+@SuppressWarnings("deprecation") // Allow use of deprecated methods in tests
 class FileControllerTest {
 
         @Autowired
@@ -69,6 +72,12 @@ class FileControllerTest {
         @SuppressWarnings("unused")
         @Autowired
         private EntityManager entityManager;
+
+        @Autowired
+        private RateLimitingService rateLimitingService;
+
+        @Autowired
+        private AdvancedSecurityService advancedSecurityService;
 
         private MockMvc mockMvc;
         private User testUser;
@@ -98,6 +107,10 @@ class FileControllerTest {
                 UserPrincipal userPrincipal = UserPrincipal.create(testUser);
                 authentication = new UsernamePasswordAuthenticationToken(userPrincipal, null,
                                 userPrincipal.getAuthorities());
+
+                // Clear rate limiting state to prevent test interference
+                rateLimitingService.clearRateLimitState();
+                advancedSecurityService.clearSecurityState();
         }
 
         @Test

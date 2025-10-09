@@ -56,6 +56,12 @@ public class FileSharingService {
     @Autowired
     private ShareAccessService shareAccessService;
 
+    @Autowired
+    private AdvancedSecurityService advancedSecurityService;
+
+    @Autowired
+    private RateLimitingService rateLimitingService;
+
     @Value("${app.base-url:http://localhost:8080}")
     private String baseUrl;
 
@@ -65,20 +71,45 @@ public class FileSharingService {
      * <p>This method performs the following operations:
      * <ul>
      *   <li>Validates that the file exists and belongs to the user</li>
+     *   <li>Performs advanced security validation and rate limiting</li>
      *   <li>Generates a secure UUID-based share token</li>
      *   <li>Creates the share with specified permissions and expiration</li>
+     *   <li>Records security audit events</li>
      *   <li>Returns a complete share response with URL</li>
      * </ul>
      * 
      * @param fileId the ID of the file to share
      * @param shareRequest the share configuration parameters
      * @param owner the user creating the share
+     * @param clientIp the IP address of the request
+     * @param userAgent the user agent string from the request
      * @return ShareResponse containing the share details and URL
-     * @throws RuntimeException if the file is not found or access is denied
+     * @throws RuntimeException if the file is not found, access is denied, or security validation fails
      */
-    public ShareResponse createShare(Long fileId, ShareRequest shareRequest, User owner) {
-        logger.info("Creating share for file ID: {} by user: {} (ID: {})", 
-                   fileId, owner.getUsername(), owner.getId());
+    public ShareResponse createShare(Long fileId, ShareRequest shareRequest, User owner, 
+                                   String clientIp, String userAgent) {
+        logger.info("Creating share for file ID: {} by user: {} (ID: {}) from IP: {}", 
+                   fileId, owner.getUsername(), owner.getId(), clientIp);
+
+        // Advanced security validation
+        AdvancedSecurityService.ShareCreationValidationResult securityValidation = 
+            advancedSecurityService.validateShareCreation(owner, clientIp, userAgent);
+        
+        if (!securityValidation.isAllowed()) {
+            logger.warn("Share creation denied by security validation - user: {}, IP: {}, reason: {}", 
+                       owner.getUsername(), clientIp, securityValidation.getReason());
+            throw new RuntimeException("Share creation denied: " + securityValidation.getReason());
+        }
+
+        // Rate limiting validation
+        RateLimitingService.RateLimitResult rateLimitResult = 
+            rateLimitingService.validateShareCreation(owner, clientIp);
+        
+        if (!rateLimitResult.isAllowed()) {
+            logger.warn("Share creation rate limited - user: {}, IP: {}, type: {}", 
+                       owner.getUsername(), clientIp, rateLimitResult.getLimitType());
+            throw new RuntimeException("Rate limit exceeded. Please try again later.");
+        }
 
         // Validate file exists and belongs to user
         Optional<FileEntity> fileOptional = fileRepository.findByIdAndOwner(fileId, owner);
@@ -100,11 +131,25 @@ public class FileSharingService {
         // Save the share
         FileShare savedShare = fileShareRepository.save(fileShare);
         
+        // Record security events
+        advancedSecurityService.recordShareCreation(owner, savedShare, clientIp, userAgent);
+        rateLimitingService.recordShareCreation(owner, clientIp);
+        
         logger.info("Share created successfully - ID: {}, token: {}, file: {}", 
                    savedShare.getId(), shareToken, file.getOriginalFileName());
 
         // Build and return response
         return buildShareResponse(savedShare);
+    }
+
+    /**
+     * Creates a new file share with the specified parameters (legacy method).
+     * 
+     * @deprecated Use {@link #createShare(Long, ShareRequest, User, String, String)} for enhanced security
+     */
+    @Deprecated
+    public ShareResponse createShare(Long fileId, ShareRequest shareRequest, User owner) {
+        return createShare(fileId, shareRequest, owner, "unknown", "unknown");
     }
 
     /**
@@ -170,17 +215,20 @@ public class FileSharingService {
      * <p>This method performs both token validation and security checks including:
      * <ul>
      *   <li>Standard token and share validation</li>
-     *   <li>IP-based rate limiting</li>
+     *   <li>Advanced security threat assessment</li>
+     *   <li>Multi-tier rate limiting validation</li>
      *   <li>Permission validation for the requested access type</li>
-     *   <li>Suspicious activity detection</li>
+     *   <li>Suspicious activity detection and automated response</li>
      * </ul>
      * 
      * @param shareToken the share token to validate
      * @param accessorIp the IP address of the accessor
+     * @param userAgent the user agent string from the request
      * @param accessType the type of access requested
      * @return ShareAccessValidationResult containing validation outcome and share details
      */
-    public ShareAccessValidationResult validateShareAccess(String shareToken, String accessorIp, ShareAccessType accessType) {
+    public ShareAccessValidationResult validateShareAccess(String shareToken, String accessorIp, 
+                                                          String userAgent, ShareAccessType accessType) {
         logger.debug("Validating share access for token: {} from IP: {} for {}", shareToken, accessorIp, accessType);
 
         // Step 1: Basic token validation - checks if share exists, is active, not expired, and under access limit
@@ -191,17 +239,37 @@ public class FileSharingService {
 
         FileShare share = shareOptional.get();
 
-        // Step 2: Advanced security validation - performs IP-based rate limiting, 
-        // suspicious activity detection, and permission checks for the requested access type
-        ShareAccessService.AccessValidationResult securityValidation = 
+        // Step 2: Advanced rate limiting validation
+        RateLimitingService.RateLimitResult rateLimitResult = 
+            rateLimitingService.validateShareAccess(share, accessorIp, accessType, null);
+        
+        if (!rateLimitResult.isAllowed()) {
+            logger.warn("Share access rate limited - token: {}, IP: {}, type: {}", 
+                       shareToken, accessorIp, rateLimitResult.getLimitType());
+            return ShareAccessValidationResult.denied("Rate limit exceeded. Please try again later.", 
+                ShareAccessService.AccessDenialType.RATE_LIMITED);
+        }
+
+        // Step 3: Legacy security validation for backward compatibility
+        ShareAccessService.AccessValidationResult legacyValidation = 
             shareAccessService.validateAccess(share, accessorIp, accessType);
 
-        if (!securityValidation.isAllowed()) {
-            return ShareAccessValidationResult.denied(securityValidation.getReason(), securityValidation.getDenialType());
+        if (!legacyValidation.isAllowed()) {
+            return ShareAccessValidationResult.denied(legacyValidation.getReason(), legacyValidation.getDenialType());
         }
 
         // All validations passed - access is allowed
         return ShareAccessValidationResult.allowed(share);
+    }
+
+    /**
+     * Validates share access with comprehensive security checks (legacy method).
+     * 
+     * @deprecated Use {@link #validateShareAccess(String, String, String, ShareAccessType)} for enhanced security
+     */
+    @Deprecated
+    public ShareAccessValidationResult validateShareAccess(String shareToken, String accessorIp, ShareAccessType accessType) {
+        return validateShareAccess(shareToken, accessorIp, "unknown", accessType);
     }
 
     /**
@@ -227,20 +295,26 @@ public class FileSharingService {
 
         FileShare share = shareOptional.get();
         
-        // Step 2: Perform security checks including rate limiting and suspicious activity detection
-        ShareAccessService.AccessValidationResult validation = 
-            shareAccessService.validateAccess(share, accessorIp, accessType);
+        // Step 2: Perform comprehensive security validation
+        ShareAccessValidationResult validation = validateShareAccess(shareToken, accessorIp, userAgent, accessType);
         
         if (!validation.isAllowed()) {
             logger.warn("Access denied for share token: {} from IP: {} - {}", 
                        shareToken, accessorIp, validation.getReason());
+            
+            // Record failed access for security monitoring
+            advancedSecurityService.recordShareAccess(share, accessType, accessorIp, userAgent, false, validation.getReason());
             return false;
         }
 
         // Step 3: Log the access attempt for security monitoring, analytics, and audit trails
         shareAccessService.logAccess(share, accessorIp, userAgent, accessType);
         
-        // Step 4: Increment the share's access counter to track usage and enforce limits
+        // Step 4: Record access in advanced security and rate limiting systems
+        advancedSecurityService.recordShareAccess(share, accessType, accessorIp, userAgent, true, null);
+        rateLimitingService.recordShareAccess(share, accessorIp, accessType, null);
+        
+        // Step 5: Increment the share's access counter to track usage and enforce limits
         share.incrementAccessCount();
         fileShareRepository.save(share);
 

@@ -140,8 +140,9 @@ public class ShareTokenValidationFilter extends OncePerRequestFilter {
                     : ShareAccessType.VIEW;
 
             // Step 5: Validate share access with comprehensive security checks
+            String userAgent = request.getHeader("User-Agent");
             FileSharingService.ShareAccessValidationResult validation = fileSharingService
-                    .validateShareAccess(shareToken, clientIp, accessType);
+                    .validateShareAccess(shareToken, clientIp, userAgent, accessType);
 
             if (!validation.isAllowed()) {
                 logger.warn("Share access denied for token: {} from IP: {} - {}",

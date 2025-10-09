@@ -91,7 +91,7 @@ public class SecureShareController {
         }
 
         try {
-            // Record the access for analytics and security monitoring
+            // Record the access for analytics and security monitoring with enhanced security
             String userAgent = request.getHeader("User-Agent");
             boolean accessRecorded = fileSharingService.recordShareAccess(token, clientIp, userAgent, ShareAccessType.VIEW);
 
@@ -175,7 +175,7 @@ public class SecureShareController {
                         .body(new MessageResponse("Download not permitted for this share"));
             }
 
-            // Record the download access
+            // Record the download access with enhanced security monitoring
             String userAgent = request.getHeader("User-Agent");
             boolean accessRecorded = fileSharingService.recordShareAccess(token, clientIp, userAgent, ShareAccessType.DOWNLOAD);
 

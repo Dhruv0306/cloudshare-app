@@ -45,6 +45,7 @@ import static org.mockito.Mockito.lenient;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("FileSharingService Tests")
+@SuppressWarnings("deprecation") // Allow use of deprecated methods in tests
 class FileSharingServiceTest {
 
     @Mock
@@ -55,6 +56,12 @@ class FileSharingServiceTest {
 
     @Mock
     private ShareAccessService shareAccessService;
+
+    @Mock
+    private AdvancedSecurityService advancedSecurityService;
+
+    @Mock
+    private RateLimitingService rateLimitingService;
 
     @InjectMocks
     private FileSharingService fileSharingService;
@@ -88,6 +95,16 @@ class FileSharingServiceTest {
         // Mock ShareAccessService to allow access by default (lenient to avoid unnecessary stubbing errors)
         lenient().when(shareAccessService.validateAccess(any(FileShare.class), anyString(), any(ShareAccessType.class)))
             .thenReturn(ShareAccessService.AccessValidationResult.allowed());
+        
+        // Mock AdvancedSecurityService to allow share creation by default
+        lenient().when(advancedSecurityService.validateShareCreation(any(User.class), anyString(), anyString()))
+            .thenReturn(AdvancedSecurityService.ShareCreationValidationResult.allowed());
+        
+        // Mock RateLimitingService to allow share creation by default
+        lenient().when(rateLimitingService.validateShareCreation(any(User.class), anyString()))
+            .thenReturn(RateLimitingService.RateLimitResult.allowed());
+        lenient().when(rateLimitingService.validateShareAccess(any(FileShare.class), anyString(), any(ShareAccessType.class), any()))
+            .thenReturn(RateLimitingService.RateLimitResult.allowed());
     }
 
     @Nested

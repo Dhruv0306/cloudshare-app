@@ -184,4 +184,21 @@ public interface FileShareRepository extends JpaRepository<FileShare, Long> {
      * @return List of active FileShare objects ordered by creation date
      */
     List<FileShare> findByActiveTrueOrderByCreatedAtDesc();
+    
+    /**
+     * Counts shares created by a specific user after a given date.
+     * 
+     * @param owner the user whose shares to count
+     * @param since the earliest creation date to include
+     * @return the number of shares created by the user since the date
+     */
+    long countByOwnerAndCreatedAtAfter(User owner, LocalDateTime since);
+    
+    /**
+     * Counts active shares created after a specific date.
+     * 
+     * @param since the earliest creation date to include
+     * @return the number of active shares created since the date
+     */
+    long countByActiveTrueAndCreatedAtAfter(LocalDateTime since);
 }
