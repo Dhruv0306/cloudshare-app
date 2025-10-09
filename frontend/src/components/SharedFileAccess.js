@@ -19,7 +19,6 @@ const SharedFileAccess = ({ shareToken }) => {
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const [accessLogged, setAccessLogged] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
 
   /**
    * Handle API errors and set appropriate error states
@@ -89,7 +88,6 @@ const SharedFileAccess = ({ shareToken }) => {
 
       const response = await axios.get(`/api/files/shared/${shareToken}`);
       setShareData(response.data);
-      setRetryCount(0);
 
       // Log the access if not already logged
       if (!accessLogged) {
@@ -117,7 +115,6 @@ const SharedFileAccess = ({ shareToken }) => {
       }
     } catch (err) {
       console.error('Error loading shared file:', err);
-      setRetryCount(prev => prev + 1);
       
       // Handle API errors inline to avoid dependency issues
       if (err.response) {
@@ -169,7 +166,7 @@ const SharedFileAccess = ({ shareToken }) => {
     } finally {
       setLoading(false);
     }
-  }, [shareToken, accessLogged]);
+  }, [shareToken, accessLogged, handleSharingError, showInfo]);
 
   // Load shared file data on component mount
   useEffect(() => {

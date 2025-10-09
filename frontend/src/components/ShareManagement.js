@@ -20,7 +20,6 @@ const ShareManagement = () => {
   const [error, setError] = useState(null);
   const [selectedShares, setSelectedShares] = useState(new Set());
   const [bulkActionsVisible, setBulkActionsVisible] = useState(false);
-  const [operationLoading, setOperationLoading] = useState(false);
   
   // Filter and sort state
   const [filters, setFilters] = useState({
@@ -110,8 +109,6 @@ const ShareManagement = () => {
     const fileName = share?.file?.originalFileName || 'Unknown file';
     
     try {
-      setOperationLoading(true);
-      
       const loadingId = showLoading(`Revoking share for "${fileName}"...`);
       
       await axios.delete(`/api/files/shares/${shareId}`);
@@ -133,8 +130,6 @@ const ShareManagement = () => {
       handleSharingError(error, 'revoking share');
       showError(`Failed to revoke share for "${fileName}"`);
       throw error;
-    } finally {
-      setOperationLoading(false);
     }
   };
 
@@ -147,8 +142,6 @@ const ShareManagement = () => {
     const permissionText = newPermission === 'VIEW_ONLY' ? 'View Only' : 'Download';
     
     try {
-      setOperationLoading(true);
-      
       const loadingId = showLoading(`Updating permissions for "${fileName}"...`);
       
       await axios.put(`/api/files/shares/${shareId}`, {
@@ -165,8 +158,6 @@ const ShareManagement = () => {
       handleSharingError(error, 'updating share permissions');
       showError(`Failed to update permissions for "${fileName}"`);
       throw error;
-    } finally {
-      setOperationLoading(false);
     }
   };
 
@@ -180,8 +171,6 @@ const ShareManagement = () => {
     if (!window.confirm(confirmMessage)) return;
 
     try {
-      setOperationLoading(true);
-      
       const loadingId = showLoading(`Revoking ${selectedShares.size} share${selectedShares.size !== 1 ? 's' : ''}...`);
       
       const revokePromises = Array.from(selectedShares).map(shareId => 
@@ -211,8 +200,6 @@ const ShareManagement = () => {
       console.error('Error in bulk revoke:', error);
       handleSharingError(error, 'bulk revoking shares');
       showError('Failed to revoke shares. Please try again.');
-    } finally {
-      setOperationLoading(false);
     }
   };
 

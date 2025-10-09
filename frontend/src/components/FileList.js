@@ -10,15 +10,15 @@ import './FileList.css';
  * Enhanced file list component with sharing features
  * Displays files with share status indicators, quick actions, and bulk operations
  */
-const FileList = ({ 
-  files, 
-  onFileUpdate, 
-  onDownload, 
+const FileList = ({
+  files,
+  onFileUpdate,
+  onDownload,
   onDelete,
-  loading = false 
+  loading = false
 }) => {
   // Hooks for notifications and error handling
-  const { showSuccess, showError, showLoading, removeNotification } = useNotification();
+  const { showSuccess: showSuccessNotification, showError: showErrorNotification } = useNotification();
   const { handleSharingError } = useSharingErrorHandler();
 
   // State for sharing functionality
@@ -34,7 +34,7 @@ const FileList = ({
   // Load sharing information for all files
   const loadFileShares = useCallback(async () => {
     if (!files || files.length === 0) return;
-    
+
     setLoadingShares(true);
     try {
       // Fetch sharing information for all files
@@ -50,13 +50,13 @@ const FileList = ({
 
       const shareResults = await Promise.all(sharePromises);
       const shareMap = {};
-      
+
       shareResults.forEach(({ fileId, shares }) => {
         shareMap[fileId] = {
           shares: shares || [],
           shareCount: shares ? shares.length : 0,
           hasActiveShares: shares ? shares.some(share => share.active) : false,
-          lastSharedAt: shares && shares.length > 0 
+          lastSharedAt: shares && shares.length > 0
             ? Math.max(...shares.map(share => new Date(share.createdAt).getTime()))
             : null
         };
@@ -150,19 +150,22 @@ const FileList = ({
   const handleShare = async (fileId, shareData) => {
     const file = files.find(f => f.id === fileId);
     const fileName = file?.originalFileName || 'Unknown file';
-    
+
     try {
       setSharingInProgress(true);
-      
+
       const response = await axios.post(`/api/files/${fileId}/share`, shareData);
-      
+
       // Reload shares to update indicators
       await loadFileShares();
-      
+
       // Notify parent component of file update
       if (onFileUpdate) {
         onFileUpdate();
       }
+
+      // Show success notification
+      showSuccessNotification(`Successfully shared "${fileName}"`);
 
       return {
         shareUrl: `${window.location.origin}/shared/${response.data.shareToken}`,
@@ -171,6 +174,7 @@ const FileList = ({
     } catch (error) {
       console.error('Error creating share:', error);
       handleSharingError(error, `sharing "${fileName}"`);
+      showErrorNotification(`Failed to share "${fileName}"`);
       throw error;
     } finally {
       setSharingInProgress(false);
@@ -218,7 +222,7 @@ const FileList = ({
   const getShareStatus = (fileId) => {
     const shareInfo = fileShares[fileId];
     if (!shareInfo) return { hasShares: false, shareCount: 0, isActive: false };
-    
+
     return {
       hasShares: shareInfo.shareCount > 0,
       shareCount: shareInfo.shareCount,
@@ -232,7 +236,7 @@ const FileList = ({
    */
   const renderShareIndicator = (file) => {
     const status = getShareStatus(file.id);
-    
+
     if (!status.hasShares) return null;
 
     return (
@@ -251,23 +255,23 @@ const FileList = ({
     if (!contextMenu.visible || !contextMenu.file) return null;
 
     return (
-      <div 
+      <div
         className="context-menu"
-        style={{ 
-          position: 'fixed', 
-          top: contextMenu.y, 
+        style={{
+          position: 'fixed',
+          top: contextMenu.y,
           left: contextMenu.x,
           zIndex: 1000
         }}
       >
-        <button 
+        <button
           className="context-menu-item"
           onClick={() => handleQuickShare(contextMenu.file)}
         >
           <span className="context-menu-icon">🔗</span>
           Share File
         </button>
-        <button 
+        <button
           className="context-menu-item"
           onClick={() => {
             onDownload(contextMenu.file.fileName, contextMenu.file.originalFileName);
@@ -277,7 +281,7 @@ const FileList = ({
           <span className="context-menu-icon">⬇️</span>
           Download
         </button>
-        <button 
+        <button
           className="context-menu-item danger"
           onClick={() => {
             onDelete(contextMenu.file.id);
@@ -325,14 +329,14 @@ const FileList = ({
             <span>{selectedFiles.size} file{selectedFiles.size !== 1 ? 's' : ''} selected</span>
           </div>
           <div className="bulk-actions-buttons">
-            <button 
+            <button
               className="bulk-action-btn share-btn"
               onClick={handleBulkShare}
               title="Share selected files"
             >
               🔗 Share
             </button>
-            <button 
+            <button
               className="bulk-action-btn clear-btn"
               onClick={handleClearSelection}
               title="Clear selection"
@@ -370,10 +374,10 @@ const FileList = ({
         {files.map((file) => {
           const isSelected = selectedFiles.has(file.id);
           const shareStatus = getShareStatus(file.id);
-          
+
           return (
-            <div 
-              key={file.id} 
+            <div
+              key={file.id}
               className={`file-item ${isSelected ? 'selected' : ''} ${shareStatus.isActive ? 'shared' : ''}`}
               onContextMenu={(e) => handleContextMenu(e, file)}
             >
@@ -401,7 +405,7 @@ const FileList = ({
                   </div>
                 </div>
               </div>
-              
+
               <div className="file-actions">
                 <button
                   className="action-btn share-btn"

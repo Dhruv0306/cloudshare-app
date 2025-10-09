@@ -27,6 +27,14 @@ export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
 
   /**
+   * Remove a notification by ID
+   * @param {string|number} id - Notification ID
+   */
+  const removeNotification = useCallback((id) => {
+    setNotifications(prev => prev.filter(notification => notification.id !== id));
+  }, []);
+
+  /**
    * Add a new notification
    * @param {string} type - Notification type (success, error, warning, info)
    * @param {string} message - Notification message
@@ -55,15 +63,7 @@ export const NotificationProvider = ({ children }) => {
     }
 
     return id;
-  }, []);
-
-  /**
-   * Remove a notification by ID
-   * @param {string|number} id - Notification ID
-   */
-  const removeNotification = useCallback((id) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
-  }, []);
+  }, [removeNotification]);
 
   /**
    * Clear all notifications
