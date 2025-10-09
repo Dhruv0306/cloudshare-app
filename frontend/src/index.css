@@ -211,3 +211,160 @@ code {
 .logout-btn:hover {
   background-color: #c82333;
 }
+
+/* App Layout Styles */
+.app-container {
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.app-header {
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.app-title {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-welcome {
+  color: #666;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+/* Navigation Styles */
+.app-navigation {
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 0 24px;
+  display: flex;
+  gap: 0;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  text-decoration: none;
+  color: #666;
+  font-weight: 500;
+  font-size: 14px;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.nav-link:hover {
+  color: #333;
+  background-color: #f8f9fa;
+}
+
+.nav-link.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  background-color: #f8f9ff;
+}
+
+/* Main Content Area */
+.app-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.page-content {
+  background: transparent;
+}
+
+/* Update existing container styles for new layout */
+.container {
+  background: transparent;
+  padding: 0;
+}
+
+/* Responsive Navigation */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+  
+  .header-left,
+  .header-right {
+    justify-content: center;
+  }
+  
+  .app-title {
+    font-size: 20px;
+  }
+  
+  .app-navigation {
+    padding: 0 16px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  
+  .nav-link {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+  
+  .app-main {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    padding: 10px 12px;
+  }
+  
+  .app-title {
+    font-size: 18px;
+  }
+  
+  .user-welcome {
+    font-size: 12px;
+  }
+  
+  .logout-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .app-navigation {
+    padding: 0 12px;
+  }
+  
+  .nav-link {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  
+  .app-main {
+    padding: 12px;
+  }
+}

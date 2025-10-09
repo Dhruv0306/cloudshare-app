@@ -1,22 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import Signup from './components/Signup';
 import ErrorBoundary from './components/ErrorBoundary';
 import SharedFileAccessPage from './components/SharedFileAccessPage';
 import FileList from './components/FileList';
+import ShareManagement from './components/ShareManagement';
 import './components/ErrorBoundary.css';
 
-function FileManager() {
+/**
+ * Navigation component for the authenticated app
+ */
+function Navigation() {
+  const location = useLocation();
+  
+  return (
+    <nav className="app-navigation">
+      <Link 
+        to="/files" 
+        className={`nav-link ${location.pathname === '/files' ? 'active' : ''}`}
+      >
+        📁 My Files
+      </Link>
+      <Link 
+        to="/shares" 
+        className={`nav-link ${location.pathname === '/shares' ? 'active' : ''}`}
+      >
+        🔗 Share Management
+      </Link>
+    </nav>
+  );
+}
+
+/**
+ * File upload and management page component
+ */
+function FilesPage() {
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('');
-  const { currentUser, logout, token } = useAuth();
+  const { currentUser, token } = useAuth();
 
   useEffect(() => {
     // Only fetch files if user is authenticated and token is available
@@ -113,18 +141,8 @@ function FileManager() {
     }
   };
 
-
-
   return (
-    <div className="container">
-      <div className="header-section">
-        <h1 className="header">File Sharing App</h1>
-        <div className="user-info">
-          <span>Welcome, {currentUser?.username}!</span>
-          <button onClick={logout} className="logout-btn">Logout</button>
-        </div>
-      </div>
-
+    <div className="page-content">
       {message && (
         <div className={messageType === 'error' ? 'error' : 'success'}>
           {message}
@@ -160,6 +178,37 @@ function FileManager() {
           loading={loading}
         />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Main authenticated app layout with navigation
+ */
+function FileManager() {
+  const { currentUser, logout } = useAuth();
+
+  return (
+    <div className="app-container">
+      <div className="app-header">
+        <div className="header-left">
+          <h1 className="app-title">File Sharing App</h1>
+        </div>
+        <div className="header-right">
+          <span className="user-welcome">Welcome, {currentUser?.username}!</span>
+          <button onClick={logout} className="logout-btn">Logout</button>
+        </div>
+      </div>
+
+      <Navigation />
+
+      <main className="app-main">
+        <Routes>
+          <Route path="/files" element={<FilesPage />} />
+          <Route path="/shares" element={<ShareManagement />} />
+          <Route path="/" element={<FilesPage />} />
+        </Routes>
+      </main>
     </div>
   );
 }

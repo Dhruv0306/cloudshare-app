@@ -477,8 +477,8 @@ describe('App Component', () => {
       await waitFor(() => {
         expect(screen.getByText('test.txt')).toBeInTheDocument();
         expect(screen.getByText(/1 KB/)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /download/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
+        expect(screen.getByTitle('Download file')).toBeInTheDocument();
+        expect(screen.getByTitle('Delete file')).toBeInTheDocument();
       });
     });
 
@@ -507,7 +507,7 @@ describe('App Component', () => {
       render(<App />);
 
       await waitFor(() => {
-        const downloadButton = screen.getByRole('button', { name: /download/i });
+        const downloadButton = screen.getByTitle('Download file');
         fireEvent.click(downloadButton);
       });
 
@@ -528,7 +528,12 @@ describe('App Component', () => {
       }];
 
       axios.get.mockResolvedValueOnce({ data: mockFiles }); // For initial fetch
-      axios.get.mockRejectedValueOnce(new Error('Download failed')); // For download
+      axios.get.mockImplementation((url) => {
+        if (url.includes('/download/')) {
+          return Promise.reject(new Error('Download failed'));
+        }
+        return Promise.resolve({ data: mockFiles });
+      });
 
       render(<App />);
 
@@ -538,13 +543,13 @@ describe('App Component', () => {
       });
 
       // Click download button
-      const downloadButton = screen.getByRole('button', { name: /download/i });
+      const downloadButton = screen.getByTitle('Download file');
       fireEvent.click(downloadButton);
 
       // Wait for error message to appear
       await waitFor(() => {
         expect(screen.getByText('Error downloading file')).toBeInTheDocument();
-      }, { timeout: 3000 });
+      }, { timeout: 5000 });
     });
 
     test('handles file deletion with confirmation', async () => {
@@ -565,7 +570,7 @@ describe('App Component', () => {
       render(<App />);
 
       await waitFor(() => {
-        const deleteButton = screen.getByRole('button', { name: /delete/i });
+        const deleteButton = screen.getByTitle('Delete file');
         fireEvent.click(deleteButton);
       });
 
@@ -593,7 +598,7 @@ describe('App Component', () => {
       render(<App />);
 
       await waitFor(() => {
-        const deleteButton = screen.getByRole('button', { name: /delete/i });
+        const deleteButton = screen.getByTitle('Delete file');
         fireEvent.click(deleteButton);
       });
 
@@ -618,7 +623,7 @@ describe('App Component', () => {
       render(<App />);
 
       await waitFor(() => {
-        const deleteButton = screen.getByRole('button', { name: /delete/i });
+        const deleteButton = screen.getByTitle('Delete file');
         fireEvent.click(deleteButton);
       });
 
@@ -768,8 +773,8 @@ describe('User Interface and Interactions', () => {
       expect(screen.getByText('image.jpg')).toBeInTheDocument();
 
       // Should have 3 download buttons and 3 delete buttons
-      expect(screen.getAllByRole('button', { name: /download/i })).toHaveLength(3);
-      expect(screen.getAllByRole('button', { name: /delete/i })).toHaveLength(3);
+      expect(screen.getAllByTitle('Download file')).toHaveLength(3);
+      expect(screen.getAllByTitle('Delete file')).toHaveLength(3);
     });
   });
 });

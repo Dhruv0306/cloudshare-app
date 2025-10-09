@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import FormField from './FormField';
 import { validateEmail } from '../utils/validation';
 import './ShareFileModal.css';
@@ -35,22 +35,7 @@ const ShareFileModal = ({
     }
   }, [isOpen, file]);
 
-  // Handle Escape key to close modal
-  useEffect(() => {
-    const handleEscapeKey = (event) => {
-      if (event.key === 'Escape' && isOpen) {
-        handleClose();
-      }
-    };
 
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscapeKey);
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleEscapeKey);
-    };
-  }, [isOpen]);
 
   /**
    * Reset form to initial state
@@ -67,6 +52,31 @@ const ShareFileModal = ({
     setFieldErrors({});
     setTouched({});
   };
+
+  /**
+   * Handle modal close
+   */
+  const handleClose = useCallback(() => {
+    resetForm();
+    onClose();
+  }, [onClose]);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape' && isOpen) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [isOpen, handleClose]);
 
   /**
    * Handle field changes and clear errors
@@ -263,13 +273,7 @@ const ShareFileModal = ({
     }
   };
 
-  /**
-   * Handle modal close
-   */
-  const handleClose = () => {
-    resetForm();
-    onClose();
-  };
+
 
   /**
    * Get minimum date for custom expiration (tomorrow)
