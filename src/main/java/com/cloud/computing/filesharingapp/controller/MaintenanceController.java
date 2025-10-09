@@ -1,7 +1,8 @@
 package com.cloud.computing.filesharingapp.controller;
 
-import com.cloud.computing.filesharingapp.service.EmailVerificationService;
+import com.cloud.computing.filesharingapp.dto.ShareAnalyticsDTO;
 import com.cloud.computing.filesharingapp.service.MaintenanceTaskService;
+import com.cloud.computing.filesharingapp.service.ShareAnalyticsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,195 +14,200 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Controller for maintenance and administrative operations.
- * Provides endpoints for manual cleanup and system health monitoring.
+ * REST controller for maintenance and analytics operations.
+ * 
+ * <p>This controller provides endpoints for administrators to manually trigger
+ * maintenance tasks and retrieve system analytics. All endpoints require
+ * administrative privileges for security.
+ * 
+ * <p>Available operations:
+ * <ul>
+ *   <li>Manual maintenance task execution</li>
+ *   <li>System analytics retrieval</li>
+ *   <li>Health status monitoring</li>
+ *   <li>Performance metrics access</li>
+ * </ul>
+ * 
+ * @author File Sharing App Team
+ * @version 1.0
+ * @since 1.0
  */
 @RestController
 @RequestMapping("/api/admin/maintenance")
-@PreAuthorize("hasRole('ADMIN')") // Only admin users can access these endpoints
+@PreAuthorize("hasRole('ADMIN')")
 public class MaintenanceController {
 
     private static final Logger logger = LoggerFactory.getLogger(MaintenanceController.class);
 
     @Autowired
-    private EmailVerificationService emailVerificationService;
-
-    @Autowired
     private MaintenanceTaskService maintenanceTaskService;
 
-    /**
-     * Manually trigger cleanup of expired verification codes.
-     * 
-     * @return Response indicating the result of the cleanup operation
-     */
-    @PostMapping("/cleanup-verifications")
-    public ResponseEntity<Map<String, Object>> cleanupVerifications() {
-        logger.info("Manual cleanup of verification codes requested");
-        
-        try {
-            emailVerificationService.performManualCleanup();
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Verification codes cleanup completed successfully");
-            response.put("timestamp", System.currentTimeMillis());
-            
-            return ResponseEntity.ok(response);
-            
-        } catch (Exception e) {
-            logger.error("Error during manual verification cleanup: {}", e.getMessage(), e);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Cleanup failed: " + e.getMessage());
-            response.put("timestamp", System.currentTimeMillis());
-            
-            return ResponseEntity.internalServerError().body(response);
-        }
-    }
+    @Autowired
+    private ShareAnalyticsService shareAnalyticsService;
 
     /**
-     * Manually trigger all maintenance tasks.
+     * Manually triggers all maintenance tasks.
      * 
-     * @return Response indicating the result of the maintenance operations
+     * <p>This endpoint allows administrators to run all scheduled maintenance
+     * tasks on-demand for immediate system cleanup and optimization.
+     * 
+     * @return ResponseEntity with execution status and summary
      */
-    @PostMapping("/run-all-tasks")
+    @PostMapping("/run-all")
     public ResponseEntity<Map<String, Object>> runAllMaintenanceTasks() {
         logger.info("Manual execution of all maintenance tasks requested");
         
         try {
+            long startTime = System.currentTimeMillis();
             maintenanceTaskService.performAllMaintenanceTasks();
+            long executionTime = System.currentTimeMillis() - startTime;
             
             Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
+            response.put("status", "success");
             response.put("message", "All maintenance tasks completed successfully");
+            response.put("executionTimeMs", executionTime);
             response.put("timestamp", System.currentTimeMillis());
             
+            logger.info("Manual maintenance tasks completed in {}ms", executionTime);
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            logger.error("Error during manual maintenance tasks: {}", e.getMessage(), e);
+            logger.error("Error during manual maintenance execution: {}", e.getMessage(), e);
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Maintenance tasks failed: " + e.getMessage());
-            response.put("timestamp", System.currentTimeMillis());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "Maintenance tasks failed: " + e.getMessage());
+            errorResponse.put("timestamp", System.currentTimeMillis());
             
-            return ResponseEntity.internalServerError().body(response);
+            return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
 
     /**
-     * Get system health and verification statistics.
+     * Manually triggers file sharing specific maintenance tasks.
      * 
-     * @return System health metrics and statistics
+     * @return ResponseEntity with execution status and summary
      */
-    @GetMapping("/health-stats")
-    public ResponseEntity<Map<String, Object>> getHealthStats() {
-        logger.info("System health statistics requested");
+    @PostMapping("/run-sharing")
+    public ResponseEntity<Map<String, Object>> runSharingMaintenanceTasks() {
+        logger.info("Manual execution of sharing maintenance tasks requested");
         
         try {
-            EmailVerificationService.VerificationStats stats = emailVerificationService.getVerificationStats();
+            long startTime = System.currentTimeMillis();
+            maintenanceTaskService.performSharingMaintenanceTasks();
+            long executionTime = System.currentTimeMillis() - startTime;
             
             Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
+            response.put("status", "success");
+            response.put("message", "Sharing maintenance tasks completed successfully");
+            response.put("executionTimeMs", executionTime);
             response.put("timestamp", System.currentTimeMillis());
             
-            Map<String, Object> verificationStats = new HashMap<>();
-            verificationStats.put("totalVerifications", stats.getTotalVerifications());
-            verificationStats.put("expiredCodes", stats.getExpiredCodes());
-            
-            response.put("verificationStats", verificationStats);
-            
+            logger.info("Manual sharing maintenance tasks completed in {}ms", executionTime);
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            logger.error("Error retrieving health statistics: {}", e.getMessage(), e);
+            logger.error("Error during manual sharing maintenance execution: {}", e.getMessage(), e);
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Failed to retrieve health statistics: " + e.getMessage());
-            response.put("timestamp", System.currentTimeMillis());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "Sharing maintenance tasks failed: " + e.getMessage());
+            errorResponse.put("timestamp", System.currentTimeMillis());
             
-            return ResponseEntity.internalServerError().body(response);
+            return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
 
     /**
-     * Manually trigger cleanup of pending user accounts.
+     * Retrieves comprehensive system analytics.
      * 
-     * @return Response indicating the result of the cleanup operation
+     * @return ResponseEntity containing detailed analytics data
      */
-    @PostMapping("/cleanup-pending-accounts")
-    public ResponseEntity<Map<String, Object>> cleanupPendingAccounts() {
-        logger.info("Manual cleanup of pending accounts requested");
+    @GetMapping("/analytics")
+    public ResponseEntity<ShareAnalyticsDTO> getSystemAnalytics() {
+        logger.debug("System analytics requested");
         
         try {
-            maintenanceTaskService.cleanupPendingAccounts();
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Pending accounts cleanup completed successfully");
-            response.put("timestamp", System.currentTimeMillis());
-            
-            return ResponseEntity.ok(response);
+            ShareAnalyticsDTO analytics = shareAnalyticsService.generateComprehensiveAnalytics();
+            logger.debug("System analytics generated successfully");
+            return ResponseEntity.ok(analytics);
             
         } catch (Exception e) {
-            logger.error("Error during manual pending accounts cleanup: {}", e.getMessage(), e);
+            logger.error("Error generating system analytics: {}", e.getMessage(), e);
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Pending accounts cleanup failed: " + e.getMessage());
-            response.put("timestamp", System.currentTimeMillis());
+            // Return minimal error analytics
+            ShareAnalyticsDTO errorAnalytics = new ShareAnalyticsDTO();
+            errorAnalytics.setHealthStatus("ERROR");
+            errorAnalytics.setHealthIssues("Analytics generation failed: " + e.getMessage());
             
-            return ResponseEntity.internalServerError().body(response);
+            return ResponseEntity.internalServerError().body(errorAnalytics);
         }
     }
 
     /**
-     * Get detailed system information for monitoring purposes.
+     * Retrieves quick health metrics for monitoring.
      * 
-     * @return Detailed system information and metrics
+     * @return ResponseEntity containing health status and key metrics
      */
-    @GetMapping("/system-info")
-    public ResponseEntity<Map<String, Object>> getSystemInfo() {
-        logger.info("System information requested");
+    @GetMapping("/health")
+    public ResponseEntity<ShareAnalyticsDTO> getHealthMetrics() {
+        logger.debug("Health metrics requested");
         
         try {
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("timestamp", System.currentTimeMillis());
-            
-            // JVM information
-            Runtime runtime = Runtime.getRuntime();
-            Map<String, Object> jvmInfo = new HashMap<>();
-            jvmInfo.put("totalMemory", runtime.totalMemory());
-            jvmInfo.put("freeMemory", runtime.freeMemory());
-            jvmInfo.put("usedMemory", runtime.totalMemory() - runtime.freeMemory());
-            jvmInfo.put("maxMemory", runtime.maxMemory());
-            jvmInfo.put("availableProcessors", runtime.availableProcessors());
-            
-            response.put("jvmInfo", jvmInfo);
-            
-            // Application information
-            Map<String, Object> appInfo = new HashMap<>();
-            appInfo.put("applicationName", "File Sharing App");
-            appInfo.put("version", "1.0.0");
-            appInfo.put("profile", "default");
-            
-            response.put("applicationInfo", appInfo);
-            
-            return ResponseEntity.ok(response);
+            ShareAnalyticsDTO healthMetrics = shareAnalyticsService.getQuickHealthMetrics();
+            logger.debug("Health metrics generated successfully");
+            return ResponseEntity.ok(healthMetrics);
             
         } catch (Exception e) {
-            logger.error("Error retrieving system information: {}", e.getMessage(), e);
+            logger.error("Error generating health metrics: {}", e.getMessage(), e);
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", false);
-            response.put("message", "Failed to retrieve system information: " + e.getMessage());
-            response.put("timestamp", System.currentTimeMillis());
+            // Return critical health status
+            ShareAnalyticsDTO criticalHealth = new ShareAnalyticsDTO();
+            criticalHealth.setHealthStatus("CRITICAL");
+            criticalHealth.setHealthIssues("Health check failed: " + e.getMessage());
             
-            return ResponseEntity.internalServerError().body(response);
+            return ResponseEntity.internalServerError().body(criticalHealth);
+        }
+    }
+
+    /**
+     * Retrieves system status summary for dashboard display.
+     * 
+     * @return ResponseEntity containing system status information
+     */
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> getSystemStatus() {
+        logger.debug("System status requested");
+        
+        try {
+            ShareAnalyticsDTO analytics = shareAnalyticsService.getQuickHealthMetrics();
+            
+            Map<String, Object> status = new HashMap<>();
+            status.put("healthStatus", analytics.getHealthStatus());
+            status.put("activeShares", analytics.getActiveShares());
+            status.put("recentAccesses", analytics.getTotalAccesses24h());
+            status.put("queryPerformanceMs", analytics.getQueryPerformanceMs());
+            status.put("suspiciousIpCount", analytics.getSuspiciousIpCount());
+            status.put("isPerformingWell", analytics.isPerformingWell());
+            status.put("timestamp", System.currentTimeMillis());
+            
+            if (analytics.getHealthIssues() != null && !analytics.getHealthIssues().equals("None")) {
+                status.put("healthIssues", analytics.getHealthIssues());
+            }
+            
+            logger.debug("System status generated successfully");
+            return ResponseEntity.ok(status);
+            
+        } catch (Exception e) {
+            logger.error("Error generating system status: {}", e.getMessage(), e);
+            
+            Map<String, Object> errorStatus = new HashMap<>();
+            errorStatus.put("healthStatus", "ERROR");
+            errorStatus.put("healthIssues", "Status check failed: " + e.getMessage());
+            errorStatus.put("isPerformingWell", false);
+            errorStatus.put("timestamp", System.currentTimeMillis());
+            
+            return ResponseEntity.internalServerError().body(errorStatus);
         }
     }
 }

@@ -4,6 +4,7 @@ import com.cloud.computing.filesharingapp.entity.FileShare;
 import com.cloud.computing.filesharingapp.entity.ShareAccess;
 import com.cloud.computing.filesharingapp.entity.ShareAccessType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -179,5 +180,52 @@ public interface ShareAccessRepository extends JpaRepository<ShareAccess, Long> 
            "GROUP BY sa.accessorIp HAVING COUNT(sa) >= :minCount")
     List<Object[]> findSuspiciousAccessPatterns(@Param("accessorIp") String accessorIp, 
                                                  @Param("since") LocalDateTime since, 
+                                                 @Param("minCount") long minCount);
+    
+    /**
+     * Deletes access logs older than the specified date.
+     * 
+     * <p>This method is used for maintenance cleanup to remove old access logs
+     * and manage database size. It helps maintain optimal database performance
+     * by removing historical data that is no longer needed for analytics.
+     * 
+     * @param cutoffDate the date before which access logs should be deleted
+     * @return the number of access logs that were deleted
+     */
+    @Modifying
+    @Query("DELETE FROM ShareAccess sa WHERE sa.accessedAt < :cutoffDate")
+    int deleteByAccessedAtBefore(@Param("cutoffDate") LocalDateTime cutoffDate);
+    
+    /**
+     * Counts access logs by access type after a specific date.
+     * 
+     * @param accessType the type of access to count
+     * @param since the earliest date to include in the count
+     * @return the number of access logs of the specified type since the date
+     */
+    long countByAccessTypeAndAccessedAtAfter(ShareAccessType accessType, LocalDateTime since);
+    
+    /**
+     * Counts all access logs after a specific date.
+     * 
+     * @param since the earliest date to include in the count
+     * @return the number of access logs since the date
+     */
+    long countByAccessedAtAfter(LocalDateTime since);
+    
+    /**
+     * Finds suspicious access patterns across all IPs within a time window.
+     * 
+     * <p>This overloaded method identifies all IP addresses that have made
+     * an unusually high number of access attempts within the specified time window.
+     * 
+     * @param since the time window to check (accesses after this time)
+     * @param minCount the minimum number of accesses to be considered suspicious
+     * @return List of Object arrays containing IP addresses and their access counts
+     */
+    @Query("SELECT sa.accessorIp, COUNT(sa) FROM ShareAccess sa " +
+           "WHERE sa.accessedAt > :since " +
+           "GROUP BY sa.accessorIp HAVING COUNT(sa) >= :minCount")
+    List<Object[]> findSuspiciousAccessPatterns(@Param("since") LocalDateTime since, 
                                                  @Param("minCount") long minCount);
 }

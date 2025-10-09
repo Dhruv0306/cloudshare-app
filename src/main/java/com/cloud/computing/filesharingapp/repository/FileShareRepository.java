@@ -162,4 +162,26 @@ public interface FileShareRepository extends JpaRepository<FileShare, Long> {
      * @return the number of active shares for the file
      */
     long countByFileAndActiveTrue(FileEntity file);
+    
+    /**
+     * Counts the number of active shares in the system.
+     * 
+     * @return the total number of active shares
+     */
+    long countByActiveTrue();
+    
+    /**
+     * Counts shares created after a specific date.
+     * 
+     * @param since the earliest creation date to include
+     * @return the number of shares created since the date
+     */
+    long countByCreatedAtAfter(LocalDateTime since);
+    
+    /**
+     * Finds active shares ordered by creation date (newest first).
+     * 
+     * @return List of active FileShare objects ordered by creation date
+     */
+    List<FileShare> findByActiveTrueOrderByCreatedAtDesc();
 }
