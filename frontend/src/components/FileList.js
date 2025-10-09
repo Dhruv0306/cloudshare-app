@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import ShareFileModal from './ShareFileModal';
+import { useNotification } from './NotificationSystem';
+import { useSharingErrorHandler } from './SharingErrorBoundary';
+import LoadingSpinner, { SkeletonLoader } from './LoadingSpinner';
 import './FileList.css';
 
 /**
@@ -14,6 +17,10 @@ const FileList = ({
   onDelete,
   loading = false 
 }) => {
+  // Hooks for notifications and error handling
+  const { showSuccess, showError, showLoading, removeNotification } = useNotification();
+  const { handleSharingError } = useSharingErrorHandler();
+
   // State for sharing functionality
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -22,6 +29,7 @@ const FileList = ({
   const [bulkActionsVisible, setBulkActionsVisible] = useState(false);
   const [fileShares, setFileShares] = useState({});
   const [loadingShares, setLoadingShares] = useState(false);
+  const [sharingInProgress, setSharingInProgress] = useState(false);
 
   // Load sharing information for all files
   const loadFileShares = useCallback(async () => {
@@ -137,10 +145,15 @@ const FileList = ({
   };
 
   /**
-   * Handle share creation
+   * Handle share creation with enhanced feedback
    */
   const handleShare = async (fileId, shareData) => {
+    const file = files.find(f => f.id === fileId);
+    const fileName = file?.originalFileName || 'Unknown file';
+    
     try {
+      setSharingInProgress(true);
+      
       const response = await axios.post(`/api/files/${fileId}/share`, shareData);
       
       // Reload shares to update indicators
@@ -157,7 +170,10 @@ const FileList = ({
       };
     } catch (error) {
       console.error('Error creating share:', error);
+      handleSharingError(error, `sharing "${fileName}"`);
       throw error;
+    } finally {
+      setSharingInProgress(false);
     }
   };
 
@@ -276,11 +292,28 @@ const FileList = ({
   };
 
   if (loading) {
-    return <div className="loading">Loading files...</div>;
+    return (
+      <div className="file-list-loading">
+        <LoadingSpinner message="Loading files..." />
+        <div className="file-list-skeleton">
+          {Array.from({ length: 3 }, (_, index) => (
+            <div key={index} className="file-item-skeleton">
+              <SkeletonLoader lines={2} height="1.2rem" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (!files || files.length === 0) {
-    return <div className="no-files">No files uploaded yet</div>;
+    return (
+      <div className="no-files">
+        <div className="no-files-icon">📁</div>
+        <h3>No files uploaded yet</h3>
+        <p>Upload your first file to get started with sharing!</p>
+      </div>
+    );
   }
 
   return (
@@ -323,7 +356,12 @@ const FileList = ({
           </label>
         </div>
         <div className="header-right">
-          {loadingShares && <span className="loading-shares">Loading shares...</span>}
+          {loadingShares && (
+            <div className="loading-shares">
+              <LoadingSpinner size="small" showMessage={false} />
+              <span>Loading shares...</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -404,6 +442,7 @@ const FileList = ({
         }}
         file={fileToShare}
         onShare={handleShare}
+        loading={sharingInProgress}
       />
     </div>
   );

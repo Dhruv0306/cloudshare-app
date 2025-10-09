@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { useNotification } from './NotificationSystem';
+import { useSharingErrorHandler } from './SharingErrorBoundary';
 import './ShareManagement.css';
 
 /**
@@ -8,12 +10,17 @@ import './ShareManagement.css';
  * Supports filtering, sorting, bulk operations, and permission updates
  */
 const ShareManagement = () => {
+  // Hooks for notifications and error handling
+  const { showSuccess, showError, showWarning, showLoading, removeNotification } = useNotification();
+  const { handleSharingError } = useSharingErrorHandler();
+
   // State management
   const [sharedFiles, setSharedFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedShares, setSelectedShares] = useState(new Set());
   const [bulkActionsVisible, setBulkActionsVisible] = useState(false);
+  const [operationLoading, setOperationLoading] = useState(false);
   
   // Filter and sort state
   const [filters, setFilters] = useState({
@@ -96,11 +103,22 @@ const ShareManagement = () => {
   };
 
   /**
-   * Revoke a file share
+   * Revoke a file share with enhanced feedback
    */
   const revokeShare = async (shareId) => {
+    const share = sharedFiles.find(s => s.id === shareId);
+    const fileName = share?.file?.originalFileName || 'Unknown file';
+    
     try {
+      setOperationLoading(true);
+      
+      const loadingId = showLoading(`Revoking share for "${fileName}"...`);
+      
       await axios.delete(`/api/files/shares/${shareId}`);
+      
+      removeNotification(loadingId);
+      showSuccess(`Share revoked for "${fileName}"`);
+      
       await loadSharedFiles(); // Reload data
       
       // Remove from selection if it was selected
@@ -112,28 +130,48 @@ const ShareManagement = () => {
       return true;
     } catch (error) {
       console.error('Error revoking share:', error);
+      handleSharingError(error, 'revoking share');
+      showError(`Failed to revoke share for "${fileName}"`);
       throw error;
+    } finally {
+      setOperationLoading(false);
     }
   };
 
   /**
-   * Update share permissions
+   * Update share permissions with enhanced feedback
    */
   const updateSharePermissions = async (shareId, newPermission) => {
+    const share = sharedFiles.find(s => s.id === shareId);
+    const fileName = share?.file?.originalFileName || 'Unknown file';
+    const permissionText = newPermission === 'VIEW_ONLY' ? 'View Only' : 'Download';
+    
     try {
+      setOperationLoading(true);
+      
+      const loadingId = showLoading(`Updating permissions for "${fileName}"...`);
+      
       await axios.put(`/api/files/shares/${shareId}`, {
         permission: newPermission
       });
+      
+      removeNotification(loadingId);
+      showSuccess(`Permissions updated to "${permissionText}" for "${fileName}"`);
+      
       await loadSharedFiles(); // Reload data
       return true;
     } catch (error) {
       console.error('Error updating share permissions:', error);
+      handleSharingError(error, 'updating share permissions');
+      showError(`Failed to update permissions for "${fileName}"`);
       throw error;
+    } finally {
+      setOperationLoading(false);
     }
   };
 
   /**
-   * Handle bulk revoke operation
+   * Handle bulk revoke operation with enhanced feedback
    */
   const handleBulkRevoke = async () => {
     if (selectedShares.size === 0) return;
@@ -142,18 +180,39 @@ const ShareManagement = () => {
     if (!window.confirm(confirmMessage)) return;
 
     try {
+      setOperationLoading(true);
+      
+      const loadingId = showLoading(`Revoking ${selectedShares.size} share${selectedShares.size !== 1 ? 's' : ''}...`);
+      
       const revokePromises = Array.from(selectedShares).map(shareId => 
         axios.delete(`/api/files/shares/${shareId}`)
       );
       
-      await Promise.all(revokePromises);
+      const results = await Promise.allSettled(revokePromises);
+      
+      const successful = results.filter(result => result.status === 'fulfilled').length;
+      const failed = results.filter(result => result.status === 'rejected').length;
+      
+      removeNotification(loadingId);
+      
+      if (failed === 0) {
+        showSuccess(`Successfully revoked ${successful} share${successful !== 1 ? 's' : ''}`);
+      } else if (successful === 0) {
+        showError(`Failed to revoke all ${selectedShares.size} share${selectedShares.size !== 1 ? 's' : ''}`);
+      } else {
+        showWarning(`Revoked ${successful} share${successful !== 1 ? 's' : ''}, but ${failed} failed. Please try again for the failed ones.`);
+      }
+      
       await loadSharedFiles();
       
       setSelectedShares(new Set());
       setBulkActionsVisible(false);
     } catch (error) {
       console.error('Error in bulk revoke:', error);
-      alert('Some shares could not be revoked. Please try again.');
+      handleSharingError(error, 'bulk revoking shares');
+      showError('Failed to revoke shares. Please try again.');
+    } finally {
+      setOperationLoading(false);
     }
   };
 
@@ -351,15 +410,37 @@ const ShareManagement = () => {
   };
 
   /**
-   * Copy share URL to clipboard
+   * Copy share URL to clipboard with enhanced feedback
    */
   const copyShareUrl = async (shareToken) => {
     const shareUrl = `${window.location.origin}/shared/${shareToken}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
-      // Could add a toast notification here
+      showSuccess('Share link copied to clipboard!', { duration: 3000 });
     } catch (error) {
       console.error('Failed to copy URL:', error);
+      
+      try {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = shareUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+          showSuccess('Share link copied to clipboard!', { duration: 3000 });
+        } else {
+          throw new Error('Copy command failed');
+        }
+      } catch (fallbackError) {
+        showError('Unable to copy to clipboard. Please select and copy the link manually.');
+      }
     }
   };
 

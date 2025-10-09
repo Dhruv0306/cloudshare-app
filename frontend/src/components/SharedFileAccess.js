@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { useNotification } from './NotificationSystem';
+import { useSharingErrorHandler } from './SharingErrorBoundary';
 import './SharedFileAccess.css';
 
 /**
@@ -7,12 +9,17 @@ import './SharedFileAccess.css';
  * Handles file preview, download, and various error states
  */
 const SharedFileAccess = ({ shareToken }) => {
+  // Hooks for notifications and error handling
+  const { showSuccess, showError, showInfo } = useNotification();
+  const { handleSharingError } = useSharingErrorHandler();
+
   // State management
   const [shareData, setShareData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const [accessLogged, setAccessLogged] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   /**
    * Handle API errors and set appropriate error states
@@ -82,19 +89,87 @@ const SharedFileAccess = ({ shareToken }) => {
 
       const response = await axios.get(`/api/files/shared/${shareToken}`);
       setShareData(response.data);
+      setRetryCount(0);
 
       // Log the access if not already logged
       if (!accessLogged) {
-        logFileAccess('VIEW');
+        try {
+          await axios.post(`/api/files/shared/${shareToken}/access`, {
+            accessType: 'VIEW'
+          });
+        } catch (err) {
+          // Access logging failure shouldn't prevent file access
+          console.warn('Failed to log file access:', err);
+        }
         setAccessLogged(true);
+      }
+
+      // Show info about file access
+      if (response.data.permission === 'VIEW_ONLY') {
+        try {
+          showInfo('This file is view-only. Download is not permitted.', {
+            duration: 4000
+          });
+        } catch (infoErr) {
+          // Ignore notification errors
+          console.warn('Failed to show info notification:', infoErr);
+        }
       }
     } catch (err) {
       console.error('Error loading shared file:', err);
-      handleApiError(err);
+      setRetryCount(prev => prev + 1);
+      
+      // Handle API errors inline to avoid dependency issues
+      if (err.response) {
+        switch (err.response.status) {
+          case 404:
+            setError({
+              type: 'NOT_FOUND',
+              message: 'This file share could not be found. It may have been removed or the link is incorrect.'
+            });
+            break;
+          case 410:
+            setError({
+              type: 'EXPIRED',
+              message: 'This share link has expired and is no longer available.'
+            });
+            break;
+          case 403:
+            setError({
+              type: 'REVOKED',
+              message: 'Access to this file has been revoked by the owner.'
+            });
+            break;
+          case 429:
+            setError({
+              type: 'RATE_LIMITED',
+              message: 'Too many access attempts. Please try again later.'
+            });
+            break;
+          default:
+            setError({
+              type: 'SERVER_ERROR',
+              message: 'Unable to load the shared file. Please try again later.'
+            });
+        }
+      } else {
+        setError({
+          type: 'NETWORK_ERROR',
+          message: 'Network error. Please check your connection and try again.'
+        });
+      }
+      
+      // Use specialized error handler for better user experience
+      try {
+        handleSharingError(err, 'loading shared file');
+      } catch (handlerErr) {
+        // Ignore error handler failures
+        console.warn('Error handler failed:', handlerErr);
+      }
     } finally {
       setLoading(false);
     }
-  }, [shareToken, accessLogged, handleApiError, logFileAccess]);
+  }, [shareToken, accessLogged]);
 
   // Load shared file data on component mount
   useEffect(() => {
@@ -110,36 +185,77 @@ const SharedFileAccess = ({ shareToken }) => {
   }, [shareToken, loadSharedFile]);
 
   /**
-   * Handle file download
+   * Handle file download with enhanced feedback
    */
   const handleDownload = async () => {
     if (!shareData || shareData.permission === 'VIEW_ONLY') {
+      showError('Download is not permitted for this file');
       return;
     }
 
     try {
       setDownloading(true);
+      
+      // Show download starting notification
+      showInfo('Starting download...', { duration: 2000 });
 
       // Log download access
       await logFileAccess('DOWNLOAD');
 
       const response = await axios.get(`/api/files/shared/${shareToken}/download`, {
         responseType: 'blob',
+        timeout: 30000, // 30 second timeout
+        onDownloadProgress: (progressEvent) => {
+          // Could show progress here if needed
+          console.log('Download progress:', progressEvent);
+        }
       });
+
+      // Validate response
+      if (!response.data || response.data.size === 0) {
+        throw new Error('Downloaded file is empty');
+      }
 
       // Create download link
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', shareData.file.originalFileName);
+      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+      // Show success notification
+      showSuccess(`Downloaded "${shareData.file.originalFileName}" successfully!`, {
+        duration: 4000
+      });
 
     } catch (err) {
       console.error('Error downloading file:', err);
-      handleApiError(err);
+      
+      // Handle specific download errors
+      if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
+        showError('Download timed out. The file might be too large or your connection is slow.', {
+          action: {
+            label: 'Retry',
+            onClick: handleDownload
+          },
+          duration: 8000
+        });
+      } else if (err.response?.status === 413) {
+        showError('File is too large to download');
+      } else if (err.response?.status === 404) {
+        showError('File not found or has been removed');
+      } else {
+        handleApiError(err);
+        handleSharingError(err, 'downloading file');
+      }
     } finally {
       setDownloading(false);
     }

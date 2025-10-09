@@ -8,10 +8,23 @@ import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import axios from 'axios';
 import FileList from './FileList';
+import { NotificationProvider } from './NotificationSystem';
 
 // Mock axios
 jest.mock('axios');
 const mockedAxios = axios;
+
+// Test wrapper with providers
+const TestWrapper = ({ children }) => (
+  <NotificationProvider>
+    {children}
+  </NotificationProvider>
+);
+
+// Helper function to render with providers
+const renderWithProviders = (ui, options = {}) => {
+  return render(ui, { wrapper: TestWrapper, ...options });
+};
 
 // Mock data
 const mockFiles = [
@@ -70,7 +83,7 @@ describe('FileList Component', () => {
 
   describe('Basic Rendering', () => {
     it('renders file list with files', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -79,19 +92,19 @@ describe('FileList Component', () => {
     });
 
     it('shows loading state', () => {
-      render(<FileList {...mockProps} loading={true} />);
+      renderWithProviders(<FileList {...mockProps} loading={true} />);
       expect(screen.getByText('Loading files...')).toBeInTheDocument();
     });
 
     it('shows empty state when no files', () => {
-      render(<FileList {...mockProps} files={[]} />);
+      renderWithProviders(<FileList {...mockProps} files={[]} />);
       expect(screen.getByText('No files uploaded yet')).toBeInTheDocument();
     });
   });
 
   describe('Share Status Indicators', () => {
     it('displays share indicators for shared files', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         const shareIndicators = screen.getAllByText('🔗');
@@ -100,7 +113,7 @@ describe('FileList Component', () => {
     });
 
     it('shows active share indicator with pulse animation', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         const activeIndicator = document.querySelector('.share-indicator.active');
@@ -109,7 +122,7 @@ describe('FileList Component', () => {
     });
 
     it('displays correct share count', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('1')).toBeInTheDocument(); // Share count
@@ -119,7 +132,7 @@ describe('FileList Component', () => {
 
   describe('File Selection and Bulk Operations', () => {
     it('allows individual file selection', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -136,7 +149,7 @@ describe('FileList Component', () => {
     });
 
     it('shows bulk actions bar when files are selected', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -154,7 +167,7 @@ describe('FileList Component', () => {
     });
 
     it('handles select all functionality', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -169,7 +182,7 @@ describe('FileList Component', () => {
     });
 
     it('clears selection when clear button is clicked', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -196,7 +209,7 @@ describe('FileList Component', () => {
 
   describe('Context Menu', () => {
     it('shows context menu on right click', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -211,7 +224,7 @@ describe('FileList Component', () => {
     });
 
     it('calls download function when download is clicked in context menu', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -232,7 +245,7 @@ describe('FileList Component', () => {
     });
 
     it('calls delete function when delete is clicked in context menu', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -252,7 +265,7 @@ describe('FileList Component', () => {
 
   describe('Quick Actions', () => {
     it('renders action buttons for each file', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -268,7 +281,7 @@ describe('FileList Component', () => {
     });
 
     it('calls download function when download button is clicked', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -286,7 +299,7 @@ describe('FileList Component', () => {
     });
 
     it('calls delete function when delete button is clicked', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -303,7 +316,7 @@ describe('FileList Component', () => {
 
   describe('Share Functionality', () => {
     it('opens share modal when share button is clicked', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -317,7 +330,7 @@ describe('FileList Component', () => {
     });
 
     it('handles bulk share operation', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -342,7 +355,7 @@ describe('FileList Component', () => {
 
   describe('API Integration', () => {
     it('loads share information for files on mount', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(mockedAxios.get).toHaveBeenCalledWith('/api/files/1/shares');
@@ -353,7 +366,7 @@ describe('FileList Component', () => {
     it('handles API errors gracefully when loading shares', async () => {
       mockedAxios.get.mockRejectedValue(new Error('API Error'));
       
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -368,7 +381,7 @@ describe('FileList Component', () => {
         data: { shareToken: 'new-token', shareUrl: 'http://example.com/shared/new-token' }
       });
 
-      const fileList = render(<FileList {...mockProps} />);
+      const fileList = renderWithProviders(<FileList {...mockProps} />);
       const component = fileList.container.querySelector('.file-list-container');
       
       // Simulate share creation (this would normally be triggered through the modal)
@@ -384,7 +397,7 @@ describe('FileList Component', () => {
         data: { shareToken: 'new-token', shareUrl: 'http://example.com/shared/new-token' }
       });
 
-      const { rerender } = render(<FileList {...mockProps} />);
+      const { rerender } = renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -431,7 +444,7 @@ describe('FileList Component', () => {
         return Promise.resolve({ data: [] });
       });
 
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -449,7 +462,7 @@ describe('FileList Component', () => {
         new Promise(resolve => setTimeout(() => resolve({ data: [] }), 100))
       );
 
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('Loading shares...')).toBeInTheDocument();
@@ -459,7 +472,7 @@ describe('FileList Component', () => {
 
   describe('File Styling Based on Share Status', () => {
     it('applies shared styling to files with active shares', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -475,7 +488,7 @@ describe('FileList Component', () => {
     it('does not apply shared styling to files without shares', async () => {
       mockedAxios.get.mockImplementation(() => Promise.resolve({ data: [] }));
 
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -495,7 +508,7 @@ describe('FileList Component', () => {
         value: 480,
       });
 
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       // Check if mobile-specific classes or behaviors are applied
       // This would depend on how responsive design is implemented
@@ -504,7 +517,7 @@ describe('FileList Component', () => {
 
   describe('Accessibility', () => {
     it('provides proper ARIA labels and roles', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();
@@ -520,7 +533,7 @@ describe('FileList Component', () => {
     });
 
     it('supports keyboard navigation', async () => {
-      render(<FileList {...mockProps} />);
+      renderWithProviders(<FileList {...mockProps} />);
 
       await waitFor(() => {
         expect(screen.getByText('document1.pdf')).toBeInTheDocument();

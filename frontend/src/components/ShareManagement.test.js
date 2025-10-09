@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import axios from 'axios';
 import ShareManagement from './ShareManagement';
+import { NotificationProvider } from './NotificationSystem';
 
 // Mock axios
 jest.mock('axios');
@@ -57,6 +58,19 @@ const mockAccessHistory = [
   }
 ];
 
+
+// Test wrapper with providers
+const TestWrapper = ({ children }) => (
+  <NotificationProvider>
+    {children}
+  </NotificationProvider>
+);
+
+// Helper function to render with providers
+const renderWithProviders = (ui, options = {}) => {
+  return render(ui, { wrapper: TestWrapper, ...options });
+};
+
 describe('ShareManagement Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -68,7 +82,7 @@ describe('ShareManagement Component', () => {
   test('displays loading state initially', () => {
     mockedAxios.get.mockImplementation(() => new Promise(() => {})); // Never resolves
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     expect(screen.getByText('Loading shared files...')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Loading shared files...');
@@ -80,7 +94,7 @@ describe('ShareManagement Component', () => {
   test('loads and displays shared files successfully', async () => {
     mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('Share Management')).toBeInTheDocument();
@@ -108,7 +122,7 @@ describe('ShareManagement Component', () => {
   test('displays error message when loading fails', async () => {
     mockedAxios.get.mockRejectedValue(new Error('Network error'));
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('Error Loading Shares')).toBeInTheDocument();
@@ -124,7 +138,7 @@ describe('ShareManagement Component', () => {
   test('filters shares by status', async () => {
     mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -145,7 +159,7 @@ describe('ShareManagement Component', () => {
   test('searches shares by filename', async () => {
     mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -166,7 +180,7 @@ describe('ShareManagement Component', () => {
   test('sorts shares by different criteria', async () => {
     mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -191,7 +205,7 @@ describe('ShareManagement Component', () => {
     mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
     mockedAxios.delete.mockResolvedValue({});
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -221,7 +235,7 @@ describe('ShareManagement Component', () => {
     // Mock window.confirm
     window.confirm = jest.fn(() => true);
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -243,7 +257,7 @@ describe('ShareManagement Component', () => {
     mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
     mockedAxios.put.mockResolvedValue({});
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -268,7 +282,7 @@ describe('ShareManagement Component', () => {
       .mockResolvedValueOnce({ data: mockSharedFiles })
       .mockResolvedValueOnce({ data: mockAccessHistory });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -297,7 +311,7 @@ describe('ShareManagement Component', () => {
   test('toggles statistics visibility', async () => {
     mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('Total Shares')).toBeInTheDocument();
@@ -323,7 +337,7 @@ describe('ShareManagement Component', () => {
   test('displays empty state when no shares exist', async () => {
     mockedAxios.get.mockResolvedValue({ data: [] });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('No shared files found')).toBeInTheDocument();
@@ -345,7 +359,7 @@ describe('ShareManagement Component', () => {
       }
     });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -373,7 +387,7 @@ describe('ShareManagement Component', () => {
     window.confirm = jest.fn(() => true);
     window.alert = jest.fn();
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -393,7 +407,7 @@ describe('ShareManagement Component', () => {
     fireEvent.click(bulkRevokeButton);
     
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalledWith('Some shares could not be revoked. Please try again.');
+      expect(screen.getByText('Failed to revoke all 1 share')).toBeInTheDocument();
     });
   });
 
@@ -405,7 +419,7 @@ describe('ShareManagement Component', () => {
       .mockResolvedValueOnce({ data: mockSharedFiles })
       .mockResolvedValueOnce({ data: mockAccessHistory });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -430,7 +444,7 @@ describe('ShareManagement Component', () => {
   test('filters shares by date range', async () => {
     mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();
@@ -456,7 +470,7 @@ describe('ShareManagement Component', () => {
   test('selects all shares with select all checkbox', async () => {
     mockedAxios.get.mockResolvedValue({ data: mockSharedFiles });
     
-    render(<ShareManagement />);
+    renderWithProviders(<ShareManagement />);
     
     await waitFor(() => {
       expect(screen.getByText('document.pdf')).toBeInTheDocument();

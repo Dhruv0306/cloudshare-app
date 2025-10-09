@@ -329,17 +329,55 @@
 }
 
 /* Loading and Empty States */
-.loading, .no-files {
-  text-align: center;
+.file-list-loading {
   padding: 40px 20px;
-  color: #666;
-  font-size: 16px;
+}
+
+.file-list-skeleton {
+  margin-top: 20px;
+}
+
+.file-item-skeleton {
+  padding: 16px;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  background: white;
+}
+
+.loading-shares {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #6c757d;
 }
 
 .no-files {
+  text-align: center;
+  padding: 80px 20px;
+  color: #6c757d;
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.no-files-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.no-files h3 {
+  margin: 0 0 8px 0;
+  color: #495057;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.no-files p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 /* Responsive Design */

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './components/NotificationSystem';
+import SharingErrorBoundary from './components/SharingErrorBoundary';
 import Login from './components/Login';
 import Signup from './components/Signup';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -206,9 +208,21 @@ function FileManager() {
 
       <main className="app-main">
         <Routes>
-          <Route path="/files" element={<FilesPage />} />
-          <Route path="/shares" element={<ShareManagement />} />
-          <Route path="/" element={<FilesPage />} />
+          <Route path="/files" element={
+            <SharingErrorBoundary>
+              <FilesPage />
+            </SharingErrorBoundary>
+          } />
+          <Route path="/shares" element={
+            <SharingErrorBoundary>
+              <ShareManagement />
+            </SharingErrorBoundary>
+          } />
+          <Route path="/" element={
+            <SharingErrorBoundary>
+              <FilesPage />
+            </SharingErrorBoundary>
+          } />
         </Routes>
       </main>
     </div>
@@ -234,22 +248,32 @@ function AuthWrapper() {
 function App() {
   return (
     <ErrorBoundary>
-      <Router>
-        <Routes>
-          {/* Public route for shared file access with enhanced security */}
-          <Route path="/shared/:token" element={<SecureShareRoute />} />
-          
-          {/* Legacy route for backward compatibility */}
-          <Route path="/share/:token" element={<SharedFileAccessPage />} />
-          
-          {/* Main application routes */}
-          <Route path="/*" element={
-            <AuthProvider>
-              <AuthWrapper />
-            </AuthProvider>
-          } />
-        </Routes>
-      </Router>
+      <NotificationProvider>
+        <Router>
+          <Routes>
+            {/* Public route for shared file access with enhanced security */}
+            <Route path="/shared/:token" element={
+              <SharingErrorBoundary>
+                <SecureShareRoute />
+              </SharingErrorBoundary>
+            } />
+            
+            {/* Legacy route for backward compatibility */}
+            <Route path="/share/:token" element={
+              <SharingErrorBoundary>
+                <SharedFileAccessPage />
+              </SharingErrorBoundary>
+            } />
+            
+            {/* Main application routes */}
+            <Route path="/*" element={
+              <AuthProvider>
+                <AuthWrapper />
+              </AuthProvider>
+            } />
+          </Routes>
+        </Router>
+      </NotificationProvider>
     </ErrorBoundary>
   );
 }

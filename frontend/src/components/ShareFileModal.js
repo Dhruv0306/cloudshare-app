@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import FormField from './FormField';
 import { validateEmail } from '../utils/validation';
+import { useNotification } from './NotificationSystem';
+import { useSharingErrorHandler } from './SharingErrorBoundary';
 import './ShareFileModal.css';
 
 /**
@@ -14,6 +16,10 @@ const ShareFileModal = ({
   onShare,
   loading = false 
 }) => {
+  // Hooks for notifications and error handling
+  const { showSuccess, showError, showWarning, showLoading, removeNotification } = useNotification();
+  const { handleSharingError } = useSharingErrorHandler();
+
   // Form state
   const [permission, setPermission] = useState('DOWNLOAD');
   const [expirationOption, setExpirationOption] = useState('1_DAY');
@@ -27,6 +33,9 @@ const ShareFileModal = ({
   const [copySuccess, setCopySuccess] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [touched, setTouched] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -51,6 +60,9 @@ const ShareFileModal = ({
     setCopySuccess(false);
     setFieldErrors({});
     setTouched({});
+    setIsSubmitting(false);
+    setSubmitError(null);
+    setRetryCount(0);
   };
 
   /**
@@ -216,7 +228,7 @@ const ShareFileModal = ({
   };
 
   /**
-   * Handle form submission
+   * Handle form submission with comprehensive error handling
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -228,8 +240,17 @@ const ShareFileModal = ({
     });
 
     if (!validateForm()) {
+      showWarning('Please fix the form errors before sharing');
       return;
     }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    // Show loading notification
+    const loadingNotificationId = showLoading('Creating share link...', {
+      persistent: true
+    });
 
     const shareData = {
       permission,
@@ -242,34 +263,93 @@ const ShareFileModal = ({
 
     try {
       const result = await onShare(file.id, shareData);
+      
+      // Remove loading notification
+      removeNotification(loadingNotificationId);
+      
       if (result && result.shareUrl) {
         setShareUrl(result.shareUrl);
         setIsShared(true);
+        setRetryCount(0);
+        
+        // Show success notification
+        showSuccess('Share link created successfully!', {
+          duration: 4000
+        });
+        
+        // Show additional success message if email notifications were sent
+        if (sendNotification && emailRecipients.trim()) {
+          const emailCount = emailRecipients.split(',').length;
+          showSuccess(`Email notifications sent to ${emailCount} recipient${emailCount !== 1 ? 's' : ''}`, {
+            duration: 6000
+          });
+        }
+      } else {
+        throw new Error('Invalid response from server');
       }
     } catch (error) {
-      console.error('Error sharing file:', error);
+      // Remove loading notification
+      removeNotification(loadingNotificationId);
+      
+      setSubmitError(error);
+      setRetryCount(prev => prev + 1);
+      
+      // Handle error with specialized error handler
+      handleSharingError(error, 'file sharing');
+      
+      // Show retry option for certain errors
+      if (error.response?.status >= 500 || error.code === 'NETWORK_ERROR') {
+        showError('Failed to create share link. Please try again.', {
+          action: {
+            label: 'Retry',
+            onClick: () => handleSubmit(e)
+          },
+          duration: 8000
+        });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   /**
-   * Copy share URL to clipboard
+   * Copy share URL to clipboard with enhanced feedback
    */
   const handleCopyUrl = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopySuccess(true);
+      showSuccess('Share link copied to clipboard!', { duration: 3000 });
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (error) {
       console.error('Failed to copy URL:', error);
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = shareUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
+      
+      try {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = shareUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+          setCopySuccess(true);
+          showSuccess('Share link copied to clipboard!', { duration: 3000 });
+          setTimeout(() => setCopySuccess(false), 2000);
+        } else {
+          throw new Error('Copy command failed');
+        }
+      } catch (fallbackError) {
+        showError('Unable to copy to clipboard. Please select and copy the link manually.', {
+          duration: 6000
+        });
+      }
     }
   };
 
@@ -319,6 +399,38 @@ const ShareFileModal = ({
 
           {!isShared ? (
             <form onSubmit={handleSubmit} className="share-form">
+              {/* Error Display */}
+              {submitError && retryCount > 0 && (
+                <div className="form-error-banner">
+                  <div className="error-banner-content">
+                    <span className="error-banner-icon">⚠️</span>
+                    <div className="error-banner-text">
+                      <strong>Failed to create share link</strong>
+                      <p>
+                        {submitError.response?.status === 413 
+                          ? 'File is too large to share'
+                          : submitError.response?.status === 403
+                          ? 'You don\'t have permission to share this file'
+                          : submitError.response?.status >= 500
+                          ? 'Server error occurred. Please try again.'
+                          : 'An unexpected error occurred. Please try again.'}
+                      </p>
+                      {retryCount > 1 && (
+                        <small>Retry attempt: {retryCount}</small>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="error-banner-close"
+                      onClick={() => setSubmitError(null)}
+                      aria-label="Dismiss error"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="form-section">
                 <h4>Permissions</h4>
                 <div className="radio-group">
@@ -433,16 +545,27 @@ const ShareFileModal = ({
                   type="button" 
                   onClick={handleClose}
                   className="btn btn-secondary"
-                  disabled={loading}
+                  disabled={loading || isSubmitting}
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   className="btn btn-primary"
-                  disabled={loading}
+                  disabled={loading || isSubmitting}
                 >
-                  {loading ? 'Creating Share...' : 'Create Share Link'}
+                  {isSubmitting ? (
+                    <>
+                      <span className="btn-spinner"></span>
+                      Creating Share...
+                    </>
+                  ) : loading ? (
+                    'Creating Share...'
+                  ) : retryCount > 0 ? (
+                    `Retry (${retryCount + 1})`
+                  ) : (
+                    'Create Share Link'
+                  )}
                 </button>
               </div>
             </form>

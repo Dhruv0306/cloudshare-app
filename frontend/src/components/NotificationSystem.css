@@ -1,0 +1,337 @@
+/**
+ * Notification System Styles
+ * Provides styling for toast notifications with animations and responsive design
+ */
+
+.notification-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 400px;
+  width: 100%;
+  pointer-events: none;
+}
+
+.notification {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border-left: 4px solid;
+  animation: slideInRight 0.3s ease-out;
+  pointer-events: auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.notification.clickable {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.notification.clickable:hover {
+  transform: translateX(-4px);
+}
+
+/* Notification Types */
+.notification-success {
+  border-left-color: #28a745;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fff9 100%);
+}
+
+.notification-error {
+  border-left-color: #dc3545;
+  background: linear-gradient(135deg, #ffffff 0%, #fff8f8 100%);
+}
+
+.notification-warning {
+  border-left-color: #ffc107;
+  background: linear-gradient(135deg, #ffffff 0%, #fffdf5 100%);
+}
+
+.notification-info {
+  border-left-color: #17a2b8;
+  background: linear-gradient(135deg, #ffffff 0%, #f5fdff 100%);
+}
+
+.notification-loading {
+  border-left-color: #6c757d;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+}
+
+/* Notification Icon */
+.notification-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.notification-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #6c757d;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Notification Content */
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-message {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  line-height: 1.4;
+  margin-bottom: 4px;
+  word-wrap: break-word;
+}
+
+.notification-action-btn {
+  background: none;
+  border: none;
+  color: #007bff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+  margin: 4px 0;
+  text-decoration: underline;
+  transition: color 0.2s ease;
+}
+
+.notification-action-btn:hover {
+  color: #0056b3;
+}
+
+.notification-timestamp {
+  font-size: 11px;
+  color: #6c757d;
+  margin-top: 4px;
+}
+
+/* Close Button */
+.notification-close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6c757d;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.notification-close-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  color: #333;
+}
+
+/* Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.notification.removing {
+  animation: slideOutRight 0.3s ease-in forwards;
+}
+
+/* Progress Bar for Loading Notifications */
+.notification-loading::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6c757d, #adb5bd, #6c757d);
+  background-size: 200% 100%;
+  animation: progressPulse 2s ease-in-out infinite;
+  width: 100%;
+}
+
+@keyframes progressPulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .notification-container {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+
+  .notification {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .notification-message {
+    font-size: 13px;
+  }
+
+  .notification-icon {
+    font-size: 18px;
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .notification-container {
+    top: 5px;
+    right: 5px;
+    left: 5px;
+  }
+
+  .notification {
+    padding: 12px;
+    border-radius: 6px;
+  }
+
+  .notification-message {
+    font-size: 12px;
+  }
+
+  .notification-close-btn {
+    width: 20px;
+    height: 20px;
+    font-size: 16px;
+  }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  .notification {
+    border: 2px solid #000;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  }
+
+  .notification-close-btn {
+    border: 1px solid #000;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .notification {
+    animation: none;
+  }
+
+  .notification-spinner {
+    animation: none;
+  }
+
+  .notification::after {
+    animation: none;
+  }
+
+  .notification.clickable:hover {
+    transform: none;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .notification {
+    background: #2d3748;
+    color: #e2e8f0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .notification-success {
+    background: linear-gradient(135deg, #2d3748 0%, #1a2f1a 100%);
+  }
+
+  .notification-error {
+    background: linear-gradient(135deg, #2d3748 0%, #2f1a1a 100%);
+  }
+
+  .notification-warning {
+    background: linear-gradient(135deg, #2d3748 0%, #2f2a1a 100%);
+  }
+
+  .notification-info {
+    background: linear-gradient(135deg, #2d3748 0%, #1a2a2f 100%);
+  }
+
+  .notification-loading {
+    background: linear-gradient(135deg, #2d3748 0%, #1a1e2e 100%);
+  }
+
+  .notification-message {
+    color: #e2e8f0;
+  }
+
+  .notification-timestamp {
+    color: #a0aec0;
+  }
+
+  .notification-close-btn {
+    color: #a0aec0;
+  }
+
+  .notification-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #e2e8f0;
+  }
+
+  .notification-action-btn {
+    color: #63b3ed;
+  }
+
+  .notification-action-btn:hover {
+    color: #90cdf4;
+  }
+}

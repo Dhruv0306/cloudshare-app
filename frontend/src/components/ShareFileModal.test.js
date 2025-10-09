@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ShareFileModal from './ShareFileModal';
+import { NotificationProvider } from './NotificationSystem';
 
 // Mock the validation utility
 jest.mock('../utils/validation', () => ({
@@ -40,6 +41,19 @@ Object.assign(navigator, {
  * Tests file sharing functionality including form validation, permissions, 
  * expiration settings, email notifications, and clipboard operations
  */
+
+// Test wrapper with providers
+const TestWrapper = ({ children }) => (
+  <NotificationProvider>
+    {children}
+  </NotificationProvider>
+);
+
+// Helper function to render with providers
+const renderWithProviders = (ui, options = {}) => {
+  return render(ui, { wrapper: TestWrapper, ...options });
+};
+
 describe('ShareFileModal', () => {
     const mockFile = {
         id: 1,
@@ -70,8 +84,7 @@ describe('ShareFileModal', () => {
          * Test that modal renders correctly when opened
          */
         test('renders modal when isOpen is true', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -88,8 +101,7 @@ describe('ShareFileModal', () => {
          * Test that modal is hidden when closed
          */
         test('does not render modal when isOpen is false', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={false}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -104,8 +116,7 @@ describe('ShareFileModal', () => {
          * Test that all required form sections are present
          */
         test('renders all form sections', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -128,8 +139,7 @@ describe('ShareFileModal', () => {
                 fileSize: 1048576 // 1MB
             };
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={largeFile}
@@ -147,8 +157,7 @@ describe('ShareFileModal', () => {
          * Test default permission setting
          */
         test('defaults to DOWNLOAD permission', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -164,8 +173,7 @@ describe('ShareFileModal', () => {
          * Test permission switching functionality
          */
         test('allows switching between permission options', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -189,8 +197,7 @@ describe('ShareFileModal', () => {
          * Test permission labels and descriptions
          */
         test('displays permission descriptions', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -210,8 +217,7 @@ describe('ShareFileModal', () => {
          * Test default expiration setting
          */
         test('defaults to 1 day expiration', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -227,8 +233,7 @@ describe('ShareFileModal', () => {
          * Test custom date field visibility
          */
         test('shows custom date field when CUSTOM is selected', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -252,8 +257,7 @@ describe('ShareFileModal', () => {
          * Test custom date field hiding when other option selected
          */
         test('hides custom date field when switching from CUSTOM', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -280,8 +284,7 @@ describe('ShareFileModal', () => {
          * Test custom expiration date validation
          */
         test('validates custom expiration date', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -315,8 +318,7 @@ describe('ShareFileModal', () => {
          * Test minimum date validation
          */
         test('sets minimum date to tomorrow', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -340,8 +342,7 @@ describe('ShareFileModal', () => {
          * Test all expiration options are available
          */
         test('displays all expiration options', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -363,8 +364,7 @@ describe('ShareFileModal', () => {
          * Test email input visibility when notifications enabled
          */
         test('shows email input when notification is enabled', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -382,8 +382,7 @@ describe('ShareFileModal', () => {
          * Test email input hiding when notifications disabled
          */
         test('hides email input when notification is disabled', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -413,8 +412,7 @@ describe('ShareFileModal', () => {
                 message: 'Please enter a valid email address'
             });
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -441,8 +439,7 @@ describe('ShareFileModal', () => {
             // Mock valid email validation
             validateEmail.mockReturnValue({ isValid: true, message: '' });
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -467,8 +464,7 @@ describe('ShareFileModal', () => {
          * Test required email validation when notifications enabled
          */
         test('requires email recipients when notification is enabled', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -496,8 +492,7 @@ describe('ShareFileModal', () => {
                 .mockReturnValueOnce({ isValid: true, message: '' })
                 .mockReturnValueOnce({ isValid: false, message: 'Invalid email' });
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -527,8 +522,7 @@ describe('ShareFileModal', () => {
                 shareUrl: 'https://example.com/shared/abc123'
             });
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -555,8 +549,7 @@ describe('ShareFileModal', () => {
                 shareUrl: 'https://example.com/shared/abc123'
             });
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -591,8 +584,7 @@ describe('ShareFileModal', () => {
                 message: 'Invalid email'
             });
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -621,8 +613,7 @@ describe('ShareFileModal', () => {
             const shareUrl = 'https://example.com/shared/abc123';
             mockOnShare.mockResolvedValue({ shareUrl });
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -646,8 +637,7 @@ describe('ShareFileModal', () => {
             const shareUrl = 'https://example.com/shared/abc123';
             mockOnShare.mockResolvedValue({ shareUrl });
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -678,8 +668,7 @@ describe('ShareFileModal', () => {
          * Test modal close via close button
          */
         test('closes modal when close button is clicked', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -697,8 +686,7 @@ describe('ShareFileModal', () => {
          * Test modal close via cancel button
          */
         test('closes modal when cancel button is clicked', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -716,8 +704,7 @@ describe('ShareFileModal', () => {
          * Test modal close via overlay click
          */
         test('closes modal when overlay is clicked', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -735,8 +722,7 @@ describe('ShareFileModal', () => {
          * Test modal does not close when content is clicked
          */
         test('does not close modal when content is clicked', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -756,8 +742,7 @@ describe('ShareFileModal', () => {
          * Test loading state display
          */
         test('shows loading state during share creation', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -774,8 +759,7 @@ describe('ShareFileModal', () => {
          * Test form elements disabled during loading
          */
         test('disables form elements during loading', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -792,8 +776,7 @@ describe('ShareFileModal', () => {
          * Test normal state when not loading
          */
         test('shows normal state when not loading', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -813,8 +796,7 @@ describe('ShareFileModal', () => {
          * Test ARIA attributes for accessibility
          */
         test('has proper ARIA attributes', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -834,8 +816,7 @@ describe('ShareFileModal', () => {
          * Test form field accessibility
          */
         test('has accessible form fields', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -860,8 +841,7 @@ describe('ShareFileModal', () => {
          * Test keyboard navigation
          */
         test('supports keyboard navigation', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -892,8 +872,7 @@ describe('ShareFileModal', () => {
          * Test screen reader announcements
          */
         test('provides proper labels for screen readers', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -915,8 +894,7 @@ describe('ShareFileModal', () => {
          * Test behavior with missing file prop
          */
         test('handles missing file prop gracefully', () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={null}
@@ -932,8 +910,7 @@ describe('ShareFileModal', () => {
          * Test behavior with empty email list
          */
         test('handles empty email list correctly', async () => {
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
@@ -963,8 +940,7 @@ describe('ShareFileModal', () => {
                 message: 'Invalid email'
             });
 
-            render(
-                <ShareFileModal
+            renderWithProviders(<ShareFileModal
                     isOpen={true}
                     onClose={mockOnClose}
                     file={mockFile}
