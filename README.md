@@ -27,29 +27,29 @@ This repository contains the complete system design, architecture blueprints, da
 
 The architecture and implementation specifications of CloudShare are divided into the following specialized design modules. Click on any module to review its detailed design, specifications, and Mermaid diagrams:
 
-1.  **[System Architecture & Requirements](file:///d:/github/cloudshare-app/docs/system-design/architecture.md)**
+1.  **[System Architecture & Requirements](docs/system-design/architecture.md)**
     *   High-level architecture topology.
     *   Functional and Non-Functional Requirements (Scalability, Availability, Durability).
-2.  **[Security Architecture](file:///d:/github/cloudshare-app/docs/system-design/security.md)**
+2.  **[Security Architecture](docs/system-design/security.md)**
     *   Authentication (OAuth2 & JWT Rotation) and Session Security.
     *   Encryption-at-Rest (Envelope Encryption via AES-256) and Encryption-in-Transit (TLS 1.3).
     *   Secure Upload Sanitization Pipeline (ClamAV virus scanning, MIME-type checks, filename sanitization).
     *   OWASP Top 10 defenses (CSRF, XSS, Path Traversal, CORS).
-3.  **[RESTful API Specification](file:///d:/github/cloudshare-app/docs/system-design/api-spec.md)**
+3.  **[RESTful API Specification](docs/system-design/api-spec.md)**
     *   API contract for User Auth, File Management, Secure Links, and Administration.
     *   Request/Response JSON schemas and HTTP response codes.
-4.  **[Database Schema & ERD](file:///d:/github/cloudshare-app/docs/system-design/database.md)**
+4.  **[Database Schema & ERD](docs/system-design/database.md)**
     *   Entity-Relationship Diagram (ERD).
     *   Relational DB schema (PostgreSQL DDL), indexes, and partitioning strategy.
     *   Database connection pooling (HikariCP) and row-level access controls.
-5.  **[Core Data Flows & Sequence Diagrams](file:///d:/github/cloudshare-app/docs/system-design/data-flows.md)**
+5.  **[Core Data Flows & Sequence Diagrams](docs/system-design/data-flows.md)**
     *   Detailed logic flows for User Login, Secure File Upload, Secure Download, and Share Link Verification.
-6.  **[Infrastructure, Containerization & CI/CD](file:///d:/github/cloudshare-app/docs/system-design/infrastructure-cicd.md)**
+6.  **[Infrastructure, Containerization & CI/CD](docs/system-design/infrastructure-cicd.md)**
     *   Production-ready multi-stage `Dockerfile`.
     *   Multi-container local deployment with `docker-compose.yml`.
     *   Kubernetes production manifests.
     *   Continuous Integration and Continuous Deployment (CI/CD) pipelines with automated security scans (Trivy, OWASP Dependency Check).
-7.  **[Observability, Logging & Audit Trails](file:///d:/github/cloudshare-app/docs/system-design/observability.md)**
+7.  **[Observability, Logging & Audit Trails](docs/system-design/observability.md)**
     *   Structured JSON logging (Logback/SLF4J).
     *   Tamper-proof compliance auditing.
     *   Application metrics & telemetry (Actuator, Prometheus, Grafana).
