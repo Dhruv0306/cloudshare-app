@@ -78,6 +78,43 @@ The Logback configuration is optimized to output JSON logs to standard output (C
 }
 ```
 
+### 1.4 Gateway Access Logs (Nginx)
+To prevent the accidental logging of credentials or sensitive public link passwords (passed via the `Authorization` or `X-Share-Password` headers), the Nginx edge gateway implements a custom log format that sanitizes or strips these values:
+
+```nginx
+# Custom log format stripping sensitive tokens and headers
+log_format secure_json escape=json '{'
+    '"time_local":"$time_local",'
+    '"remote_addr":"$remote_addr",'
+    '"request":"$request",'
+    '"status": "$status",'
+    '"body_bytes_sent":"$body_bytes_sent",'
+    '"http_referer":"$http_referer",'
+    '"http_user_agent":"$http_user_agent",'
+    '"http_x_forwarded_for":"$http_x_forwarded_for",'
+    '"trace_id":"$http_x_trace_id",'
+    '"auth_header_present":"$auth_header_present",'
+    '"share_password_present":"$share_password_present"'
+'}';
+
+# Map rules to detect header presence without logging actual values
+map $http_authorization $auth_header_present {
+    default "true";
+    ""      "false";
+}
+
+map $http_x_share_password $share_password_present {
+    default "true";
+    ""      "false";
+}
+
+server {
+    listen 443 ssl http2;
+    access_log /var/log/nginx/access.log secure_json;
+}
+```
+*   **Security Benefit:** Only the presence (`true`/`false`) of the authentication and sharing headers is logged, ensuring that plain-text passwords or bearer tokens are never saved to disk in Nginx access logs.
+
 ---
 
 ## 2. Tamper-Evident Audit Trails
