@@ -74,12 +74,14 @@ flowchart LR
     
     subgraph Testcontainers Engine
         PG[Transient PostgreSQL Container]
-        RD[Transient Redis Container]
+        RC[Transient Redis Cache Container]
+        RS[Transient Redis Security Container]
     end
 
-    TestRunner -->|Starts / Wipes| PG & RD
+    TestRunner -->|Starts / Wipes| PG & RC & RS
     TestRunner -->|Spring Context / Real JDBC| PG
-    TestRunner -->|Spring Context / Jedis| RD
+    TestRunner -->|Spring Context / Caching| RC
+    TestRunner -->|Spring Context / Security| RS
 ```
 
 ### 3.1 Testcontainers Abstract Configuration
@@ -93,22 +95,34 @@ public abstract class BaseIntegrationTest {
             .withUsername("test_user")
             .withPassword("test_pass");
 
-    static final GenericContainer<?> redis = new GenericContainer<>("redis:7-alpine")
+    // Container for general application metadata caching
+    static final GenericContainer<?> redisCache = new GenericContainer<>("redis:7-alpine")
+            .withExposedPorts(6379);
+
+    // Container for security blacklists, OTP sessions, and rate-limiting
+    static final GenericContainer<?> redisSecurity = new GenericContainer<>("redis:7-alpine")
             .withExposedPorts(6379);
 
     static {
         postgres.start();
-        redis.start();
+        redisCache.start();
+        redisSecurity.start();
     }
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
+        // Database connection pool mappings
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
         
-        registry.add("spring.data.redis.host", redis::getHost);
-        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        // Cache instance mappings
+        registry.add("spring.data.redis.host", redisCache::getHost);
+        registry.add("spring.data.redis.port", () -> redisCache.getMappedPort(6379));
+
+        // Security / Rate limiter instance mappings
+        registry.add("security.redis.host", redisSecurity::getHost);
+        registry.add("security.redis.port", () -> redisSecurity.getMappedPort(6379));
     }
 }
 ```
