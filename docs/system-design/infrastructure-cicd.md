@@ -86,8 +86,10 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudshare
       - SPRING_DATASOURCE_USERNAME=cloudshare_user
       - SPRING_DATASOURCE_PASSWORD=StrongDBPassword123!
-      - SPRING_DATA_REDIS_HOST=cache
+      - SPRING_DATA_REDIS_HOST=cache-aside
       - SPRING_DATA_REDIS_PORT=6379
+      - SECURITY_REDIS_HOST=cache-security
+      - SECURITY_REDIS_PORT=6379
       - CLAMAV_HOST=clamav
       - CLAMAV_PORT=3310
       - STORAGE_PROVIDER=MINIO # Toggles storage service to MinIO
@@ -98,7 +100,8 @@ services:
       - CRYPTO_MASTER_KEK=32ByteHexadecimalMasterKeyEncryptKek
     depends_on:
       - db
-      - cache
+      - cache-aside
+      - cache-security
       - clamav
       - storage
 
@@ -114,13 +117,23 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  # Redis Cache & Sessions Store
-  cache:
+  # Redis Cache-Aside Instance
+  cache-aside:
     image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
-      - redisdata:/data
+      - redisdata-aside:/data
+
+  # Redis Security Instance (Blacklists, Rate Limiting)
+  cache-security:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
+    ports:
+      - "6380:6379" # Exposed on port 6380 on the host to prevent conflict
+    volumes:
+      - redisdata-security:/data
 
   # ClamAV Virus Scanner Daemon
   clamav:
@@ -143,7 +156,8 @@ services:
 
 volumes:
   pgdata:
-  redisdata:
+  redisdata-aside:
+  redisdata-security:
   miniadata:
 ```
 
