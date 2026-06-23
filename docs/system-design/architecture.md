@@ -27,7 +27,8 @@ graph TD
 
     subgraph Data & Storage Tier
         Postgres[(PostgreSQL Relational DB)]
-        Redis[(Redis Cache & Rate Limiting)]
+        RedisCache[(Redis Cache-Aside Node)]
+        RedisSecurity[(Redis Security Node)]
         
         %% Pluggable Storage
         subgraph Pluggable Storage Layer
@@ -43,7 +44,8 @@ graph TD
     
     %% Backend Integrations
     SpringApp1 & SpringApp2 -->|Read/Write Metadata| Postgres
-    SpringApp1 & SpringApp2 -->|Session / Rate Limits| Redis
+    SpringApp1 & SpringApp2 -->|App Caching| RedisCache
+    SpringApp1 & SpringApp2 -->|Sessions & Rate Limits| RedisSecurity
     SpringApp1 & SpringApp2 -->|Synchronous Virus Scan| ClamAV
     
     %% Storage access
@@ -66,9 +68,9 @@ graph TD
 4.  **Security Services (ClamAV):**
     *   A lightweight antivirus daemon exposed via a TCP socket.
     *   Spring Boot streams files to ClamAV during the upload pipeline *before* storing them or saving metadata.
-5.  **Cache Tier (Redis):**
-    *   Stores short-lived data like OAuth2 token blacklists, password reset tokens, and multi-factor authentication (MFA) codes.
-    *   Implements sliding-window API rate limiting per user/IP.
+5.  **Cache & Security Tier (Dual Redis Mappings):**
+    *   **Redis Cache-Aside Node (`cache-aside`):** Stores user metadata, JPA queries, and resource access permissions with LRU eviction policies to prevent database lookup hotspots.
+    *   **Redis Security Node (`cache-security`):** Stores JWT blacklists, active session listings, and rate limiting counters with a strict `noeviction` policy to preserve session and access control integrity.
 6.  **Database Tier (PostgreSQL):**
     *   Houses relational schemas for users, credentials, roles, file metadata (names, paths, hash sums, sizes), permissions, and audit logs.
 7.  **Storage Tier (Pluggable):**
