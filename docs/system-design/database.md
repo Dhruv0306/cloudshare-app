@@ -240,3 +240,49 @@ spring:
       connection-timeout: 30000 # 30 seconds
       leak-detection-threshold: 2000 # 2 seconds to trace unclosed connections
 ```
+
+---
+
+## 6. Soft-Delete Referential Integrity Rules
+
+When a file's state changes to `deleted = TRUE` (moved to the Recycle Bin), all active share records and public links pointing to it must be invalidated immediately.
+
+### 6.1 Database Trigger Cleanup
+To prevent index bloat and ensure security at the database layer, an asynchronous trigger automatically deletes associated permissions upon file soft-deletion:
+
+```sql
+-- Trigger Function to clean up shares when a file is soft-deleted
+CREATE OR REPLACE FUNCTION purge_shares_on_file_soft_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.deleted = TRUE AND OLD.deleted = FALSE THEN
+        -- Revoke all internal user shares
+        DELETE FROM file_shares WHERE file_id = NEW.id;
+        
+        -- Delete all public sharing links
+        DELETE FROM share_links WHERE file_id = NEW.id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Bind Trigger to Files Table
+CREATE TRIGGER trg_files_soft_delete
+    AFTER UPDATE OF deleted ON files
+    FOR EACH ROW
+    WHEN (NEW.deleted = TRUE AND OLD.deleted = FALSE)
+    EXECUTE FUNCTION purge_shares_on_file_soft_delete();
+```
+
+### 6.2 Application Query Resolution (Defense-in-Depth)
+Even before triggers execute, all query filters resolving permissions must join the `files` table and verify that `deleted = FALSE` to prevent race conditions:
+
+```sql
+-- Query to resolve active internal shares for a specific user
+SELECT fs.* FROM file_shares fs
+JOIN files f ON fs.file_id = f.id
+WHERE fs.shared_with = :userId 
+  AND fs.file_id = :fileId 
+  AND f.deleted = FALSE;
+```
+
