@@ -53,3 +53,20 @@ The architecture and implementation specifications of CloudShare are divided int
     *   Structured JSON logging (Logback/SLF4J).
     *   Tamper-proof compliance auditing.
     *   Application metrics & telemetry (Actuator, Prometheus, Grafana).
+8.  **[Testing Strategy & Test Plan](docs/system-design/testing-strategy.md)**
+    *   Unit and Integration testing using JUnit 5, Mockito, and Testcontainers.
+    *   Static security analysis (OWASP, SpotBugs) and performance load testing (Gatling).
+9.  **[Key Management & Secrets Rotation](docs/system-design/secrets-key-management.md)**
+    *   Envelope encryption configurations and external Key Management Service (KMS) integration.
+    *   Zero-downtime KEK/FEK rotation runbooks.
+10. **[Data Retention & Lifecycle Policies](docs/system-design/data-lifecycle.md)**
+    *   Recycle bin soft-delete lifecycles and automated Spring Scheduler cleanups.
+    *   GDPR compliance and account deletion procedures.
+11. **[Disaster Recovery & Backup Blueprint](docs/system-design/disaster-recovery.md)**
+    *   PostgreSQL backups (WAL-G), object storage redundancy, and RTO/RPO targets.
+    *   Automated restore verification drill setups.
+12. **[Caching & Rate Limiting Strategy](docs/system-design/caching-strategy.md)**
+    *   Redis Cache-Aside metadata patterns and eviction parameters.
+    *   Sliding window token rate limiting using Redis Lua scripting.
+13. **[Threat Modeling & Risk Assessment](docs/system-design/threat-model.md)**
+    *   STRIDE security threat classification and architectural countermeasures.
