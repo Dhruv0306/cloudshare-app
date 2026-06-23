@@ -118,6 +118,68 @@ To maintain a consistent API structure, all responses are wrapped in a standard 
 *   **Responses:**
     *   `200 OK`: Logout successful (token blacklisted in Redis).
 
+### 2.5 Initialize MFA Setup
+*   **Endpoint:** `POST /api/v1/auth/mfa/setup`
+*   **Authentication:** Bearer Token
+*   **Request Body:** None
+*   **Response Body:**
+    ```json
+    {
+      "success": true,
+      "data": {
+        "secret": "JBSWY3DPEHPK3PXP",
+        "qrCodeDataUri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+      }
+    }
+    ```
+*   **Responses:**
+    *   `200 OK`: Setup initialized. Secret key and QR code generated.
+
+### 2.6 Verify and Activate MFA
+*   **Endpoint:** `POST /api/v1/auth/mfa/verify`
+*   **Authentication:** Bearer Token
+*   **Request Body:**
+    ```json
+    {
+      "code": "123456"
+    }
+    ```
+*   **Response Body:**
+    ```json
+    {
+      "success": true,
+      "data": {
+        "message": "Multi-Factor Authentication enabled successfully."
+      }
+    }
+    ```
+*   **Responses:**
+    *   `200 OK`: Verification successful, MFA activated (`mfa_enabled = true` in DB).
+    *   `400 Bad Request`: Invalid MFA verification code.
+
+### 2.7 Administrative Step-Up Authentication
+*   **Endpoint:** `POST /api/v1/auth/mfa/step-up`
+*   **Authentication:** Bearer Token
+*   **Request Body:**
+    ```json
+    {
+      "code": "123456"
+    }
+    ```
+*   **Response Body:**
+    ```json
+    {
+      "success": true,
+      "data": {
+        "stepUpToken": "eyJhbGciOiJIUzI1NiIs...",
+        "expiresInSeconds": 300
+      }
+    }
+    ```
+*   **Responses:**
+    *   `200 OK`: Step-Up code accepted. Returns a short-lived (5-minute) validation token.
+    *   `401 Unauthorized`: Invalid MFA code.
+
 ---
 
 ## 3. File Endpoints (`/api/v1/files`)
@@ -247,7 +309,7 @@ All operations in this section require an `Authorization: Bearer <accessToken>` 
 *   **Endpoint:** `GET /api/v1/shares/link/{shareCode}/download`
 *   **Authentication:** None (Public)
 *   **Headers Required if Password Protected:**
-    *   `X-Share-Password: DownloadSecret123!`
+    *   `X-Share-Password: DownloadSecret123!` (Note: The password is sent via this HTTP header. To protect against interception, TLS 1.3 is strictly enforced. The edge gateway Nginx is explicitly configured to strip this header from access logs to prevent cleartext exposure.)
 *   **Response Content-Type:** `application/octet-stream`
 *   **Response Body:** Binary Stream of decrypted file.
 *   **Responses:**
@@ -255,3 +317,39 @@ All operations in this section require an `Authorization: Bearer <accessToken>` 
     *   `401 Unauthorized`: Password required but missing/invalid.
     *   `403 Forbidden`: Link has expired, or reached its download limit.
     *   `404 Not Found`: Link code does not exist.
+
+---
+
+## 5. Admin & Auditing Endpoints (`/api/v1/admin`)
+
+All administrative endpoints require Role-Based Access Control (`ROLE_ADMIN`) and a valid Multi-Factor step-up token.
+
+### Headers Required:
+*   `Authorization: Bearer <accessToken>`
+*   `X-StepUp-Token: <stepUpToken>` (obtained from the `/api/v1/auth/mfa/step-up` endpoint; expires in 5 minutes).
+
+### 5.1 List Users
+*   **Endpoint:** `GET /api/v1/admin/users?page=0&size=10`
+*   **Responses:**
+    *   `200 OK`: Returns a paginated list of all users in the system.
+    *   `401 Unauthorized`: Missing or invalid bearer/step-up token.
+    *   `403 Forbidden`: Authenticated, but lacks admin privileges.
+
+### 5.2 Read System Audit Logs
+*   **Endpoint:** `GET /api/v1/admin/audit-logs?page=0&size=20&userId=xxx&action=FILE_UPLOAD`
+*   **Responses:**
+    *   `200 OK`: Returns the system event log history.
+
+---
+
+## 6. File Size Configuration Limits
+
+To prevent resource exhaustion and buffer overflows, maximum file limits must be aligned across all layers of the stack:
+
+| Component | Setting Key / File | Configured Limit | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Nginx Reverse Proxy** | `nginx.conf` (`client_max_body_size`) | `100M` | Prevents edge buffer allocations for oversized payloads. |
+| **Spring Boot App** | `application.yml` (`spring.servlet.multipart.max-file-size`) | `100MB` | Spring threshold to reject oversized files prior to controller execution. |
+| **Spring Boot App** | `application.yml` (`spring.servlet.multipart.max-request-size`) | `100MB` | Total multipart size constraint. |
+| **ClamAV Scanner** | `clamd.conf` (`StreamMaxLength`) | `100M` | Ensures ClamAV buffer handles files of maximum allowed size. |
+
