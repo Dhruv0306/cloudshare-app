@@ -140,7 +140,7 @@ sequenceDiagram
     participant Storage as StorageService
 
     Guest->>Controller: GET /api/v1/shares/link/{shareCode}/download
-    Note over Guest, Controller: Optional Header: X-Share-Password
+    Note over Guest, Controller: Optional Header: X-Share-Password (TLS 1.3 encrypted, stripped from Nginx logs)
     Controller->>Service: downloadSharedLink(shareCode, passwordHeader)
     
     Service->>DB: Fetch share_link & related file metadata
