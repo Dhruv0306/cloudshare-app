@@ -4,15 +4,18 @@ To prevent relational database saturation and block malicious scraping or brute-
 
 ---
 
-## 1. Redis Roles & Data Structure Mapping
+## 1. Dual-Redis Split Instance Architecture
 
-Redis operates as a stateless cache running side-by-side with PostgreSQL. It stores three primary datasets:
+To prevent eviction of security-critical keys (like JWT blacklists and rate limiter counters) under memory pressure, CloudShare deploys **two separate physical/logical Redis instances** with tailored configurations:
 
-| Dataset Category | Redis Key Pattern | Data Structure | TTL (Time-to-Live) | Eviction Policy |
-| :--- | :--- | :--- | :--- | :--- |
-| **Revoked JWTs** | `blacklist:token:<jti>` | String | Remaining token life | No eviction (static expiry) |
-| **Cache-Aside Metadata**| `cache:user:<id>` <br> `cache:permissions:<file_id>` | Hash / String | 1 Hour | `allkeys-lru` (Evict old) |
-| **API Rate Limits** | `limit:<ip_or_userid>:<endpoint>` | Sorted Set / String | 1 Minute | `allkeys-lru` (Evict old) |
+1.  **Redis Cache (`cache-aside`)**: Holds transient business objects. Allows key eviction when RAM limits are reached.
+2.  **Redis Security (`cache-security`)**: Holds JWT blacklists, MFA session states, and sliding-window rate limit sets. Strict `noeviction` policy enforces security rules.
+
+| Target Instance | Dataset Category | Redis Key Pattern | Data Structure | TTL | Eviction Policy |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Redis Security** | **Revoked JWTs** | `blacklist:token:<jti>` | String | Token expiry | **No Eviction** |
+| **Redis Security** | **API Rate Limits** | `limit:<ip_or_userid>:<endpoint>` | Sorted Set | 1 Minute | **No Eviction** |
+| **Redis Cache** | **Cache-Aside Metadata** | `cache:user:<id>` <br> `cache:permissions:<file_id>` | Hash / String | 1 Hour | `allkeys-lru` |
 
 ---
 
@@ -82,17 +85,25 @@ end
 
 ---
 
-## 4. Redis Memory Tuning
+## 4. Redis Configuration & Tuning Spec
 
-If Redis reaches its memory capacity limit, it must not drop critical session tokens or blacklists.
+The two Redis instances are configured with distinct memory limits and eviction policies to guarantee security and system reliability under load.
 
-In `redis.conf`:
-```properties
-# Allocate maximum memory (e.g., 512MB)
-maxmemory 536870912
+### 4.1 Redis Cache Config (`cache-aside`)
+*   **Max Memory:** 256MB.
+*   **Max Memory Policy:** `allkeys-lru` (Least Recently Used). If memory limit is reached, Redis evicts the oldest user profiles or permission caches to make room for new metadata.
+*   **Tuning Properties:**
+    ```properties
+    maxmemory 268435456
+    maxmemory-policy allkeys-lru
+    ```
 
-# Evict only temporary cache keys, protect persistent keys
-maxmemory-policy volatile-lru
-```
-*   `volatile-lru`: Redis only removes keys with an expiration (`TTL`) set, ensuring that rate limit keys and metadata caches can be purged, while leaving active session states secure.
-*   **Alerting:** Prometheus monitors `redis_memory_used_bytes`. If usage exceeds 80%, an automated alert triggers to scale Redis memory allocation.
+### 4.2 Redis Security Config (`cache-security`)
+*   **Max Memory:** 256MB.
+*   **Max Memory Policy:** `noeviction`. Security records (such as blacklisted JWT IDs and IP rate limits) must never be dropped dynamically. If memory is full, new write requests fail with an Out-of-Memory error, protecting the application from brute-force floods or replay attacks bypassing checks.
+*   **Tuning Properties:**
+    ```properties
+    maxmemory 268435456
+    maxmemory-policy noeviction
+    ```
+*   **Alerting:** Prometheus monitors `redis_memory_used_bytes` for both instances. If usage exceeds 80% on either node, an automated alert triggers to notify operators to allocate more memory.
