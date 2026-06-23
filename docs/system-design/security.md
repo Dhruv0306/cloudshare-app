@@ -53,6 +53,26 @@ sequenceDiagram
 4.  **Credential Hashing:**
     *   All user passwords are encrypted using `BCrypt` with a work factor of 12 before database storage. Cleartext passwords are never logged, logged in memory, or stored.
 
+### Multi-Factor Authentication (MFA) Enrollment Flow
+CloudShare supports two-factor authentication using the **Time-Based One-Time Password (TOTP)** algorithm (RFC 6238).
+
+1.  **MFA Setup (`POST /api/v1/auth/mfa/setup`):**
+    *   The backend generates a cryptographically secure, random 160-bit secret key (Base32 encoded).
+    *   It creates a standard key URI formatted as: `otpauth://totp/CloudShare:username?secret=SECRET&issuer=CloudShare&algorithm=SHA1&digits=6&period=30`.
+    *   The URI is rendered as a Base64-encoded PNG QR code and returned to the frontend along with the raw secret.
+    *   The secret key is stored in the database flagged as unverified (using a temporary staging column or pending state).
+2.  **MFA Verification (`POST /api/v1/auth/mfa/verify`):**
+    *   The user scans the QR code in their authenticator app (Google Authenticator, Authy, etc.) and submits the current 6-digit code.
+    *   The backend calculates the expected code for the current time window (allowing a drift window of +/- 1 interval).
+    *   If correct, the backend permanently saves the secret key in the `users` table and toggles `mfa_enabled = true`.
+
+### Administrative Step-Up Authentication
+To protect critical configurations (like viewing system logs or modifying other user accounts), endpoints protected by `ROLE_ADMIN` require **step-up authentication**:
+
+*   **Logic:** When accessing `/api/v1/admin/*`, the client must present an `X-StepUp-Token` header.
+*   **Token Generation:** The user calls `POST /api/v1/auth/mfa/step-up`, passing their current 6-digit MFA code. If valid, the backend issues a separate, short-lived JWT token (`stepUpToken`) containing the claim `step_up: true` with a strict **5-minute expiration**.
+*   **Security Interceptor:** A Spring Security filter intercepts all admin paths and verifies that the `X-StepUp-Token` is present, valid, and unexpired. This prevents session hijackers from executing administrative actions even if they possess a valid bearer access token.
+
 ---
 
 ## 2. Encryption Architecture
@@ -64,6 +84,7 @@ sequenceDiagram
     Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
     ```
 *   **Cipher Suites:** Restricts connections to highly secure ciphers, e.g., `TLS_AES_256_GCM_SHA384` and `TLS_CHACHA20_POLY1305_SHA256`.
+*   **Header Protection in Transit:** Sensitive parameters (like the public link access password `X-Share-Password`) are transmitted exclusively within the TLS 1.3 encrypted tunnel, protecting them from wire sniffing. At the reverse proxy level, Nginx is configured to strip these headers before writing the standard access logs, preventing cleartext leaks in operational logs. No weak client-side pre-hashing is used as it acts as a static password equivalence; transport security is managed entirely via TLS 1.3.
 
 ### 2.2 Encryption-at-Rest: Envelope Encryption
 To secure stored files against physical disk compromise or unauthorized access to the S3 bucket/local directory, CloudShare uses **Envelope Encryption** powered by **AES-256-GCM** (Galois/Counter Mode).
