@@ -41,6 +41,7 @@ erDiagram
         varchar checksum_sha256
         varchar encrypted_fek
         varchar iv_gcm
+        integer kek_version
         boolean deleted
         timestamp created_at
         timestamp updated_at
@@ -136,6 +137,7 @@ CREATE TABLE files (
     checksum_sha256 VARCHAR(64) NOT NULL,
     encrypted_fek VARCHAR(128) NOT NULL, -- AES FEK encrypted by KEK (Base64)
     iv_gcm VARCHAR(24) NOT NULL, -- 12 byte IV (Base64)
+    kek_version INTEGER NOT NULL DEFAULT 1, -- KEK key version reference
     deleted BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
