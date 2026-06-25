@@ -221,7 +221,8 @@ public class FileService {
         fileRepository.save(metadata);
 
         // Log delete audit event
-        // Note: Audit failures intentionally abort/fail the operation for compliance (fail-secure stance)
+        // Audit failure rolls back the entire delete transaction (fail-secure).
+        // The file remains visible to the user; they can retry the deletion.
         try {
             auditLogService.log(userId, "FILE_DELETE", fileId, ipAddress, 
                     "Successfully soft-deleted file: " + metadata.getOriginalFilename());
