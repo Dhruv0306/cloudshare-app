@@ -130,8 +130,14 @@ public class FileService {
             FileMetadata savedMetadata = persistMetadata(metadata);
 
             // 8. Log success audit event
-            auditLogService.log(ownerId, "FILE_UPLOAD", savedMetadata.getId(), ipAddress, 
-                    "Successfully uploaded file: " + safeFilename);
+            // Note: Audit failures intentionally abort/fail the operation for compliance (fail-secure stance)
+            try {
+                auditLogService.log(ownerId, "FILE_UPLOAD", savedMetadata.getId(), ipAddress, 
+                        "Successfully uploaded file: " + safeFilename);
+            } catch (Exception auditEx) {
+                log.error("Audit log failed for file upload. Failing operation for compliance.", auditEx);
+                throw new RuntimeException("A server-side compliance issue occurred: audit logging failed.", auditEx);
+            }
 
             return mapToFileResponse(savedMetadata);
 
@@ -173,8 +179,14 @@ public class FileService {
             );
 
             // Log download audit event
-            auditLogService.log(userId, "FILE_DOWNLOAD", fileId, ipAddress, 
-                    "Successfully downloaded file: " + metadata.getOriginalFilename());
+            // Note: Audit failures intentionally abort/fail the operation for compliance (fail-secure stance)
+            try {
+                auditLogService.log(userId, "FILE_DOWNLOAD", fileId, ipAddress, 
+                        "Successfully downloaded file: " + metadata.getOriginalFilename());
+            } catch (Exception auditEx) {
+                log.error("Audit log failed for file download. Failing operation for compliance.", auditEx);
+                throw new RuntimeException("A server-side compliance issue occurred: audit logging failed.", auditEx);
+            }
 
             return new DecryptedFileStream(
                     decryptedStream,
@@ -209,8 +221,14 @@ public class FileService {
         fileRepository.save(metadata);
 
         // Log delete audit event
-        auditLogService.log(userId, "FILE_DELETE", fileId, ipAddress, 
-                "Successfully soft-deleted file: " + metadata.getOriginalFilename());
+        // Note: Audit failures intentionally abort/fail the operation for compliance (fail-secure stance)
+        try {
+            auditLogService.log(userId, "FILE_DELETE", fileId, ipAddress, 
+                    "Successfully soft-deleted file: " + metadata.getOriginalFilename());
+        } catch (Exception auditEx) {
+            log.error("Audit log failed for file deletion. Failing operation for compliance.", auditEx);
+            throw new RuntimeException("A server-side compliance issue occurred: audit logging failed.", auditEx);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -219,7 +237,7 @@ public class FileService {
                 .map(this::mapToFileResponse);
     }
 
-    @Transactional
+    // Note: JpaRepository.save() is @Transactional by default
     public FileMetadata persistMetadata(FileMetadata metadata) {
         return fileRepository.save(metadata);
     }
