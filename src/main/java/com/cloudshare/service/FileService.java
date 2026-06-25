@@ -5,13 +5,16 @@ import com.cloudshare.exception.ResourceNotFoundException;
 import com.cloudshare.exception.UnsupportedMediaTypeException;
 import com.cloudshare.exception.VirusDetectedException;
 import com.cloudshare.model.FileMetadata;
+import com.cloudshare.model.PermissionType;
 import com.cloudshare.repository.FileRepository;
-import lombok.RequiredArgsConstructor;
+import com.cloudshare.repository.FileShareRepository;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,7 +31,6 @@ import java.util.Base64;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class FileService {
 
@@ -37,6 +39,25 @@ public class FileService {
     private final ClamAvService clamAvService;
     private final EncryptionService encryptionService;
     private final AuditLogService auditLogService;
+    private final FileShareRepository fileShareRepository;
+    private final StringRedisTemplate cacheRedisTemplate;
+
+    public FileService(
+            FileRepository fileRepository,
+            StorageService storageService,
+            ClamAvService clamAvService,
+            EncryptionService encryptionService,
+            AuditLogService auditLogService,
+            FileShareRepository fileShareRepository,
+            @Qualifier("redisTemplate") StringRedisTemplate cacheRedisTemplate) {
+        this.fileRepository = fileRepository;
+        this.storageService = storageService;
+        this.clamAvService = clamAvService;
+        this.encryptionService = encryptionService;
+        this.auditLogService = auditLogService;
+        this.fileShareRepository = fileShareRepository;
+        this.cacheRedisTemplate = cacheRedisTemplate;
+    }
 
     private final Tika tika = new Tika();
 
@@ -156,8 +177,11 @@ public class FileService {
     public DecryptedFileStream downloadFile(UUID fileId, UUID userId, String ipAddress) {
         log.info("Processing file download request: user={}, fileId={}", userId, fileId);
 
-        // Fetch file details with BOLA validation
-        FileMetadata metadata = fileRepository.findByIdAndOwnerIdAndDeletedFalse(fileId, userId)
+        // 1. Verify access via cache-aside permissions check
+        verifyFileAccess(fileId, userId, PermissionType.READ);
+
+        // 2. Fetch file details with BOLA validation checking ownership or active share
+        FileMetadata metadata = fileRepository.findAccessibleFile(fileId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("File not found or access denied"));
 
         Path decryptedTempFile = null;
@@ -209,6 +233,73 @@ public class FileService {
         }
     }
 
+    public void verifyFileAccess(UUID fileId, UUID userId, PermissionType requiredPermission) {
+        String cacheKey = "cache:permissions:" + fileId;
+        
+        try {
+            // Check cache hit
+            String cachedPermission = (String) cacheRedisTemplate.opsForHash().get(cacheKey, userId.toString());
+            if (cachedPermission != null) {
+                if (hasRequiredPermission(cachedPermission, requiredPermission)) {
+                    return; // Access allowed
+                }
+                throw new com.cloudshare.exception.AccessDeniedException("Access denied to file");
+            }
+            
+            // Check if key exists (could be key exists but user not in hash, meaning no access)
+            Boolean keyExists = cacheRedisTemplate.hasKey(cacheKey);
+            if (Boolean.TRUE.equals(keyExists)) {
+                throw new ResourceNotFoundException("File not found or access denied");
+            }
+        } catch (com.cloudshare.exception.AccessDeniedException | ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            log.warn("Redis error during permission check, falling back to database", e);
+        }
+        
+        // Cache Miss or Redis error: Query DB
+        FileMetadata file = fileRepository.findByIdAndDeletedFalse(fileId)
+                .orElseThrow(() -> new ResourceNotFoundException("File not found or access denied"));
+        
+        // Build permission map
+        java.util.Map<String, String> permissionMap = new java.util.HashMap<>();
+        permissionMap.put(file.getOwnerId().toString(), "OWNER");
+        
+        // Query active shares
+        java.util.List<com.cloudshare.model.FileShare> shares = fileShareRepository.findByFileId(fileId);
+        for (com.cloudshare.model.FileShare share : shares) {
+            permissionMap.put(share.getSharedWith().getId().toString(), share.getPermissionType().name());
+        }
+        
+        // Write to Redis with 1 Hour TTL
+        try {
+            cacheRedisTemplate.opsForHash().putAll(cacheKey, permissionMap);
+            cacheRedisTemplate.expire(cacheKey, java.time.Duration.ofHours(1));
+        } catch (Exception e) {
+            log.error("Failed to write permissions to Redis cache", e);
+        }
+        
+        String userPermission = permissionMap.get(userId.toString());
+        if (userPermission != null && hasRequiredPermission(userPermission, requiredPermission)) {
+            return;
+        }
+        
+        throw new ResourceNotFoundException("File not found or access denied");
+    }
+
+    private boolean hasRequiredPermission(String actualPermission, PermissionType requiredPermission) {
+        if ("OWNER".equals(actualPermission)) {
+            return true;
+        }
+        if (requiredPermission == PermissionType.READ) {
+            return "READ".equals(actualPermission) || "WRITE".equals(actualPermission);
+        }
+        if (requiredPermission == PermissionType.WRITE) {
+            return "WRITE".equals(actualPermission);
+        }
+        return false;
+    }
+
     @Transactional
     public void deleteFile(UUID fileId, UUID userId, String ipAddress) {
         log.info("Processing file deletion request: user={}, fileId={}", userId, fileId);
@@ -219,6 +310,15 @@ public class FileService {
 
         metadata.setDeleted(true);
         fileRepository.save(metadata);
+
+        // Evict permissions cache key in Redis
+        try {
+            String cacheKey = "cache:permissions:" + fileId;
+            cacheRedisTemplate.delete(cacheKey);
+            log.debug("Evicted permissions cache for deleted file: {}", fileId);
+        } catch (Exception e) {
+            log.error("Failed to evict permissions cache for deleted file: {}", fileId, e);
+        }
 
         // Log delete audit event
         // Audit failure rolls back the entire delete transaction (fail-secure).
@@ -300,34 +400,5 @@ public class FileService {
         String mimeType;
         long size;
     }
-
-    private static class DeleteOnCloseInputStream extends InputStream {
-        private final InputStream delegate;
-        private final Path fileToDelete;
-
-        public DeleteOnCloseInputStream(InputStream delegate, Path fileToDelete) {
-            this.delegate = delegate;
-            this.fileToDelete = fileToDelete;
-        }
-
-        @Override
-        public int read() throws IOException {
-            return delegate.read();
-        }
-
-        @Override
-        public int read(byte[] b, int off, int len) throws IOException {
-            return delegate.read(b, off, len);
-        }
-
-        @Override
-        public void close() throws IOException {
-            try {
-                delegate.close();
-            } finally {
-                Files.deleteIfExists(fileToDelete);
-                log.debug("Temporary decrypted download file deleted: {}", fileToDelete);
-            }
-        }
-    }
 }
+
