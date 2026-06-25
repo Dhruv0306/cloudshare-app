@@ -10,6 +10,7 @@ import com.cloudshare.security.UserPrincipal;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -38,6 +39,9 @@ public class AuthService {
     private final JwtTokenProvider tokenProvider;
     private final RefreshTokenService refreshTokenService;
     private final AuditLogService auditLogService;
+
+    @Value("${security.jwt.expiration-seconds:900}")
+    private long jwtExpirationSeconds;
 
     @Transactional
     public void registerUser(RegisterRequest request, String ipAddress) {
@@ -104,7 +108,7 @@ public class AuthService {
 
             AuthResponse authResponse = AuthResponse.builder()
                     .accessToken(accessToken)
-                    .expiresIn(900) // 15 mins
+                    .expiresIn(jwtExpirationSeconds)
                     .user(AuthResponse.UserDetailsDto.builder()
                             .id(userId)
                             .username(principal.getUsername())
@@ -155,7 +159,7 @@ public class AuthService {
 
         TokenRefreshResponse refreshResponse = TokenRefreshResponse.builder()
                 .accessToken(accessToken)
-                .expiresIn(900)
+                .expiresIn(jwtExpirationSeconds)
                 .build();
 
         ResponseCookie cookie = createHttpOnlyCookie(newRefreshToken, 604800);

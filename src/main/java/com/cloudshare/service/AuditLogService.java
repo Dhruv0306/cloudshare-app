@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -16,7 +17,7 @@ public class AuditLogService {
 
     private final JdbcTemplate jdbcTemplate;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(UUID userId, String action, UUID fileId, String ipAddress, String details) {
         log.debug("Writing audit log: user={}, action={}, ip={}", userId, action, ipAddress);
         String sql = "INSERT INTO audit_logs (user_id, action, file_id, ip_address, details, created_at) " +
