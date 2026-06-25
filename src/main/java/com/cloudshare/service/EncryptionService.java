@@ -98,10 +98,23 @@ public class EncryptionService {
         }
     }
 
-    public InputStream decryptStream(InputStream encryptedIn, SecretKey fek, byte[] iv) throws Exception {
+    public void decryptStreamFully(InputStream encryptedIn, OutputStream decryptedOut, SecretKey fek, byte[] iv) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         GCMParameterSpec parameterSpec = new GCMParameterSpec(128, iv);
         cipher.init(Cipher.DECRYPT_MODE, fek, parameterSpec);
-        return new CipherInputStream(encryptedIn, cipher);
+
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = encryptedIn.read(buffer)) != -1) {
+            byte[] decryptedChunk = cipher.update(buffer, 0, read);
+            if (decryptedChunk != null) {
+                decryptedOut.write(decryptedChunk);
+            }
+        }
+        byte[] finalChunk = cipher.doFinal();
+        if (finalChunk != null) {
+            decryptedOut.write(finalChunk);
+        }
+        decryptedOut.flush();
     }
 }

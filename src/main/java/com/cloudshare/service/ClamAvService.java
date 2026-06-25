@@ -52,6 +52,7 @@ public class ClamAvService {
                 // Terminate stream with a zero-length chunk
                 out.write(new byte[]{0, 0, 0, 0});
                 out.flush();
+                socket.shutdownOutput(); // Signal end of data, prompts ClamAV to respond and close
 
                 // Read ClamAV response
                 ByteArrayOutputStream responseBuffer = new ByteArrayOutputStream();

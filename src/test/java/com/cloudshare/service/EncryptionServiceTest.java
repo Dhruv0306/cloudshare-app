@@ -63,14 +63,8 @@ class EncryptionServiceTest {
 
         // Decrypt stream
         ByteArrayInputStream encryptedIn = new ByteArrayInputStream(encryptedBytes);
-        InputStream decryptedIn = encryptionService.decryptStream(encryptedIn, fek, iv);
-
         ByteArrayOutputStream decryptedOut = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        int read;
-        while ((read = decryptedIn.read(buffer)) != -1) {
-            decryptedOut.write(buffer, 0, read);
-        }
+        encryptionService.decryptStreamFully(encryptedIn, decryptedOut, fek, iv);
 
         String decryptedText = decryptedOut.toString(StandardCharsets.UTF_8);
         assertEquals(originalText, decryptedText);

@@ -17,6 +17,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Optional;
@@ -168,9 +169,6 @@ class FileServiceTest {
         
         ByteArrayInputStream mockEncryptedStream = new ByteArrayInputStream("Encrypted Data".getBytes(StandardCharsets.UTF_8));
         when(storageService.retrieve("storage_uuid")).thenReturn(mockEncryptedStream);
-        
-        ByteArrayInputStream mockDecryptedStream = new ByteArrayInputStream("Plaintext Data".getBytes(StandardCharsets.UTF_8));
-        when(encryptionService.decryptStream(eq(mockEncryptedStream), eq(mockFek), any(byte[].class))).thenReturn(mockDecryptedStream);
 
         FileService.DecryptedFileStream result = fileService.downloadFile(fileId, userId, ipAddress);
 
@@ -179,7 +177,8 @@ class FileServiceTest {
         assertEquals("application/pdf", result.getMimeType());
         assertEquals(1234L, result.getSize());
 
-        // Verify audit logging
+        // Verify decryption and audit logging
+        verify(encryptionService).decryptStreamFully(eq(mockEncryptedStream), any(OutputStream.class), eq(mockFek), any(byte[].class));
         verify(auditLogService).log(eq(userId), eq("FILE_DOWNLOAD"), eq(fileId), eq(ipAddress), any(String.class));
     }
 

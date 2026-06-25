@@ -40,7 +40,6 @@ public class FileService {
 
     private final Tika tika = new Tika();
 
-    @Transactional
     public FileResponse uploadFile(MultipartFile file, UUID ownerId, String ipAddress) {
         log.info("Processing file upload: user={}, filename={}, size={}", ownerId, file.getOriginalFilename(), file.getSize());
 
@@ -79,6 +78,13 @@ public class FileService {
                 throw new UnsupportedMediaTypeException("This file type or media extension is not allowed");
             }
 
+            // Sanitize filename to prevent HTTP Header Injection in Content-Disposition
+            String safeFilename = "file";
+            if (file.getOriginalFilename() != null && !file.getOriginalFilename().isEmpty()) {
+                safeFilename = java.nio.file.Path.of(file.getOriginalFilename()).getFileName().toString()
+                        .replaceAll("[^a-zA-Z0-9._\\- ]", "_");
+            }
+
             // 4. Encrypt plaintext stream on-the-fly and calculate checksum
             SecretKey fek = encryptionService.generateFek();
             byte[] iv = encryptionService.generateIv();
@@ -111,7 +117,7 @@ public class FileService {
             FileMetadata metadata = FileMetadata.builder()
                     .ownerId(ownerId)
                     .storagePath(storagePath)
-                    .originalFilename(file.getOriginalFilename())
+                    .originalFilename(safeFilename)
                     .fileSizeBytes(file.getSize())
                     .mimeType(detectedMimeType)
                     .checksumSha256(checksumSha256)
@@ -121,11 +127,11 @@ public class FileService {
                     .deleted(false)
                     .build();
 
-            FileMetadata savedMetadata = fileRepository.save(metadata);
+            FileMetadata savedMetadata = persistMetadata(metadata);
 
             // 8. Log success audit event
             auditLogService.log(ownerId, "FILE_UPLOAD", savedMetadata.getId(), ipAddress, 
-                    "Successfully uploaded file: " + file.getOriginalFilename());
+                    "Successfully uploaded file: " + safeFilename);
 
             return mapToFileResponse(savedMetadata);
 
@@ -141,7 +147,6 @@ public class FileService {
         }
     }
 
-    @Transactional(readOnly = true)
     public DecryptedFileStream downloadFile(UUID fileId, UUID userId, String ipAddress) {
         log.info("Processing file download request: user={}, fileId={}", userId, fileId);
 
@@ -149,14 +154,23 @@ public class FileService {
         FileMetadata metadata = fileRepository.findByIdAndOwnerIdAndDeletedFalse(fileId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("File not found or access denied"));
 
+        Path decryptedTempFile = null;
         try {
             // Unwrap FEK with KEK using AESWrap
             SecretKey fek = encryptionService.unwrapFek(metadata.getEncryptedFek());
             byte[] iv = Base64.getDecoder().decode(metadata.getIvGcm());
 
-            // Retrieve and wrap streaming decryption
-            InputStream encryptedStream = storageService.retrieve(metadata.getStoragePath());
-            InputStream decryptedStream = encryptionService.decryptStream(encryptedStream, fek, iv);
+            // Decrypt fully to temporary file (validates GCM tag before streaming)
+            decryptedTempFile = Files.createTempFile("download-", ".tmp");
+            try (InputStream encryptedStream = storageService.retrieve(metadata.getStoragePath());
+                 OutputStream decryptedOut = Files.newOutputStream(decryptedTempFile)) {
+                encryptionService.decryptStreamFully(encryptedStream, decryptedOut, fek, iv);
+            }
+
+            InputStream decryptedStream = new DeleteOnCloseInputStream(
+                    Files.newInputStream(decryptedTempFile), 
+                    decryptedTempFile
+            );
 
             // Log download audit event
             auditLogService.log(userId, "FILE_DOWNLOAD", fileId, ipAddress, 
@@ -170,6 +184,14 @@ public class FileService {
             );
 
         } catch (Exception e) {
+            // Clean up the decrypted temp file if streaming setup fails
+            if (decryptedTempFile != null) {
+                try {
+                    Files.deleteIfExists(decryptedTempFile);
+                } catch (IOException ioException) {
+                    log.warn("Failed to delete temporary download file: {}", decryptedTempFile, ioException);
+                }
+            }
             log.error("Failed to retrieve or decrypt file for download: {}", fileId, e);
             throw new RuntimeException("Error occurred while processing file download", e);
         }
@@ -195,6 +217,11 @@ public class FileService {
     public Page<FileResponse> listFiles(UUID userId, Pageable pageable) {
         return fileRepository.findByOwnerIdAndDeletedFalse(userId, pageable)
                 .map(this::mapToFileResponse);
+    }
+
+    @Transactional
+    public FileMetadata persistMetadata(FileMetadata metadata) {
+        return fileRepository.save(metadata);
     }
 
     private FileResponse mapToFileResponse(FileMetadata metadata) {
@@ -253,5 +280,35 @@ public class FileService {
         String filename;
         String mimeType;
         long size;
+    }
+
+    private static class DeleteOnCloseInputStream extends InputStream {
+        private final InputStream delegate;
+        private final Path fileToDelete;
+
+        public DeleteOnCloseInputStream(InputStream delegate, Path fileToDelete) {
+            this.delegate = delegate;
+            this.fileToDelete = fileToDelete;
+        }
+
+        @Override
+        public int read() throws IOException {
+            return delegate.read();
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            return delegate.read(b, off, len);
+        }
+
+        @Override
+        public void close() throws IOException {
+            try {
+                delegate.close();
+            } finally {
+                Files.deleteIfExists(fileToDelete);
+                log.debug("Temporary decrypted download file deleted: {}", fileToDelete);
+            }
+        }
     }
 }
