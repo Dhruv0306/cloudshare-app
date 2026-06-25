@@ -1,0 +1,97 @@
+services:
+  # Nginx Gateway & Static Asset Router (Scaffolded for later phases)
+  gateway:
+    image: nginx:1.25-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./frontend:/usr/share/nginx/html:ro
+    depends_on:
+      - app
+
+  # Spring Boot Stateless App (Scaffolded for later phases)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudshare
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+      - SPRING_DATA_REDIS_HOST=cache-aside
+      - SPRING_DATA_REDIS_PORT=6379
+      - SECURITY_REDIS_HOST=cache-security
+      - SECURITY_REDIS_PORT=6379
+      - CLAMAV_HOST=clamav
+      - CLAMAV_PORT=3310
+      - STORAGE_PROVIDER=MINIO
+      - MINIO_ENDPOINT=http://storage:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_BUCKET_NAME=cloudshare-bucket
+      - CRYPTO_MASTER_KEK=${CRYPTO_MASTER_KEK}
+    depends_on:
+      - db
+      - cache-aside
+      - cache-security
+      - clamav
+      - storage
+
+  # PostgreSQL Relational Metadata Database
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_DB=cloudshare
+      - POSTGRES_USER=${SPRING_DATASOURCE_USERNAME}
+      - POSTGRES_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Redis Cache-Aside Instance
+  cache-aside:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata-aside:/data
+
+  # Redis Security Instance (Blacklists, Rate Limiting)
+  cache-security:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
+    ports:
+      - "6380:6379" # Exposed on port 6380 on the host to prevent conflict
+    volumes:
+      - redisdata-security:/data
+
+  # ClamAV Virus Scanner Daemon
+  clamav:
+    image: clamav/clamav:latest
+    ports:
+      - "3310:3310"
+
+  # MinIO S3-Compatible Object Storage (Free local S3)
+  storage:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000" # MinIO API
+      - "9001:9001" # MinIO Console Web UI
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    volumes:
+      - miniadata:/data
+
+volumes:
+  pgdata:
+  redisdata-aside:
+  redisdata-security:
+  miniadata:

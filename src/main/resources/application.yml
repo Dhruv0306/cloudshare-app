@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: cloudshare
+  config:
+    import: optional:file:.env[.properties]
+  
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cloudshare}
+    username: ${SPRING_DATASOURCE_USERNAME:cloudshare_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:StrongDBPassword123!}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: CloudShareHikariPool
+      maximum-pool-size: 25
+      minimum-idle: 10
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      leak-detection-threshold: 2000
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  # Default Spring Redis (cache-aside) configuration
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+
+# Custom Redis configurations and security
+security:
+  redis:
+    host: ${SECURITY_REDIS_HOST:localhost}
+    port: ${SECURITY_REDIS_PORT:6380}
+  jwt:
+    secret: ${JWT_SECRET:32ByteSecretKeyForHMACSHA256SignatureAuthenticationOfCloudShareTokens}
+    expiration-seconds: ${JWT_EXPIRATION:900}
+    refresh-expiration-seconds: ${JWT_REFRESH_EXPIRATION:604800}
+
+logging:
+  level:
+    org.springframework.security: INFO
+    org.flywaydb: INFO
+    com.cloudshare: DEBUG
