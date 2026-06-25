@@ -190,7 +190,7 @@ class ShareServiceTest {
         assertEquals(2, shareLink.getDownloadCount());
 
         verify(shareLinkRepository).save(shareLink);
-        verify(auditLogService).log(isNull(), eq("FILE_DOWNLOAD"), eq(fileId), eq(ipAddress), any(String.class));
+        verify(auditLogService).log(isNull(), eq("GUEST_DOWNLOAD"), eq(fileId), eq(ipAddress), any(String.class));
     }
 
     @Test

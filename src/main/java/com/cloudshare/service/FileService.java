@@ -243,7 +243,7 @@ public class FileService {
                 if (hasRequiredPermission(cachedPermission, requiredPermission)) {
                     return; // Access allowed
                 }
-                throw new com.cloudshare.exception.AccessDeniedException("Access denied to file");
+                throw new ResourceNotFoundException("File not found or access denied");
             }
             
             // Check if key exists (could be key exists but user not in hash, meaning no access)
@@ -251,7 +251,7 @@ public class FileService {
             if (Boolean.TRUE.equals(keyExists)) {
                 throw new ResourceNotFoundException("File not found or access denied");
             }
-        } catch (com.cloudshare.exception.AccessDeniedException | ResourceNotFoundException e) {
+        } catch (ResourceNotFoundException e) {
             throw e;
         } catch (Exception e) {
             log.warn("Redis error during permission check, falling back to database", e);

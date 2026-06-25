@@ -257,4 +257,43 @@ class FileServiceTest {
         // Verify audit logging
         verify(auditLogService).log(eq(userId), eq("FILE_DELETE"), eq(fileId), eq(ipAddress), any(String.class));
     }
+
+    @Test
+    void downloadFile_cacheHitInsufficientPermission_throwsException() {
+        UUID fileId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        // Stub cache-aside lookup as NONE (insufficient)
+        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
+        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn("NONE");
+
+        assertThrows(ResourceNotFoundException.class, () -> {
+            fileService.downloadFile(fileId, userId, ipAddress);
+        });
+
+        // Ensure key processing & storage retrieval never run
+        verifyNoInteractions(encryptionService);
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void downloadFile_cacheKeyExistsButUserMissing_throwsException() {
+        UUID fileId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        // Stub cache key exists but user entry is null
+        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
+        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn(null);
+        when(cacheRedisTemplate.hasKey("cache:permissions:" + fileId)).thenReturn(true);
+
+        assertThrows(ResourceNotFoundException.class, () -> {
+            fileService.downloadFile(fileId, userId, ipAddress);
+        });
+
+        // Ensure key processing & storage retrieval never run
+        verifyNoInteractions(encryptionService);
+        verifyNoInteractions(storageService);
+    }
 }

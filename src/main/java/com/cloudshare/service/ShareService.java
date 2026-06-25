@@ -233,8 +233,13 @@ public class ShareService {
             );
 
             // Log download audit event (Fail-secure: abort download if audit log fails)
-            auditLogService.log(null, "FILE_DOWNLOAD", file.getId(), ipAddress,
-                    "Successfully downloaded file via public link code: " + shareCode);
+            try {
+                auditLogService.log(null, "GUEST_DOWNLOAD", file.getId(), ipAddress,
+                        "Successfully downloaded file via public link code: " + shareCode);
+            } catch (Exception auditEx) {
+                log.error("Audit log failed for public link download. Failing operation for compliance.", auditEx);
+                throw new RuntimeException("A server-side compliance issue occurred: audit logging failed.", auditEx);
+            }
 
             return new FileService.DecryptedFileStream(
                     decryptedStream,
