@@ -9,7 +9,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.*;
