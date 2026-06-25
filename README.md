@@ -1,5 +1,7 @@
 # CloudShare - Secure File Sharing Web Application
 
+[![Java CI with Maven](https://github.com/Dhruv0306/cloudshare-app/actions/workflows/maven.yml/badge.svg)](https://github.com/Dhruv0306/cloudshare-app/actions/workflows/maven.yml)
+
 CloudShare is a production-ready, highly secure file-sharing web application built using **Spring Boot** and a **modern JavaScript frontend**. It features robust user authentication, secure file upload/download pipelines, sharing controls, structured auditing, and automated testing, packaged with Docker support and a pre-configured CI/CD pipeline.
 
 This repository contains the complete system design, architecture blueprints, data models, and infrastructure specifications for CloudShare.
