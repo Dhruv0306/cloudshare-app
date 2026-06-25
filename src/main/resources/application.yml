@@ -22,6 +22,9 @@ spring:
     enabled: true
     baseline-on-migrate: true
 
+  jpa:
+    open-in-view: false
+
   # Default Spring Redis (cache-aside) configuration
   data:
     redis:
@@ -69,3 +72,4 @@ logging:
     org.springframework.security: INFO
     org.flywaydb: INFO
     com.cloudshare: DEBUG
+    org.springframework.data.repository.config: WARN

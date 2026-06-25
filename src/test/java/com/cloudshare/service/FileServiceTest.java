@@ -28,6 +28,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.HashOperations;
+import com.cloudshare.repository.FileShareRepository;
+
 @ExtendWith(MockitoExtension.class)
 class FileServiceTest {
 
@@ -46,11 +50,28 @@ class FileServiceTest {
     @Mock
     private AuditLogService auditLogService;
 
+    @Mock
+    private FileShareRepository fileShareRepository;
+
+    @Mock
+    private StringRedisTemplate cacheRedisTemplate;
+
+    @Mock
+    private HashOperations<String, Object, Object> hashOperations;
+
     private FileService fileService;
 
     @BeforeEach
     void setUp() {
-        fileService = new FileService(fileRepository, storageService, clamAvService, encryptionService, auditLogService);
+        fileService = new FileService(
+            fileRepository, 
+            storageService, 
+            clamAvService, 
+            encryptionService, 
+            auditLogService,
+            fileShareRepository,
+            cacheRedisTemplate
+        );
     }
 
     @Test
@@ -160,8 +181,12 @@ class FileServiceTest {
                 .deleted(false)
                 .build();
 
+        // Stub cache-aside lookup as OWNER
+        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
+        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn("OWNER");
+
         // Stub repository to return file
-        when(fileRepository.findByIdAndOwnerIdAndDeletedFalse(fileId, userId)).thenReturn(Optional.of(metadata));
+        when(fileRepository.findAccessibleFile(fileId, userId)).thenReturn(Optional.of(metadata));
 
         // Stub decryption keys
         SecretKey mockFek = new SecretKeySpec(new byte[32], "AES");
@@ -188,8 +213,13 @@ class FileServiceTest {
         UUID userId = UUID.randomUUID();
         String ipAddress = "192.168.1.10";
 
-        // Stub repository to return empty (simulating file missing or owner mismatch)
-        when(fileRepository.findByIdAndOwnerIdAndDeletedFalse(fileId, userId)).thenReturn(Optional.empty());
+        // Stub cache-aside miss
+        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
+        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn(null);
+        when(cacheRedisTemplate.hasKey("cache:permissions:" + fileId)).thenReturn(false);
+
+        // Stub database lookup fail
+        when(fileRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> {
             fileService.downloadFile(fileId, userId, ipAddress);
@@ -221,7 +251,49 @@ class FileServiceTest {
         assertTrue(metadata.isDeleted());
         verify(fileRepository).save(metadata);
 
+        // Verify cache eviction
+        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+
         // Verify audit logging
         verify(auditLogService).log(eq(userId), eq("FILE_DELETE"), eq(fileId), eq(ipAddress), any(String.class));
+    }
+
+    @Test
+    void downloadFile_cacheHitInsufficientPermission_throwsException() {
+        UUID fileId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        // Stub cache-aside lookup as NONE (insufficient)
+        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
+        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn("NONE");
+
+        assertThrows(ResourceNotFoundException.class, () -> {
+            fileService.downloadFile(fileId, userId, ipAddress);
+        });
+
+        // Ensure key processing & storage retrieval never run
+        verifyNoInteractions(encryptionService);
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void downloadFile_cacheKeyExistsButUserMissing_throwsException() {
+        UUID fileId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        // Stub cache key exists but user entry is null
+        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
+        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn(null);
+        when(cacheRedisTemplate.hasKey("cache:permissions:" + fileId)).thenReturn(true);
+
+        assertThrows(ResourceNotFoundException.class, () -> {
+            fileService.downloadFile(fileId, userId, ipAddress);
+        });
+
+        // Ensure key processing & storage retrieval never run
+        verifyNoInteractions(encryptionService);
+        verifyNoInteractions(storageService);
     }
 }
