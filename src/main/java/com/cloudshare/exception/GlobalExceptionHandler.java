@@ -55,6 +55,34 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
+    @ExceptionHandler(VirusDetectedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVirusDetectedException(VirusDetectedException ex) {
+        log.warn("Virus detected warning: {}", ex.getMessage());
+        ApiResponse<Void> response = ApiResponse.error("VIRUS_DETECTED", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
+    }
+
+    @ExceptionHandler(UnsupportedMediaTypeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnsupportedMediaTypeException(UnsupportedMediaTypeException ex) {
+        log.warn("Unsupported media type: {}", ex.getMessage());
+        ApiResponse<Void> response = ApiResponse.error("UNSUPPORTED_MEDIA_TYPE", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(response);
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFoundException(ResourceNotFoundException ex) {
+        log.warn("Resource not found: {}", ex.getMessage());
+        ApiResponse<Void> response = ApiResponse.error("NOT_FOUND", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceededException(org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        log.warn("Max upload size exceeded: {}", ex.getMessage());
+        ApiResponse<Void> response = ApiResponse.error("PAYLOAD_TOO_LARGE", "The uploaded file exceeds the maximum allowed size of 100MB.");
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleAllExceptions(Exception ex) {
         log.error("Unhandled system exception", ex);
