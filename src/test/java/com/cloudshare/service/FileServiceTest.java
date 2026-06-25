@@ -57,7 +57,7 @@ class FileServiceTest {
     private StringRedisTemplate cacheRedisTemplate;
 
     @Mock
-    private HashOperations hashOperations;
+    private HashOperations<String, Object, Object> hashOperations;
 
     private FileService fileService;
 
