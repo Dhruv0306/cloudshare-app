@@ -28,6 +28,11 @@ spring:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
 
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
 # Custom Redis configurations and security
 security:
   redis:
@@ -37,6 +42,27 @@ security:
     secret: ${JWT_SECRET:32ByteSecretKeyForHMACSHA256SignatureAuthenticationOfCloudShareTokens}
     expiration-seconds: ${JWT_EXPIRATION:900}
     refresh-expiration-seconds: ${JWT_REFRESH_EXPIRATION:604800}
+
+# ClamAV Configuration
+clamav:
+  host: ${CLAMAV_HOST:localhost}
+  port: ${CLAMAV_PORT:3310}
+  timeout-ms: 10000
+
+# File Storage Configuration
+storage:
+  provider: ${STORAGE_PROVIDER:LOCAL} # LOCAL or MINIO
+  local:
+    directory: ${STORAGE_LOCAL_DIRECTORY:./uploads}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    bucket-name: ${MINIO_BUCKET_NAME:cloudshare-bucket}
+
+# Cryptography
+crypto:
+  master-kek: ${CRYPTO_MASTER_KEK:your_crypto_master_kek_32_bytes}
 
 logging:
   level:
