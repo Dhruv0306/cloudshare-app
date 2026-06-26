@@ -1,0 +1,79 @@
+name: API Integration Tests
+
+on:
+  push:
+    branches: [ main, "release/*" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create CI env file
+        env:
+          CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+          CI_JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
+          CI_CRYPTO_MASTER_KEK: ${{ secrets.CI_CRYPTO_MASTER_KEK }}
+        run: |
+          # Use secrets if available, otherwise generate secure 64-byte keys dynamically
+          DB_PASSWORD="$CI_DB_PASSWORD"
+          [ -z "$DB_PASSWORD" ] && DB_PASSWORD="A1000Rocks"
+          
+          JWT_SECRET="$CI_JWT_SECRET"
+          [ -z "$JWT_SECRET" ] && JWT_SECRET=$(openssl rand -hex 64)
+          
+          CRYPTO_KEK="$CI_CRYPTO_MASTER_KEK"
+          [ -z "$CRYPTO_KEK" ] && CRYPTO_KEK=$(openssl rand -hex 64)
+          
+          echo "SPRING_DATASOURCE_USERNAME=cloudshare_user" > tests/.env.ci
+          echo "SPRING_DATASOURCE_PASSWORD=$DB_PASSWORD" >> tests/.env.ci
+          echo "JWT_SECRET=$JWT_SECRET" >> tests/.env.ci
+          echo "JWT_EXPIRATION=900" >> tests/.env.ci
+          echo "JWT_REFRESH_EXPIRATION=604800" >> tests/.env.ci
+          echo "MINIO_ROOT_USER=minioadmin" >> tests/.env.ci
+          echo "MINIO_ROOT_PASSWORD=A1000Minio" >> tests/.env.ci
+          echo "CRYPTO_MASTER_KEK=$CRYPTO_KEK" >> tests/.env.ci
+
+      - name: Start stack
+        run: docker compose --env-file tests/.env.ci up -d --build
+
+      - name: Wait for Spring Boot
+        run: |
+          for i in {1..90}; do
+            curl -sf http://localhost:8080/actuator/health && break
+            echo "Waiting for app... ($i)"
+            sleep 5
+            [ $i -eq 90 ] && echo "Spring Boot did not start in time" && exit 1
+          done
+
+      - name: Wait for ClamAV
+        run: |
+          for i in {1..60}; do
+            nc -z localhost 3310 && echo "ClamAV ready" && break
+            echo "Waiting for ClamAV... ($i)"
+            sleep 5
+            [ $i -eq 60 ] && echo "ClamAV did not become ready in time" && exit 1
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run API tests
+        run: python3 tests/api_test.py
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose --env-file tests/.env.ci logs
+
+      - name: Cleanup env file
+        if: always()
+        run: rm -f tests/.env.ci
