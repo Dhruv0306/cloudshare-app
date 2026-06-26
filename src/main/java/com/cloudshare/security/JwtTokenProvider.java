@@ -51,7 +51,7 @@ public class JwtTokenProvider {
     }
 
     public String getUserIdFromToken(String token) {
-        return getClaimFromToken(token, Claims::getSubject);
+        return getClaimFromToken(token, claims -> claims.getSubject());
     }
 
     @SuppressWarnings("unchecked")
@@ -66,11 +66,11 @@ public class JwtTokenProvider {
     }
 
     public Date getExpirationDateFromToken(String token) {
-        return getClaimFromToken(token, Claims::getExpiration);
+        return getClaimFromToken(token, claims -> claims.getExpiration());
     }
 
     public String getJtiFromToken(String token) {
-        return getClaimFromToken(token, Claims::getId);
+        return getClaimFromToken(token, claims -> claims.getId());
     }
 
     public <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver) {
