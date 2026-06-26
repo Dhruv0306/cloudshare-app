@@ -87,7 +87,7 @@ class ShareControllerTest {
                         .content(objectMapper.writeValueAsString(request))
                         .with(csrf())
                         .with(user(principal)))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.sharedWith").value("janedoe@example.com"))
                 .andExpect(jsonPath("$.data.permission").value("READ"));
