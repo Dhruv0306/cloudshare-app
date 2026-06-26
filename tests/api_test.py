@@ -1,0 +1,309 @@
+import os
+import sys
+import time
+import hashlib
+import uuid
+import requests
+
+BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8080")
+
+EICAR_STRING = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+
+class TestRunner:
+    def __init__(self):
+        self.tests_run = 0
+        self.tests_failed = 0
+
+    def run_case(self, name, func, *args, **kwargs):
+        self.tests_run += 1
+        print(f"[RUN] {name} ... ", end="", flush=True)
+        try:
+            func(*args, **kwargs)
+            print("[PASS]")
+        except Exception as e:
+            self.tests_failed += 1
+            print("[FAIL]")
+            print(f"   Reason: {e}")
+
+    def summary(self):
+        print("\n" + "=" * 50)
+        print("Integration Test Summary")
+        print("=" * 50)
+        print(f"Total Tests Run: {self.tests_run}")
+        print(f"Passed:          {self.tests_run - self.tests_failed}")
+        print(f"Failed:          {self.tests_failed}")
+        print("=" * 50)
+        return self.tests_failed == 0
+
+def generate_random_user():
+    unique_suffix = uuid.uuid4().hex[:8]
+    return {
+        "username": f"user_{unique_suffix}",
+        "email": f"user_{unique_suffix}@example.com",
+        "password": "Password123!"
+    }
+
+# ----------------------------------------------------
+# 1. Auth Flow Tests
+# ----------------------------------------------------
+def test_auth_flow(url_prefix):
+    user = generate_random_user()
+    
+    # Register user
+    reg_response = requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    assert reg_response.status_code == 201, f"Expected 201, got {reg_response.status_code}. Response: {reg_response.text}"
+    assert reg_response.json().get("success") is True, f"Registration failed response: {reg_response.text}"
+    
+    # Register duplicate user
+    dup_response = requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    assert dup_response.status_code == 400, f"Expected 400 for duplicate user, got {dup_response.status_code}. Response: {dup_response.text}"
+    
+    # Login user
+    session = requests.Session()
+    login_payload = {
+        "usernameOrEmail": user["username"],
+        "password": user["password"]
+    }
+    login_response = session.post(f"{url_prefix}/api/v1/auth/login", json=login_payload)
+    assert login_response.status_code == 200, f"Expected 200, got {login_response.status_code}. Response: {login_response.text}"
+    
+    login_data = login_response.json()
+    assert login_data.get("success") is True
+    access_token = login_data["data"]["accessToken"]
+    assert access_token is not None
+    
+    # Check refresh_token cookie was set on /api/v1/auth path
+    cookies = session.cookies.get_dict()
+    assert "refresh_token" in cookies, f"Expected refresh_token cookie, found cookies: {cookies}"
+    
+    # For local HTTP testing, requests requires the secure flag to be False on cookies
+    for c in session.cookies:
+        if c.name == "refresh_token":
+            c.secure = False
+            
+    # Test token refresh
+    refresh_response = session.post(f"{url_prefix}/api/v1/auth/refresh")
+    assert refresh_response.status_code == 200, f"Expected 200, got {refresh_response.status_code}. Response: {refresh_response.text}"
+    
+    refresh_data = refresh_response.json()
+    assert refresh_data.get("success") is True
+    new_access_token = refresh_data["data"]["accessToken"]
+    assert new_access_token != access_token, "Expected rotated/new access token, but got the same one."
+    
+    # Reset secure flag on the newly rotated refresh token cookie
+    for c in session.cookies:
+        if c.name == "refresh_token":
+            c.secure = False
+    
+    # Test logout
+    logout_headers = {"Authorization": f"Bearer {new_access_token}"}
+    logout_response = session.post(f"{url_prefix}/api/v1/auth/logout", headers=logout_headers)
+    assert logout_response.status_code == 200, f"Expected 200, got {logout_response.status_code}. Response: {logout_response.text}"
+    
+    # Verify access is revoked (requesting files with logged out token should return 401)
+    list_files_response = requests.get(f"{url_prefix}/api/v1/files", headers=logout_headers)
+    assert list_files_response.status_code == 401, f"Expected 401, got {list_files_response.status_code}. Response: {list_files_response.text}"
+    
+    # Verify refresh token is revoked (trying to refresh token again should return 400)
+    session.cookies.set("refresh_token", str(uuid.uuid4()), path="/api/v1/auth")
+    stale_refresh_response = session.post(f"{url_prefix}/api/v1/auth/refresh")
+    assert stale_refresh_response.status_code == 400, f"Expected 400, got {stale_refresh_response.status_code}. Response: {stale_refresh_response.text}"
+
+# ----------------------------------------------------
+# 2. File Operation Tests
+# ----------------------------------------------------
+def test_file_operations(url_prefix):
+    user = generate_random_user()
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    
+    session = requests.Session()
+    login_res = session.post(f"{url_prefix}/api/v1/auth/login", json={
+        "usernameOrEmail": user["username"],
+        "password": user["password"]
+    })
+    access_token = login_res.json()["data"]["accessToken"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+    
+    # 2.1 Upload clean file
+    file_content = b"Hello, CloudShare security testing!"
+    file_checksum = hashlib.sha256(file_content).hexdigest()
+    
+    files = {"file": ("test_file.txt", file_content, "text/plain")}
+    upload_res = requests.post(f"{url_prefix}/api/v1/files/upload", headers=headers, files=files)
+    assert upload_res.status_code == 201, f"Expected 201, got {upload_res.status_code}. Response: {upload_res.text}"
+    
+    upload_data = upload_res.json()
+    assert upload_data.get("success") is True
+    file_id = upload_data["data"]["id"]
+    assert upload_data["data"]["name"] == "test_file.txt"
+    assert upload_data["data"]["checksum"] == file_checksum
+    
+    # 2.2 Upload dangerous file extension / MIME type
+    bad_files = {"file": ("malicious.exe", b"executable bytes", "application/x-msdownload")}
+    bad_upload_res = requests.post(f"{url_prefix}/api/v1/files/upload", headers=headers, files=bad_files)
+    assert bad_upload_res.status_code == 415, f"Expected 415, got {bad_upload_res.status_code}. Response: {bad_upload_res.text}"
+    
+    # 2.3 Upload EICAR antivirus test file (triggers ClamAV malware check)
+    eicar_files = {"file": ("eicar_test.txt", EICAR_STRING, "text/plain")}
+    eicar_upload_res = requests.post(f"{url_prefix}/api/v1/files/upload", headers=headers, files=eicar_files)
+    assert eicar_upload_res.status_code == 422, f"Expected 422, got {eicar_upload_res.status_code}. Response: {eicar_upload_res.text}"
+    assert eicar_upload_res.json()["error"]["code"] == "VIRUS_DETECTED"
+    
+    # 2.4 Download own uploaded file
+    download_res = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers)
+    assert download_res.status_code == 200, f"Expected 200, got {download_res.status_code}"
+    assert download_res.content == file_content, "Downloaded file content does not match uploaded content."
+    
+    # 2.5 Download non-existent file
+    fake_uuid = str(uuid.uuid4())
+    fake_download_res = requests.get(f"{url_prefix}/api/v1/files/{fake_uuid}/download", headers=headers)
+    assert fake_download_res.status_code == 404, f"Expected 404, got {fake_download_res.status_code}. Response: {fake_download_res.text}"
+    
+    # 2.6 Delete file
+    delete_res = requests.delete(f"{url_prefix}/api/v1/files/{file_id}", headers=headers)
+    assert delete_res.status_code == 204, f"Expected 204, got {delete_res.status_code}"
+    
+    # 2.7 Download deleted file
+    post_delete_res = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers)
+    assert post_delete_res.status_code == 404, f"Expected 404, got {post_delete_res.status_code}. Response: {post_delete_res.text}"
+
+# ----------------------------------------------------
+# 3. Sharing & Collaboration Tests
+# ----------------------------------------------------
+def test_sharing_flow(url_prefix):
+    user_a = generate_random_user()
+    user_b = generate_random_user()
+    user_c = generate_random_user()
+    
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user_a)
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user_b)
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user_c)
+    
+    # Logins
+    login_a = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": user_a["username"], "password": user_a["password"]}).json()
+    login_b = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": user_b["username"], "password": user_b["password"]}).json()
+    login_c = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": user_c["username"], "password": user_c["password"]}).json()
+    
+    headers_a = {"Authorization": f"Bearer {login_a['data']['accessToken']}"}
+    headers_b = {"Authorization": f"Bearer {login_b['data']['accessToken']}"}
+    headers_c = {"Authorization": f"Bearer {login_c['data']['accessToken']}"}
+    
+    # User A uploads file
+    file_content = b"Hello shared world!"
+    upload_res = requests.post(
+        f"{url_prefix}/api/v1/files/upload", 
+        headers=headers_a, 
+        files={"file": ("shared_doc.txt", file_content, "text/plain")}
+    )
+    file_id = upload_res.json()["data"]["id"]
+    
+    # User A shares internally with User B
+    share_payload = {
+        "fileId": file_id,
+        "targetUsernameOrEmail": user_b["username"],
+        "permissionType": "READ"
+    }
+    share_res = requests.post(f"{url_prefix}/api/v1/shares/internal", headers=headers_a, json=share_payload)
+    assert share_res.status_code == 201, f"Expected 201, got {share_res.status_code}. Response: {share_res.text}"
+    
+    # User B downloads shared file (Access Allowed)
+    download_b = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers_b)
+    assert download_b.status_code == 200, f"Expected 200, got {download_b.status_code}"
+    assert download_b.content == file_content
+    
+    # User C downloads shared file (Access Denied -> 404)
+    download_c = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers_c)
+    assert download_c.status_code == 404, f"Expected 404, got {download_c.status_code}. Response: {download_c.text}"
+    
+    # 3.2 Public link sharing
+    link_payload = {
+        "fileId": file_id,
+        "expiresInSeconds": 3600,
+        "password": "LinkPassword999",
+        "downloadLimit": 5
+    }
+    link_res = requests.post(f"{url_prefix}/api/v1/shares/link", headers=headers_a, json=link_payload)
+    assert link_res.status_code == 200, f"Expected 200, got {link_res.status_code}. Response: {link_res.text}"
+    share_code = link_res.json()["data"]["shareCode"]
+    
+    # Guest downloads public link with correct password
+    guest_headers = {"X-Share-Password": "LinkPassword999"}
+    guest_download = requests.get(f"{url_prefix}/api/v1/shares/link/{share_code}/download", headers=guest_headers)
+    assert guest_download.status_code == 200, f"Expected 200, got {guest_download.status_code}"
+    assert guest_download.content == file_content
+    
+    # Guest downloads public link with wrong password
+    bad_guest_headers = {"X-Share-Password": "WrongPassword"}
+    bad_guest_download = requests.get(f"{url_prefix}/api/v1/shares/link/{share_code}/download", headers=bad_guest_headers)
+    assert bad_guest_download.status_code == 401, f"Expected 401, got {bad_guest_download.status_code}. Response: {bad_guest_download.text}"
+    
+    # Guest downloads public link with missing password
+    missing_guest_download = requests.get(f"{url_prefix}/api/v1/shares/link/{share_code}/download")
+    assert missing_guest_download.status_code == 401, f"Expected 401, got {missing_guest_download.status_code}. Response: {missing_guest_download.text}"
+    
+    # Test expiration: create public link with 2s expiry
+    exp_payload = {
+        "fileId": file_id,
+        "expiresInSeconds": 2,
+        "downloadLimit": 5
+    }
+    exp_link_res = requests.post(f"{url_prefix}/api/v1/shares/link", headers=headers_a, json=exp_payload)
+    exp_share_code = exp_link_res.json()["data"]["shareCode"]
+    
+    # Sleep 4 seconds to ensure it is fully expired
+    time.sleep(4)
+    expired_download = requests.get(f"{url_prefix}/api/v1/shares/link/{exp_share_code}/download")
+    assert expired_download.status_code == 403, f"Expected 403 (expired), got {expired_download.status_code}. Response: {expired_download.text}"
+    
+    # Test download limit: create public link with limit of 1
+    limit_payload = {
+        "fileId": file_id,
+        "expiresInSeconds": 3600,
+        "downloadLimit": 1
+    }
+    limit_link_res = requests.post(f"{url_prefix}/api/v1/shares/link", headers=headers_a, json=limit_payload)
+    limit_share_code = limit_link_res.json()["data"]["shareCode"]
+    
+    # First download -> OK
+    download_1 = requests.get(f"{url_prefix}/api/v1/shares/link/{limit_share_code}/download")
+    assert download_1.status_code == 200, f"Expected 200, got {download_1.status_code}"
+    
+    # Second download -> 403 Limit Exceeded
+    download_2 = requests.get(f"{url_prefix}/api/v1/shares/link/{limit_share_code}/download")
+    assert download_2.status_code == 403, f"Expected 403 (limit reached), got {download_2.status_code}. Response: {download_2.text}"
+
+# ----------------------------------------------------
+# 4. Auth Boundary Tests
+# ----------------------------------------------------
+def test_auth_boundaries(url_prefix):
+    user = generate_random_user()
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    
+    login_res = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": user["username"], "password": user["password"]}).json()
+    access_token = login_res["data"]["accessToken"]
+    user_headers = {"Authorization": f"Bearer {access_token}"}
+    
+    # Try calling list files endpoint without token
+    no_token_res = requests.get(f"{url_prefix}/api/v1/files")
+    assert no_token_res.status_code == 401, f"Expected 401 for no token, got {no_token_res.status_code}. Response: {no_token_res.text}"
+    
+    # Try calling admin endpoint with non-admin token
+    admin_res = requests.get(f"{url_prefix}/api/v1/admin/users", headers=user_headers)
+    assert admin_res.status_code == 403, f"Expected 403 for non-admin on admin endpoint, got {admin_res.status_code}. Response: {admin_res.text}"
+
+# ----------------------------------------------------
+# Runner
+# ----------------------------------------------------
+if __name__ == "__main__":
+    print(f"Connecting to API at: {BASE_URL}")
+    runner = TestRunner()
+    
+    runner.run_case("Authentication Flow", test_auth_flow, BASE_URL)
+    runner.run_case("File Operations", test_file_operations, BASE_URL)
+    runner.run_case("Sharing & Collaboration", test_sharing_flow, BASE_URL)
+    runner.run_case("Auth Boundaries", test_auth_boundaries, BASE_URL)
+    
+    success = runner.summary()
+    if not success:
+        sys.exit(1)
+    sys.exit(0)
