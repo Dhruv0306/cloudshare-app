@@ -73,3 +73,9 @@ logging:
     org.flywaydb: INFO
     com.cloudshare: DEBUG
     org.springframework.data.repository.config: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
