@@ -64,7 +64,7 @@ public class AuthService {
                 .roles(Collections.singleton(userRole))
                 .build();
 
-        User savedUser = userRepository.saveAndFlush(user);
+        userRepository.saveAndFlush(user);
 
         // Audit log registration
         auditLogService.log(
