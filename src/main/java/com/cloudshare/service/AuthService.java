@@ -15,7 +15,6 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -69,7 +68,7 @@ public class AuthService {
 
         // Audit log registration
         auditLogService.log(
-                savedUser.getId(),
+                null,
                 "REGISTRATION_SUCCESS",
                 null,
                 ipAddress,
@@ -96,7 +95,7 @@ public class AuthService {
             UUID userId = principal.getId();
 
             List<String> roles = principal.getAuthorities().stream()
-                    .map(GrantedAuthority::getAuthority)
+                    .map(auth -> auth.getAuthority())
                     .collect(Collectors.toList());
 
             // Generate tokens
@@ -148,7 +147,7 @@ public class AuthService {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
 
         List<String> roles = user.getRoles().stream()
-                .map(Role::getName)
+                .map(role -> role.getName())
                 .collect(Collectors.toList());
 
         // Generate a new access token
