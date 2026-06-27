@@ -97,6 +97,13 @@
             <version>8.5.12</version>
         </dependency>
 
+        <!-- TOTP / MFA library -->
+        <dependency>
+            <groupId>dev.samstevens.totp</groupId>
+            <artifactId>totp</artifactId>
+            <version>1.7.1</version>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

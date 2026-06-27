@@ -4,6 +4,7 @@ import com.cloudshare.dto.FileResponse;
 import com.cloudshare.security.CustomUserDetailsService;
 import com.cloudshare.security.JwtTokenProvider;
 import com.cloudshare.service.FileService;
+import com.cloudshare.service.RateLimiterService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -43,8 +44,16 @@ class FileControllerTest {
     @MockitoBean
     private CustomUserDetailsService customUserDetailsService;
 
+    @MockitoBean
+    private RateLimiterService rateLimiterService;
+
     @MockitoBean(name = "securityRedisTemplate")
     private org.springframework.data.redis.core.StringRedisTemplate securityRedisTemplate;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUpRateLimiter() {
+        when(rateLimiterService.isAllowed(any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(true);
+    }
 
     private com.cloudshare.security.UserPrincipal getMockPrincipal() {
         com.cloudshare.model.User userEntity = com.cloudshare.model.User.builder()

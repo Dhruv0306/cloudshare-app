@@ -20,6 +20,7 @@ mvnw.cmd
 
 # Version Control
 .git/
+.github/
 .gitignore
 
 # OS generated files
@@ -36,3 +37,6 @@ frontend/
 docs/
 README.md
 implementation_phase_plan.md
+LICENSE
+CONTRIBUTING.md
+tests/

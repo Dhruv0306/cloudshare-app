@@ -50,6 +50,36 @@ public class JwtTokenProvider {
                 .compact();
     }
 
+    public String generateStepUpToken(String userId, String username) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + (300 * 1000)); // 5 minutes
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("username", username);
+        claims.put("step_up", true);
+
+        return Jwts.builder()
+                .id(java.util.UUID.randomUUID().toString())
+                .subject(userId)
+                .claims(claims)
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(key)
+                .compact();
+    }
+
+    public boolean validateStepUpToken(String token, String expectedUserId) {
+        try {
+            Claims claims = getAllClaimsFromToken(token);
+            Boolean stepUp = claims.get("step_up", Boolean.class);
+            String userId = claims.getSubject();
+            return stepUp != null && stepUp && userId != null && userId.equals(expectedUserId);
+        } catch (JwtException | IllegalArgumentException ex) {
+            log.debug("Invalid step-up token: {}", ex.getMessage());
+        }
+        return false;
+    }
+
     public String getUserIdFromToken(String token) {
         return getClaimFromToken(token, claims -> claims.getSubject());
     }

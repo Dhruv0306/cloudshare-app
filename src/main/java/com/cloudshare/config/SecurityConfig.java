@@ -2,6 +2,8 @@ package com.cloudshare.config;
 
 import com.cloudshare.security.CustomUserDetailsService;
 import com.cloudshare.security.JwtAuthenticationFilter;
+import com.cloudshare.security.RateLimitingFilter;
+import com.cloudshare.security.StepUpAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,6 +26,8 @@ public class SecurityConfig {
 
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitingFilter rateLimitingFilter;
+    private final StepUpAuthenticationFilter stepUpAuthenticationFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -63,7 +67,9 @@ public class SecurityConfig {
                 })
             )
             .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter.class)
+            .addFilterAfter(stepUpAuthenticationFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

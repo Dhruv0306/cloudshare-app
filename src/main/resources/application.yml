@@ -45,6 +45,11 @@ security:
     secret: ${JWT_SECRET:32ByteSecretKeyForHMACSHA256SignatureAuthenticationOfCloudShareTokens}
     expiration-seconds: ${JWT_EXPIRATION:900}
     refresh-expiration-seconds: ${JWT_REFRESH_EXPIRATION:604800}
+  rate-limiting:
+    auth-limit: ${RATE_LIMIT_AUTH:5}
+    upload-limit: ${RATE_LIMIT_UPLOAD:10}
+    link-limit: ${RATE_LIMIT_LINK:30}
+    general-limit: ${RATE_LIMIT_GENERAL:100}
 
 # ClamAV Configuration
 clamav:

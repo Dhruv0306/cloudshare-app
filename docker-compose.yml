@@ -36,6 +36,10 @@ services:
       - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET_NAME=cloudshare-bucket
       - CRYPTO_MASTER_KEK=${CRYPTO_MASTER_KEK}
+      - RATE_LIMIT_AUTH=${RATE_LIMIT_AUTH:-5}
+      - RATE_LIMIT_UPLOAD=${RATE_LIMIT_UPLOAD:-10}
+      - RATE_LIMIT_LINK=${RATE_LIMIT_LINK:-30}
+      - RATE_LIMIT_GENERAL=${RATE_LIMIT_GENERAL:-100}
     depends_on:
       - db
       - cache-aside
