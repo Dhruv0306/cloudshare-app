@@ -10,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.cloudshare.security.UserPrincipal;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -57,6 +59,29 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .body(ApiResponse.success("Logout successful"));
+    }
+
+    @PostMapping("/mfa/setup")
+    public ResponseEntity<ApiResponse<MfaSetupResponse>> setupMfa(@AuthenticationPrincipal UserPrincipal principal) {
+        MfaSetupResponse response = authService.setupMfa(principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/mfa/verify")
+    public ResponseEntity<ApiResponse<String>> verifyMfa(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody MfaVerifyRequest request,
+            HttpServletRequest servletRequest) {
+        authService.verifyMfa(principal.getId(), request.getCode(), getClientIp(servletRequest));
+        return ResponseEntity.ok(ApiResponse.success("Multi-Factor Authentication enabled successfully."));
+    }
+
+    @PostMapping("/mfa/step-up")
+    public ResponseEntity<ApiResponse<MfaStepUpResponse>> stepUpMfa(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody MfaVerifyRequest request) {
+        MfaStepUpResponse response = authService.stepUpMfa(principal.getId(), request.getCode());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     private String getClientIp(HttpServletRequest request) {

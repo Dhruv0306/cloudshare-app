@@ -15,6 +15,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import com.cloudshare.exception.ResourceNotFoundException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ public class AuthService {
     private final JwtTokenProvider tokenProvider;
     private final RefreshTokenService refreshTokenService;
     private final AuditLogService auditLogService;
+    private final MfaService mfaService;
 
     @Value("${security.jwt.expiration-seconds:900}")
     private long jwtExpirationSeconds;
@@ -94,6 +96,15 @@ public class AuthService {
             UserPrincipal principal = (UserPrincipal) authentication.getPrincipal();
             UUID userId = principal.getId();
 
+            User userEntity = userRepository.findById(userId)
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+            if (userEntity.isMfaEnabled()) {
+                if (request.getMfaCode() == null || !mfaService.verifyCode(userEntity.getMfaSecret(), request.getMfaCode())) {
+                    throw new org.springframework.security.authentication.BadCredentialsException("Invalid credentials or invalid MFA code.");
+                }
+            }
+
             List<String> roles = principal.getAuthorities().stream()
                     .map(auth -> auth.getAuthority())
                     .collect(Collectors.toList());
@@ -113,7 +124,7 @@ public class AuthService {
                             .username(principal.getUsername())
                             .email(principal.getEmail())
                             .roles(roles)
-                            .mfaRequired(false) // TOTP check placeholder for Phase 4
+                            .mfaRequired(userEntity.isMfaEnabled())
                             .build())
                     .build();
 
@@ -200,6 +211,69 @@ public class AuthService {
 
         // Return clearing cookie (Max-Age=0)
         return createHttpOnlyCookie("", 0);
+    }
+
+    @Transactional
+    public MfaSetupResponse setupMfa(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (user.isMfaEnabled()) {
+            throw new IllegalArgumentException("MFA is already enabled for this user");
+        }
+
+        String secret = mfaService.generateSecret();
+        String qrCodeUri = mfaService.generateQrCodeUri(user.getUsername(), secret);
+
+        user.setMfaSecret(secret);
+        userRepository.save(user);
+
+        return MfaSetupResponse.builder()
+                .secret(secret)
+                .qrCodeDataUri(qrCodeUri)
+                .build();
+    }
+
+    @Transactional
+    public void verifyMfa(UUID userId, String code, String ipAddress) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (user.isMfaEnabled()) {
+            throw new IllegalArgumentException("MFA is already enabled");
+        }
+
+        if (user.getMfaSecret() == null) {
+            throw new IllegalArgumentException("MFA setup has not been initialized");
+        }
+
+        if (!mfaService.verifyCode(user.getMfaSecret(), code)) {
+            throw new IllegalArgumentException("Invalid MFA verification code");
+        }
+
+        user.setMfaEnabled(true);
+        userRepository.save(user);
+
+        auditLogService.log(userId, "MFA_ENABLED", null, ipAddress, "MFA enabled successfully");
+    }
+
+    public MfaStepUpResponse stepUpMfa(UUID userId, String code) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (!user.isMfaEnabled()) {
+            throw new IllegalArgumentException("MFA is not enabled for this user");
+        }
+
+        if (!mfaService.verifyCode(user.getMfaSecret(), code)) {
+            throw new org.springframework.security.authentication.BadCredentialsException("Invalid MFA code");
+        }
+
+        String stepUpToken = tokenProvider.generateStepUpToken(user.getId().toString(), user.getUsername());
+        return MfaStepUpResponse.builder()
+                .stepUpToken(stepUpToken)
+                .expiresInSeconds(300)
+                .build();
     }
 
     public ResponseCookie createHttpOnlyCookie(String token, long maxAgeSeconds) {
