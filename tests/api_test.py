@@ -132,7 +132,9 @@ def test_auth_flow(url_prefix):
     list_files_response = requests.get(f"{url_prefix}/api/v1/files", headers=logout_headers)
     assert list_files_response.status_code == 401, f"Expected 401, got {list_files_response.status_code}. Response: {list_files_response.text}"
     
-    # Verify refresh token is revoked (trying to refresh token again should return 400)
+    # Verify completely unknown/non-existent refresh token returns 400 Bad Request
+    # (Note: A legitimately rotated but reused token triggers reuse detection and returns 401.
+    # Here we send a completely invalid random UUID to check that non-existent tokens are rejected with a 400.)
     session.cookies.set("refresh_token", str(uuid.uuid4()), path="/api/v1/auth")
     stale_refresh_response = session.post(f"{url_prefix}/api/v1/auth/refresh")
     assert stale_refresh_response.status_code == 400, f"Expected 400, got {stale_refresh_response.status_code}. Response: {stale_refresh_response.text}"
