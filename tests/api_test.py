@@ -43,6 +43,34 @@ def generate_random_user():
         "password": "Password123!"
     }
 
+def generate_totp(secret_base32):
+    import base64
+    import hmac
+    import hashlib
+    import time
+    import struct
+
+    # Decode base32 secret. Pad with '=' if length is not a multiple of 8.
+    missing_padding = len(secret_base32) % 8
+    if missing_padding:
+        secret_base32 += '=' * (8 - missing_padding)
+    key = base64.b32decode(secret_base32, casefold=True)
+    
+    # Calculate time step index (30-second window)
+    counter = int(time.time() // 30)
+    
+    # Pack counter as an 8-byte big-endian integer
+    msg = struct.pack(">Q", counter)
+    
+    # Compute HMAC-SHA1
+    digest = hmac.new(key, msg, hashlib.sha1).digest()
+    
+    # Dynamic truncation to generate 6-digit code
+    offset = digest[-1] & 0x0F
+    code = (struct.unpack(">I", digest[offset:offset+4])[0] & 0x7FFFFFFF) % 1000000
+    
+    return f"{code:06d}"
+
 # ----------------------------------------------------
 # 1. Auth Flow Tests
 # ----------------------------------------------------
@@ -292,6 +320,80 @@ def test_auth_boundaries(url_prefix):
     assert admin_res.status_code == 403, f"Expected 403 for non-admin on admin endpoint, got {admin_res.status_code}. Response: {admin_res.text}"
 
 # ----------------------------------------------------
+# 5. Security Hardening Tests
+# ----------------------------------------------------
+def test_security_hardening(url_prefix):
+    user = generate_random_user()
+    
+    # Register user
+    reg_res = requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    assert reg_res.status_code == 201, f"Registration failed: {reg_res.text}"
+    
+    session = requests.Session()
+    login_res = session.post(f"{url_prefix}/api/v1/auth/login", json={
+        "usernameOrEmail": user["username"],
+        "password": user["password"]
+    }).json()
+    access_token = login_res["data"]["accessToken"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+    
+    # 5.1 Request MFA setup
+    setup_res = requests.post(f"{url_prefix}/api/v1/auth/mfa/setup", headers=headers)
+    assert setup_res.status_code == 200, f"MFA setup failed: {setup_res.text}"
+    
+    setup_data = setup_res.json()["data"]
+    secret = setup_data["secret"]
+    assert secret is not None
+    assert setup_data["qrCodeDataUri"].startswith("data:image/png;base64,")
+    
+    # 5.2 Verify/Enable MFA
+    mfa_code = generate_totp(secret)
+    verify_res = requests.post(f"{url_prefix}/api/v1/auth/mfa/verify", headers=headers, json={"code": mfa_code})
+    assert verify_res.status_code == 200, f"MFA verification failed: {verify_res.text}"
+    
+    # 5.3 Login again, should fail without MFA code
+    login_fail_res = requests.post(f"{url_prefix}/api/v1/auth/login", json={
+        "usernameOrEmail": user["username"],
+        "password": user["password"]
+    })
+    assert login_fail_res.status_code == 401, f"Expected 401 login failure without MFA, got {login_fail_res.status_code}"
+    
+    # 5.4 Login again with correct MFA code -> SUCCESS
+    mfa_code_2 = generate_totp(secret)
+    login_success_res = requests.post(f"{url_prefix}/api/v1/auth/login", json={
+        "usernameOrEmail": user["username"],
+        "password": user["password"],
+        "mfaCode": mfa_code_2
+    })
+    assert login_success_res.status_code == 200, f"Login with MFA failed: {login_success_res.text}"
+    
+    # 5.5 Step-Up Authentication Flow
+    step_up_code = generate_totp(secret)
+    step_up_res = requests.post(f"{url_prefix}/api/v1/auth/mfa/step-up", headers=headers, json={"code": step_up_code})
+    assert step_up_res.status_code == 200, f"MFA step-up failed: {step_up_res.text}"
+    
+    step_up_token = step_up_res.json()["data"]["stepUpToken"]
+    assert step_up_token is not None
+    
+    # 5.6 Admin role boundaries
+    # Note: Standard user lacks ROLE_ADMIN. The step-up token is only meaningful for admin users.
+    # A standard user attempting to access admin endpoints (e.g. GET /api/v1/admin/users)
+    # both with and without the step-up token must receive 403 Forbidden.
+    # This confirms the role boundary holds first and rejects the request.
+    
+    # Case A: Without step-up token
+    no_stepup_res = requests.get(f"{url_prefix}/api/v1/admin/users", headers=headers)
+    assert no_stepup_res.status_code == 403, f"Expected 403 for non-admin on admin endpoint without step-up token, got {no_stepup_res.status_code}. Response: {no_stepup_res.text}"
+    
+    # Case B: With step-up token
+    stepup_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "X-StepUp-Token": step_up_token
+    }
+    with_stepup_res = requests.get(f"{url_prefix}/api/v1/admin/users", headers=stepup_headers)
+    assert with_stepup_res.status_code == 403, f"Expected 403 for non-admin on admin endpoint with valid step-up token, got {with_stepup_res.status_code}. Response: {with_stepup_res.text}"
+
+# ----------------------------------------------------
 # Runner
 # ----------------------------------------------------
 if __name__ == "__main__":
@@ -302,6 +404,7 @@ if __name__ == "__main__":
     runner.run_case("File Operations", test_file_operations, BASE_URL)
     runner.run_case("Sharing & Collaboration", test_sharing_flow, BASE_URL)
     runner.run_case("Auth Boundaries", test_auth_boundaries, BASE_URL)
+    runner.run_case("Security Hardening Features", test_security_hardening, BASE_URL)
     
     success = runner.summary()
     if not success:
