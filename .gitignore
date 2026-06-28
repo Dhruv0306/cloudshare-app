@@ -34,7 +34,10 @@ Thumbs.db
 # ==========================================
 # Docker
 # ==========================================
-nginx/ssl/
+nginx/ssl/*.crt
+nginx/ssl/*.key
+nginx/ssl/*.pfx
+nginx/ssl/*.pfx.password
 
 # ==========================================
 # Integration Tests
