@@ -4,6 +4,8 @@ import com.cloudshare.security.CustomUserDetailsService;
 import com.cloudshare.security.JwtAuthenticationFilter;
 import com.cloudshare.security.RateLimitingFilter;
 import com.cloudshare.security.StepUpAuthenticationFilter;
+import com.cloudshare.security.MdcFilter;
+import com.cloudshare.security.AuthenticationMdcFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +30,8 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitingFilter rateLimitingFilter;
     private final StepUpAuthenticationFilter stepUpAuthenticationFilter;
+    private final MdcFilter mdcFilter;
+    private final AuthenticationMdcFilter authenticationMdcFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -54,7 +58,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/shares/link/**").permitAll()
-                .requestMatchers("/actuator/health").permitAll()
+                // /actuator/prometheus is permitted here but NOT routed by Nginx externally.
+                // Prometheus scrapes directly from the backend on port 8080 within the internal Docker/K8s network.
+                .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
@@ -69,6 +75,8 @@ public class SecurityConfig {
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter.class)
+            .addFilterBefore(mdcFilter, RateLimitingFilter.class)
+            .addFilterAfter(authenticationMdcFilter, JwtAuthenticationFilter.class)
             .addFilterAfter(stepUpAuthenticationFilter, JwtAuthenticationFilter.class);
 
         return http.build();

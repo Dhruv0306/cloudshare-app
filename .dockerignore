@@ -40,3 +40,8 @@ implementation_phase_plan.md
 LICENSE
 CONTRIBUTING.md
 tests/
+# Agent and temporary diff/patch files
+.agents/
+*.diff
+*.patch
+

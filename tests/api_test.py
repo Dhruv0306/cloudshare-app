@@ -395,6 +395,33 @@ def test_security_hardening(url_prefix):
     with_stepup_res = requests.get(f"{url_prefix}/api/v1/admin/users", headers=stepup_headers)
     assert with_stepup_res.status_code == 403, f"Expected 403 for non-admin on admin endpoint with valid step-up token, got {with_stepup_res.status_code}. Response: {with_stepup_res.text}"
 
+def test_observability(url_prefix):
+    # 1. Actuator health endpoint
+    health_res = requests.get(f"{url_prefix}/actuator/health")
+    assert health_res.status_code == 200, f"Expected 200 for health endpoint, got {health_res.status_code}"
+    health_data = health_res.json()
+    assert health_data.get("status") == "UP", f"Expected status to be UP, got {health_data.get('status')}"
+
+    # 2. Prometheus metrics endpoint (internal access)
+    prometheus_res = requests.get(f"{url_prefix}/actuator/prometheus")
+    assert prometheus_res.status_code == 200, f"Expected 200 for prometheus endpoint, got {prometheus_res.status_code}"
+    assert "# HELP" in prometheus_res.text, "Expected # HELP in prometheus metrics response"
+
+    # 3. X-Trace-Id echo-back
+    trace_id_value = "my-test-trace-123"
+    trace_headers = {"X-Trace-Id": trace_id_value}
+    echo_res = requests.get(f"{url_prefix}/actuator/health", headers=trace_headers)
+    assert echo_res.headers.get("X-Trace-Id") == trace_id_value, f"Expected echoed X-Trace-Id: {trace_id_value}, got {echo_res.headers.get('X-Trace-Id')}"
+
+    # 4. X-Trace-Id auto-generation
+    gen_res = requests.get(f"{url_prefix}/actuator/health")
+    gen_trace_id = gen_res.headers.get("X-Trace-Id")
+    assert gen_trace_id is not None and len(gen_trace_id) > 0, "Expected non-empty auto-generated X-Trace-Id header"
+    try:
+        uuid.UUID(gen_trace_id)
+    except ValueError:
+        assert False, f"Expected auto-generated trace ID to be a valid UUID, got {gen_trace_id}"
+
 # ----------------------------------------------------
 # Runner
 # ----------------------------------------------------
@@ -407,6 +434,7 @@ if __name__ == "__main__":
     runner.run_case("Sharing & Collaboration", test_sharing_flow, BASE_URL)
     runner.run_case("Auth Boundaries", test_auth_boundaries, BASE_URL)
     runner.run_case("Security Hardening Features", test_security_hardening, BASE_URL)
+    runner.run_case("Observability & Ops", test_observability, BASE_URL)
     
     success = runner.summary()
     if not success:
