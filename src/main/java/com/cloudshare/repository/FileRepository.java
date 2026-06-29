@@ -20,4 +20,6 @@ public interface FileRepository extends JpaRepository<FileMetadata, UUID> {
     @Query("SELECT f FROM FileMetadata f WHERE f.id = :fileId AND f.deleted = false AND " +
            "(f.ownerId = :userId OR EXISTS (SELECT fs FROM FileShare fs WHERE fs.file.id = :fileId AND fs.sharedWith.id = :userId))")
     Optional<FileMetadata> findAccessibleFile(@Param("fileId") UUID fileId, @Param("userId") UUID userId);
+
+    java.util.List<FileMetadata> findByDeletedTrueAndUpdatedAtBefore(java.time.Instant timestamp);
 }
