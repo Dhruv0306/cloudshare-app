@@ -45,3 +45,15 @@ tests/
 *.diff
 *.patch
 
+# Java / Maven artifacts
+*.class
+*.jar
+*.war
+*.ear
+*.log
+*.tmp
+
+# Local configurations
+application-local.yml
+application-local.properties
+changes.diff

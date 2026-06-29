@@ -423,6 +423,68 @@ def test_observability(url_prefix):
         assert False, f"Expected auto-generated trace ID to be a valid UUID, got {gen_trace_id}"
 
 # ----------------------------------------------------
+# 6. Soft Delete Cascade Tests
+# ----------------------------------------------------
+def test_soft_delete_cascade(url_prefix):
+    user_a = generate_random_user()
+    user_b = generate_random_user()
+
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user_a)
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user_b)
+
+    login_a = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": user_a["username"], "password": user_a["password"]}).json()
+    login_b = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": user_b["username"], "password": user_b["password"]}).json()
+
+    headers_a = {"Authorization": f"Bearer {login_a['data']['accessToken']}"}
+    headers_b = {"Authorization": f"Bearer {login_b['data']['accessToken']}"}
+
+    # 1. User A uploads file and creates a public share link
+    file_content = b"Cascade deletion test data"
+    upload_res = requests.post(
+        f"{url_prefix}/api/v1/files/upload", 
+        headers=headers_a, 
+        files={"file": ("cascade_file.txt", file_content, "text/plain")}
+    )
+    file_id = upload_res.json()["data"]["id"]
+
+    link_payload = {
+        "fileId": file_id,
+        "expiresInSeconds": 3600,
+        "password": "CascadePassword123"
+    }
+    link_res = requests.post(f"{url_prefix}/api/v1/shares/link", headers=headers_a, json=link_payload)
+    share_code = link_res.json()["data"]["shareCode"]
+
+    # Verify link access before deletion works (returns 200)
+    guest_headers = {"X-Share-Password": "CascadePassword123"}
+    guest_download = requests.get(f"{url_prefix}/api/v1/shares/link/{share_code}/download", headers=guest_headers)
+    assert guest_download.status_code == 200, f"Expected 200, got {guest_download.status_code}"
+
+    # 2. User A shares internally with User B
+    share_payload = {
+        "fileId": file_id,
+        "targetUsernameOrEmail": user_b["username"],
+        "permissionType": "READ"
+    }
+    requests.post(f"{url_prefix}/api/v1/shares/internal", headers=headers_a, json=share_payload)
+
+    # Verify User B access before deletion works (returns 200)
+    download_b = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers_b)
+    assert download_b.status_code == 200, f"Expected 200, got {download_b.status_code}"
+
+    # 3. User A soft-deletes the file
+    delete_res = requests.delete(f"{url_prefix}/api/v1/files/{file_id}", headers=headers_a)
+    assert delete_res.status_code == 204
+
+    # 4. Verify public link is cascade deleted (should return 404 since trigger deletes it)
+    guest_download_after = requests.get(f"{url_prefix}/api/v1/shares/link/{share_code}/download", headers=guest_headers)
+    assert guest_download_after.status_code == 404, f"Expected 404 (cascade deleted), got {guest_download_after.status_code}"
+
+    # 5. Verify internal share is cascade deleted (User B access returns 404)
+    download_b_after = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers_b)
+    assert download_b_after.status_code == 404, f"Expected 404 (cascade deleted), got {download_b_after.status_code}"
+
+# ----------------------------------------------------
 # Runner
 # ----------------------------------------------------
 if __name__ == "__main__":
@@ -435,6 +497,7 @@ if __name__ == "__main__":
     runner.run_case("Auth Boundaries", test_auth_boundaries, BASE_URL)
     runner.run_case("Security Hardening Features", test_security_hardening, BASE_URL)
     runner.run_case("Observability & Ops", test_observability, BASE_URL)
+    runner.run_case("Soft Delete Cascade Triggers", test_soft_delete_cascade, BASE_URL)
     
     success = runner.summary()
     if not success:
