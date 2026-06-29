@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -329,6 +330,33 @@ public class FileService {
         } catch (Exception auditEx) {
             log.error("Audit log failed for file deletion. Failing operation for compliance.", auditEx);
             throw new RuntimeException("A server-side compliance issue occurred: audit logging failed.", auditEx);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void purgeSoftDeletedFile(FileMetadata file) {
+        log.info("Permanently purging soft-deleted file: id={}, storagePath={}", file.getId(), file.getStoragePath());
+        try {
+            // Safe Deletion Order: physical delete first
+            storageService.delete(file.getStoragePath());
+            
+            // Database delete
+            fileRepository.delete(file);
+
+            // Audit logging
+            auditLogService.log(
+                    null, 
+                    "FILE_PURGE", 
+                    file.getId(), 
+                    "system", 
+                    "Permanently purged file: " + file.getOriginalFilename() + " (Owner: " + file.getOwnerId() + ")"
+            );
+        } catch (IOException e) {
+            log.error("Failed to delete physical file from storage for file id={}. DB record retained for retry.", file.getId(), e);
+            throw new RuntimeException("Storage deletion failed, database delete skipped.", e);
+        } catch (Exception e) {
+            log.error("Failed to purge database metadata for file id={}", file.getId(), e);
+            throw e;
         }
     }
 
