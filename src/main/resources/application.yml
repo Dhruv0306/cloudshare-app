@@ -72,6 +72,15 @@ storage:
 crypto:
   master-kek: ${CRYPTO_MASTER_KEK:your_crypto_master_kek_32_bytes}
 
+# Scheduler Configurations
+app:
+  scheduler:
+    file-purge:
+      cron: "${SCHEDULER_FILE_PURGE_CRON:0 0 2 * * ?}" # 2:00 AM UTC daily
+    link-cleanup:
+      cron: "${SCHEDULER_LINK_CLEANUP_CRON:0 0 3 * * ?}" # 3:00 AM UTC daily
+
+
 logging:
   level:
     org.springframework.security: INFO
