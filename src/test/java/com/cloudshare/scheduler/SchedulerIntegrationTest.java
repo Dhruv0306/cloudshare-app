@@ -234,4 +234,26 @@ class SchedulerIntegrationTest {
         assertNull(auditLogs.get(0).getFileId());
         assertTrue(auditLogs.get(0).getDetails().contains("Bulk purged 1 expired share links"));
     }
+
+    @Test
+    void testH2SkipLockedCompatibility() {
+        FileMetadata file = FileMetadata.builder()
+                .ownerId(testUser.getId())
+                .storagePath("h2-test-lock-path")
+                .originalFilename("test-lock.txt")
+                .fileSizeBytes(100L)
+                .mimeType("text/plain")
+                .checksumSha256("sha256")
+                .encryptedFek("fek")
+                .ivGcm("iv")
+                .kekVersion(1)
+                .deleted(false)
+                .build();
+        file = fileRepository.save(file);
+
+        List<FileMetadata> batch = fileRepository.findBatchForReKey(1, java.util.Collections.singletonList(java.util.UUID.randomUUID()), 10);
+        assertNotNull(batch);
+        assertEquals(1, batch.size());
+        assertEquals(file.getId(), batch.get(0).getId());
+    }
 }

@@ -1,8 +1,8 @@
 package com.cloudshare.service;
 
+import com.cloudshare.config.CryptoProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import javax.crypto.SecretKey;
 import java.io.ByteArrayInputStream;
@@ -19,8 +19,9 @@ class EncryptionServiceTest {
 
     @BeforeEach
     void setUp() {
-        encryptionService = new EncryptionService();
-        ReflectionTestUtils.setField(encryptionService, "masterKekStr", TEST_KEK);
+        CryptoProperties cryptoProperties = new CryptoProperties();
+        cryptoProperties.setMasterKek(TEST_KEK);
+        encryptionService = new EncryptionService(cryptoProperties);
     }
 
     @Test
@@ -31,13 +32,13 @@ class EncryptionServiceTest {
         assertEquals("AES", originalFek.getAlgorithm());
         assertEquals(32, originalFek.getEncoded().length); // 256 bits
 
-        // Wrap the FEK using Master KEK
-        String wrappedFek = encryptionService.wrapFek(originalFek);
+        // Wrap the FEK using Master KEK v1
+        String wrappedFek = encryptionService.wrapFek(originalFek, 1);
         assertNotNull(wrappedFek);
         assertNotEquals(Base64.getEncoder().encodeToString(originalFek.getEncoded()), wrappedFek);
 
-        // Unwrap the FEK
-        SecretKey unwrappedFek = encryptionService.unwrapFek(wrappedFek);
+        // Unwrap the FEK using Master KEK v1
+        SecretKey unwrappedFek = encryptionService.unwrapFek(wrappedFek, 1);
         assertNotNull(unwrappedFek);
         assertArrayEquals(originalFek.getEncoded(), unwrappedFek.getEncoded());
     }

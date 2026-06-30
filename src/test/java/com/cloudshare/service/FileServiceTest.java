@@ -93,7 +93,8 @@ class FileServiceTest {
         byte[] mockIv = new byte[12];
         when(encryptionService.generateFek()).thenReturn(mockFek);
         when(encryptionService.generateIv()).thenReturn(mockIv);
-        when(encryptionService.wrapFek(mockFek)).thenReturn("wrapped_fek_base64");
+        when(encryptionService.getCurrentKekVersion()).thenReturn(1);
+        when(encryptionService.wrapFek(mockFek, 1)).thenReturn("wrapped_fek_base64");
 
         // Stub repository save
         FileMetadata savedMetadata = FileMetadata.builder()
@@ -190,7 +191,7 @@ class FileServiceTest {
 
         // Stub decryption keys
         SecretKey mockFek = new SecretKeySpec(new byte[32], "AES");
-        when(encryptionService.unwrapFek("wrapped_fek")).thenReturn(mockFek);
+        when(encryptionService.unwrapFek("wrapped_fek", 1)).thenReturn(mockFek);
         
         ByteArrayInputStream mockEncryptedStream = new ByteArrayInputStream("Encrypted Data".getBytes(StandardCharsets.UTF_8));
         when(storageService.retrieve("storage_uuid")).thenReturn(mockEncryptedStream);
