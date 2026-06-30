@@ -22,4 +22,11 @@ public interface FileRepository extends JpaRepository<FileMetadata, UUID> {
     Optional<FileMetadata> findAccessibleFile(@Param("fileId") UUID fileId, @Param("userId") UUID userId);
 
     java.util.List<FileMetadata> findByDeletedTrueAndUpdatedAtBefore(java.time.Instant timestamp);
+
+    @Query(value = "SELECT * FROM files WHERE kek_version = :oldVersion AND deleted = false AND id NOT IN (:failedIds) LIMIT :limit FOR UPDATE SKIP LOCKED", nativeQuery = true)
+    java.util.List<FileMetadata> findBatchForReKey(
+            @Param("oldVersion") int oldVersion,
+            @Param("failedIds") java.util.Collection<java.util.UUID> failedIds,
+            @Param("limit") int limit
+    );
 }
