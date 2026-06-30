@@ -132,7 +132,8 @@ public class FileService {
             }
 
             // 6. Wrap FEK with KEK
-            String encryptedFek = encryptionService.wrapFek(fek);
+            int currentKekVersion = encryptionService.getCurrentKekVersion();
+            String encryptedFek = encryptionService.wrapFek(fek, currentKekVersion);
             String ivBase64 = Base64.getEncoder().encodeToString(iv);
 
             // 7. Persist metadata
@@ -145,7 +146,7 @@ public class FileService {
                     .checksumSha256(checksumSha256)
                     .encryptedFek(encryptedFek)
                     .ivGcm(ivBase64)
-                    .kekVersion(1)
+                    .kekVersion(currentKekVersion)
                     .deleted(false)
                     .build();
 
@@ -188,7 +189,7 @@ public class FileService {
         Path decryptedTempFile = null;
         try {
             // Unwrap FEK with KEK using AESWrap
-            SecretKey fek = encryptionService.unwrapFek(metadata.getEncryptedFek());
+            SecretKey fek = encryptionService.unwrapFek(metadata.getEncryptedFek(), metadata.getKekVersion());
             byte[] iv = Base64.getDecoder().decode(metadata.getIvGcm());
 
             // Decrypt fully to temporary file (validates GCM tag before streaming)

@@ -179,7 +179,7 @@ class ShareServiceTest {
         when(passwordEncoder.matches("my_pass", "hashed_pass")).thenReturn(true);
 
         SecretKey mockFek = new SecretKeySpec(new byte[32], "AES");
-        when(encryptionService.unwrapFek("fek_wrapped")).thenReturn(mockFek);
+        when(encryptionService.unwrapFek("fek_wrapped", 1)).thenReturn(mockFek);
         when(storageService.retrieve("store/123")).thenReturn(new ByteArrayInputStream("encrypted_data".getBytes()));
 
         FileService.DecryptedFileStream stream = shareService.downloadPublicLink(shareCode, "my_pass", ipAddress);
