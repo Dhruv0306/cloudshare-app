@@ -218,7 +218,7 @@ public class ShareService {
         // 6. Decrypt and stream file
         Path decryptedTempFile = null;
         try {
-            SecretKey fek = encryptionService.unwrapFek(file.getEncryptedFek());
+            SecretKey fek = encryptionService.unwrapFek(file.getEncryptedFek(), file.getKekVersion());
             byte[] iv = Base64.getDecoder().decode(file.getIvGcm());
 
             decryptedTempFile = Files.createTempFile("pub-download-", ".tmp");
