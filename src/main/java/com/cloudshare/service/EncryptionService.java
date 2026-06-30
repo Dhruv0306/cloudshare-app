@@ -1,7 +1,8 @@
 package com.cloudshare.service;
 
+import com.cloudshare.config.CryptoProperties;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
@@ -18,36 +19,54 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class EncryptionService {
 
-    @Value("${crypto.master-kek}")
-    private String masterKekStr;
-
+    private final CryptoProperties cryptoProperties;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final Map<Integer, SecretKey> resolvedKeks = new ConcurrentHashMap<>();
 
-    private SecretKey getMasterKek() {
-        byte[] keyBytes;
-        try {
-            // Attempt to decode KEK as Base64 first
-            keyBytes = Base64.getDecoder().decode(masterKekStr.trim());
-        } catch (IllegalArgumentException e) {
-            // Fallback to raw UTF-8 bytes if not valid Base64
-            keyBytes = masterKekStr.getBytes(StandardCharsets.UTF_8);
-        }
-
-        // If the key is not exactly 256 bits (32 bytes), digest it to enforce correctness
-        if (keyBytes.length != 32) {
-            try {
-                MessageDigest digest = MessageDigest.getInstance("SHA-256");
-                keyBytes = digest.digest(keyBytes);
-            } catch (NoSuchAlgorithmException ex) {
-                throw new IllegalStateException("SHA-256 digest algorithm is unavailable", ex);
+    private SecretKey getMasterKek(int version) {
+        return resolvedKeks.computeIfAbsent(version, v -> {
+            String kekStr = cryptoProperties.getKeks().get(v);
+            if (kekStr == null) {
+                if (v == 1) {
+                    kekStr = cryptoProperties.getMasterKek();
+                }
+                if (kekStr == null) {
+                    throw new IllegalArgumentException("No KEK configured for version: " + v);
+                }
             }
-        }
-        return new SecretKeySpec(keyBytes, "AES");
+
+            byte[] keyBytes;
+            try {
+                // Attempt to decode KEK as Base64 first
+                keyBytes = Base64.getDecoder().decode(kekStr.trim());
+            } catch (IllegalArgumentException e) {
+                // Fallback to raw UTF-8 bytes if not valid Base64
+                keyBytes = kekStr.getBytes(StandardCharsets.UTF_8);
+            }
+
+            // If the key is not exactly 256 bits (32 bytes), digest it to enforce correctness
+            if (keyBytes.length != 32) {
+                try {
+                    MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                    keyBytes = digest.digest(keyBytes);
+                } catch (NoSuchAlgorithmException ex) {
+                    throw new IllegalStateException("SHA-256 digest algorithm is unavailable", ex);
+                }
+            }
+            return new SecretKeySpec(keyBytes, "AES");
+        });
+    }
+
+    public int getCurrentKekVersion() {
+        return cryptoProperties.getCurrentKekVersion();
     }
 
     public SecretKey generateFek() {
@@ -66,16 +85,16 @@ public class EncryptionService {
         return iv;
     }
 
-    public String wrapFek(SecretKey fek) throws GeneralSecurityException {
-        SecretKey masterKek = getMasterKek();
+    public String wrapFek(SecretKey fek, int kekVersion) throws GeneralSecurityException {
+        SecretKey masterKek = getMasterKek(kekVersion);
         Cipher cipher = Cipher.getInstance("AESWrap");
         cipher.init(Cipher.WRAP_MODE, masterKek);
         byte[] wrappedBytes = cipher.wrap(fek);
         return Base64.getEncoder().encodeToString(wrappedBytes);
     }
 
-    public SecretKey unwrapFek(String wrappedFekBase64) throws GeneralSecurityException {
-        SecretKey masterKek = getMasterKek();
+    public SecretKey unwrapFek(String wrappedFekBase64, int kekVersion) throws GeneralSecurityException {
+        SecretKey masterKek = getMasterKek(kekVersion);
         byte[] wrappedBytes = Base64.getDecoder().decode(wrappedFekBase64);
         Cipher cipher = Cipher.getInstance("AESWrap");
         cipher.init(Cipher.UNWRAP_MODE, masterKek);
