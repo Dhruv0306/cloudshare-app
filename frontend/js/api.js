@@ -53,7 +53,11 @@ class ApiClient {
 
         const filenameStarMatch = contentDispositionHeader.match(/filename\*=UTF-8''([^;]+)/i);
         if (filenameStarMatch && filenameStarMatch[1]) {
-            filename = decodeURIComponent(filenameStarMatch[1]);
+            try {
+                filename = decodeURIComponent(filenameStarMatch[1]);
+            } catch (e) {
+                filename = filenameStarMatch[1]; // Fallback to raw value if malformed
+            }
         } else {
             const filenameMatch = contentDispositionHeader.match(/filename="?([^";]+)"?/i);
             if (filenameMatch && filenameMatch[1]) {
@@ -84,8 +88,8 @@ class ApiClient {
     async request(url, options = {}) {
         options.headers = options.headers || {};
 
-        // Inject standard JSON request content type
-        if (!(options.body instanceof FormData) && !options.headers['Content-Type']) {
+        // Inject standard JSON request content type if body is present
+        if (options.body && !(options.body instanceof FormData) && !options.headers['Content-Type']) {
             options.headers['Content-Type'] = 'application/json';
         }
 
@@ -122,9 +126,14 @@ class ApiClient {
 
                 // Attempt to refresh the token
                 return new Promise((resolve, reject) => {
-                    this.enqueueRequest(() => {
-                        this.request(url, options).then(resolve).catch(reject);
-                    });
+                    this.enqueueRequest(
+                        () => {
+                            this.request(url, options).then(resolve).catch(reject);
+                        },
+                        (err) => {
+                            reject(err);
+                        }
+                    );
 
                     if (!this.isRefreshing) {
                         this.isRefreshing = true;
@@ -185,16 +194,17 @@ class ApiClient {
     /**
      * Queue requests while silent refresh is in progress
      */
-    enqueueRequest(callback) {
-        this.refreshQueue.push(callback);
+    enqueueRequest(resolveCb, rejectCb) {
+        this.refreshQueue.push({ resolve: resolveCb, reject: rejectCb });
     }
 
     resolveQueue() {
-        this.refreshQueue.forEach(callback => callback());
+        this.refreshQueue.forEach(item => item.resolve());
         this.refreshQueue = [];
     }
 
     rejectQueue(error) {
+        this.refreshQueue.forEach(item => item.reject(error));
         this.refreshQueue = []; // Clear queue on absolute failure
     }
 

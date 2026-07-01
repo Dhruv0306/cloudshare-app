@@ -508,6 +508,7 @@ function renderFilesTable() {
         btnDownload.className = 'action-btn action-btn-download';
         btnDownload.textContent = '📥';
         btnDownload.title = 'Secure Download';
+        btnDownload.setAttribute('aria-label', 'Secure Download');
         btnDownload.addEventListener('click', () => handleFileDownload(file.id, file.name));
 
         // Share Action
@@ -515,6 +516,7 @@ function renderFilesTable() {
         btnShare.className = 'action-btn action-btn-share';
         btnShare.textContent = '🔗';
         btnShare.title = 'Share File';
+        btnShare.setAttribute('aria-label', 'Share File');
         btnShare.addEventListener('click', () => openShareModal(file.id, file.name));
 
         // Delete Action
@@ -522,6 +524,7 @@ function renderFilesTable() {
         btnDelete.className = 'action-btn action-btn-delete';
         btnDelete.textContent = '🗑️';
         btnDelete.title = 'Delete File';
+        btnDelete.setAttribute('aria-label', 'Delete File');
         btnDelete.addEventListener('click', () => handleFileDelete(file.id, file.name));
 
         actionsDiv.appendChild(btnDownload);
@@ -719,13 +722,13 @@ async function handlePublicLinkSubmit(e) {
     }
 }
 
-function copyPublicLinkToClipboard() {
+async function copyPublicLinkToClipboard() {
     const input = document.getElementById('public-link-url-display');
     input.select();
     input.setSelectionRange(0, 99999); // Mobile compatibility
 
     try {
-        navigator.clipboard.writeText(input.value);
+        await navigator.clipboard.writeText(input.value);
         showToast('Link copied to clipboard.', 'success');
     } catch (e) {
         showToast('Failed to copy. Please manually select the URL.', 'warning');
@@ -804,7 +807,7 @@ async function loadMfaSettings() {
         document.getElementById('mfa-secret-text').textContent = res.data.secret;
     } catch (err) {
         // If it failed because MFA is already enabled, display active state
-        if (err.message && err.message.includes('already enabled')) {
+        if (err.status === 400 || (err.message && err.message.includes('already enabled'))) {
             state.user.mfaRequired = true;
             banner.className = 'mfa-status-banner enabled';
             banner.textContent = '🔒 TOTP Multi-Factor Authentication is currently Active';
