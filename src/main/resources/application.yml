@@ -46,6 +46,7 @@ security:
     expiration-seconds: ${JWT_EXPIRATION:900}
     refresh-expiration-seconds: ${JWT_REFRESH_EXPIRATION:604800}
   rate-limiting:
+    enabled: ${RATE_LIMIT_ENABLED:true}
     auth-limit: ${RATE_LIMIT_AUTH:5}
     upload-limit: ${RATE_LIMIT_UPLOAD:10}
     link-limit: ${RATE_LIMIT_LINK:30}
