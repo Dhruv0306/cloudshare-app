@@ -43,6 +43,7 @@ services:
       - RATE_LIMIT_UPLOAD=${RATE_LIMIT_UPLOAD:-10}
       - RATE_LIMIT_LINK=${RATE_LIMIT_LINK:-30}
       - RATE_LIMIT_GENERAL=${RATE_LIMIT_GENERAL:-100}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
     depends_on:
       - db
       - cache-aside
