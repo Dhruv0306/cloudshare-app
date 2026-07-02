@@ -43,3 +43,8 @@ nginx/ssl/*.pfx.password
 # Integration Tests
 # ==========================================
 tests/.env.ci
+
+# ==========================================
+# Performance Tests
+# ==========================================
+src/test/resources/data/
