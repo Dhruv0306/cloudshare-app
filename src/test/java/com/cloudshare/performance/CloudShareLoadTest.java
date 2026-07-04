@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
@@ -114,7 +115,7 @@ public class CloudShareLoadTest extends Simulation {
 
     {
         setUp(
-            scn.injectOpen(atOnceUsers(100))
+            scn.injectOpen(rampUsers(100).during(Duration.ofSeconds(30)))
         ).protocols(httpProtocol)
          .assertions(
              global().failedRequests().percent().lt(0.1),
