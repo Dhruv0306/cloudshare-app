@@ -67,6 +67,7 @@ public class CloudShareLoadTest extends Simulation {
     };
 
     private final String baseUrl = System.getProperty("gatling.baseUrl", "https://localhost");
+    @SuppressWarnings("unused")
     private final boolean insecure = Boolean.parseBoolean(System.getProperty("gatling.insecure", "false"));
 
     private final HttpProtocolBuilder httpProtocol = http
