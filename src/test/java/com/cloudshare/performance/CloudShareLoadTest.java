@@ -22,6 +22,9 @@ public class CloudShareLoadTest extends Simulation {
 
     static {
         generateRandomFile();
+        if (Boolean.parseBoolean(System.getProperty("gatling.insecure", "false"))) {
+            System.setProperty("gatling.ssl.useInsecureTrustManager", "true");
+        }
     }
 
     private static void generateRandomFile() {
@@ -64,6 +67,7 @@ public class CloudShareLoadTest extends Simulation {
     };
 
     private final String baseUrl = System.getProperty("gatling.baseUrl", "https://localhost");
+    private final boolean insecure = Boolean.parseBoolean(System.getProperty("gatling.insecure", "false"));
 
     private final HttpProtocolBuilder httpProtocol = http
         .baseUrl(baseUrl)
