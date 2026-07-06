@@ -23,6 +23,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     private final RateLimiterService rateLimiterService;
     private final JwtTokenProvider tokenProvider;
 
+    @Value("${security.rate-limiting.enabled:true}")
+    private boolean rateLimitingEnabled = true;
+
     @Value("${security.rate-limiting.auth-limit:5}")
     private int authLimit;
 
@@ -39,6 +42,11 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+
+        if (!rateLimitingEnabled) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String path = request.getRequestURI();
         String method = request.getMethod();
