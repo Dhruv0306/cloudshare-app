@@ -25,9 +25,11 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -151,5 +153,33 @@ class ShareControllerTest {
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"doc.txt\""))
                 .andExpect(content().contentType(MediaType.TEXT_PLAIN))
                 .andExpect(content().bytes("plaintext".getBytes()));
+    }
+
+    @Test
+    void revokeInternalShare_success() throws Exception {
+        UUID shareId = UUID.randomUUID();
+        UserPrincipal principal = getMockPrincipal();
+
+        mockMvc.perform(delete("/api/v1/shares/internal/" + shareId)
+                        .with(csrf())
+                        .with(user(principal)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(shareService).revokeInternalShare(eq(shareId), eq(principal.getId()), any());
+    }
+
+    @Test
+    void revokePublicLink_success() throws Exception {
+        String shareCode = "XYZ12345";
+        UserPrincipal principal = getMockPrincipal();
+
+        mockMvc.perform(delete("/api/v1/shares/link/" + shareCode)
+                        .with(csrf())
+                        .with(user(principal)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(shareService).revokePublicLink(eq(shareCode), eq(principal.getId()), any());
     }
 }
