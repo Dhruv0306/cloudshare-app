@@ -104,7 +104,7 @@ mvn spring-boot:run
 Alternatively, build the executable JAR and run it:
 ```bash
 mvn clean package -DskipTests
-java -jar target/cloudshare-1.0.0-SNAPSHOT.jar
+java -jar target/cloudshare-1.0.0.jar
 ```
 
 Now, navigate to **`https://localhost`** in your browser to access the application.
@@ -142,7 +142,7 @@ When migrating to a new Key Encrypting Key (KEK) version, you run the applicatio
 
 To trigger a re-keying job (e.g., migrating from version 1 to version 2):
 ```bash
-java -jar target/cloudshare-1.0.0-SNAPSHOT.jar \
+java -jar target/cloudshare-1.0.0.jar \
   --spring.profiles.active=rekey-job \
   --rekey.oldVersion=1 \
   --rekey.newVersion=2
