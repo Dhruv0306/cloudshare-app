@@ -235,4 +235,149 @@ class ShareServiceTest {
 
         assertThrows(InvalidSharePasswordException.class, () -> shareService.downloadPublicLink(shareCode, "wrong_pass", "127.0.0.1"));
     }
+
+    @Test
+    void revokeInternalShare_successByOwner() {
+        UUID ownerId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        UUID shareId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        FileMetadata file = FileMetadata.builder().id(fileId).ownerId(ownerId).originalFilename("report.pdf").deleted(false).build();
+        User targetUser = User.builder().id(targetId).username("janedoe").email("janedoe@example.com").build();
+        User ownerUser = User.builder().id(ownerId).username("john").email("john@example.com").build();
+
+        FileShare fileShare = FileShare.builder()
+                .id(shareId)
+                .file(file)
+                .sharedBy(ownerUser)
+                .sharedWith(targetUser)
+                .permissionType(PermissionType.READ)
+                .build();
+
+        when(fileShareRepository.findById(shareId)).thenReturn(Optional.of(fileShare));
+
+        shareService.revokeInternalShare(shareId, ownerId, ipAddress);
+
+        verify(fileShareRepository).delete(fileShare);
+        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        verify(auditLogService).log(eq(ownerId), eq("SHARE_REVOKED"), eq(fileId), eq(ipAddress), any(String.class));
+    }
+
+    @Test
+    void revokeInternalShare_successBySharedBy() {
+        UUID ownerId = UUID.randomUUID();
+        UUID sharedById = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        UUID shareId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        FileMetadata file = FileMetadata.builder().id(fileId).ownerId(ownerId).originalFilename("report.pdf").deleted(false).build();
+        User targetUser = User.builder().id(targetId).username("janedoe").email("janedoe@example.com").build();
+        User sharingUser = User.builder().id(sharedById).username("john").email("john@example.com").build();
+
+        FileShare fileShare = FileShare.builder()
+                .id(shareId)
+                .file(file)
+                .sharedBy(sharingUser)
+                .sharedWith(targetUser)
+                .permissionType(PermissionType.READ)
+                .build();
+
+        when(fileShareRepository.findById(shareId)).thenReturn(Optional.of(fileShare));
+
+        shareService.revokeInternalShare(shareId, sharedById, ipAddress);
+
+        verify(fileShareRepository).delete(fileShare);
+        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        verify(auditLogService).log(eq(sharedById), eq("SHARE_REVOKED"), eq(fileId), eq(ipAddress), any(String.class));
+    }
+
+    @Test
+    void revokeInternalShare_nonOwner_throwsException() {
+        UUID ownerId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        UUID shareId = UUID.randomUUID();
+        UUID randomUserId = UUID.randomUUID();
+
+        FileMetadata file = FileMetadata.builder().id(fileId).ownerId(ownerId).originalFilename("report.pdf").deleted(false).build();
+        User targetUser = User.builder().id(targetId).username("janedoe").build();
+        User ownerUser = User.builder().id(ownerId).username("john").build();
+
+        FileShare fileShare = FileShare.builder()
+                .id(shareId)
+                .file(file)
+                .sharedBy(ownerUser)
+                .sharedWith(targetUser)
+                .build();
+
+        when(fileShareRepository.findById(shareId)).thenReturn(Optional.of(fileShare));
+
+        assertThrows(com.cloudshare.exception.ResourceNotFoundException.class, 
+                () -> shareService.revokeInternalShare(shareId, randomUserId, "127.0.0.1"));
+
+        verify(fileShareRepository, never()).delete(any());
+        verify(cacheRedisTemplate, never()).delete(anyString());
+        verify(auditLogService, never()).log(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void revokeInternalShare_notExist_throwsException() {
+        UUID shareId = UUID.randomUUID();
+        UUID callerId = UUID.randomUUID();
+        when(fileShareRepository.findById(shareId)).thenReturn(Optional.empty());
+
+        assertThrows(com.cloudshare.exception.ResourceNotFoundException.class, 
+                () -> shareService.revokeInternalShare(shareId, callerId, "127.0.0.1"));
+    }
+
+    @Test
+    void revokePublicLink_success() {
+        UUID ownerId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        String shareCode = "XYZ12345";
+        String ipAddress = "192.168.1.10";
+
+        FileMetadata file = FileMetadata.builder().id(fileId).ownerId(ownerId).originalFilename("doc.pdf").deleted(false).build();
+        ShareLink shareLink = ShareLink.builder().file(file).shareCode(shareCode).build();
+
+        when(shareLinkRepository.findByShareCode(shareCode)).thenReturn(Optional.of(shareLink));
+
+        shareService.revokePublicLink(shareCode, ownerId, ipAddress);
+
+        verify(shareLinkRepository).delete(shareLink);
+        verify(auditLogService).log(eq(ownerId), eq("SHARE_LINK_REVOKED"), eq(fileId), eq(ipAddress), any(String.class));
+    }
+
+    @Test
+    void revokePublicLink_nonOwner_throwsException() {
+        UUID ownerId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        UUID randomUserId = UUID.randomUUID();
+        String shareCode = "XYZ12345";
+
+        FileMetadata file = FileMetadata.builder().id(fileId).ownerId(ownerId).originalFilename("doc.pdf").deleted(false).build();
+        ShareLink shareLink = ShareLink.builder().file(file).shareCode(shareCode).build();
+
+        when(shareLinkRepository.findByShareCode(shareCode)).thenReturn(Optional.of(shareLink));
+
+        assertThrows(com.cloudshare.exception.ResourceNotFoundException.class, 
+                () -> shareService.revokePublicLink(shareCode, randomUserId, "127.0.0.1"));
+
+        verify(shareLinkRepository, never()).delete(any());
+        verify(auditLogService, never()).log(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void revokePublicLink_notExist_throwsException() {
+        String shareCode = "XYZ12345";
+        UUID callerId = UUID.randomUUID();
+        when(shareLinkRepository.findByShareCode(shareCode)).thenReturn(Optional.empty());
+
+        assertThrows(com.cloudshare.exception.ResourceNotFoundException.class, 
+                () -> shareService.revokePublicLink(shareCode, callerId, "127.0.0.1"));
+    }
 }

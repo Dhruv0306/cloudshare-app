@@ -261,6 +261,57 @@ public class ShareService {
         }
     }
 
+    @Transactional
+    public void revokeInternalShare(UUID shareId, UUID callerId, String ipAddress) {
+        log.info("Processing internal share revocation request: shareId={}, callerId={}", shareId, callerId);
+
+        FileShare fileShare = fileShareRepository.findById(shareId)
+                .orElseThrow(() -> new ResourceNotFoundException("Share not found or access denied"));
+
+        FileMetadata file = fileShare.getFile();
+        if (!callerId.equals(file.getOwnerId()) && !callerId.equals(fileShare.getSharedBy().getId())) {
+            throw new ResourceNotFoundException("Share not found or access denied");
+        }
+
+        fileShareRepository.delete(fileShare);
+
+        // Evict permissions cache key in Redis
+        evictPermissionsCache(file.getId());
+
+        // Audit logging (fail-secure)
+        try {
+            auditLogService.log(callerId, "SHARE_REVOKED", file.getId(), ipAddress,
+                    "Revoked internal share for file " + file.getOriginalFilename() + " with user " + fileShare.getSharedWith().getUsername());
+        } catch (Exception e) {
+            log.error("Audit log failed for internal share revocation. Failing transaction.", e);
+            throw new RuntimeException("Audit logging failed, transaction rolled back for security compliance", e);
+        }
+    }
+
+    @Transactional
+    public void revokePublicLink(String shareCode, UUID callerId, String ipAddress) {
+        log.info("Processing public link revocation request: shareCode={}, callerId={}", shareCode, callerId);
+
+        ShareLink shareLink = shareLinkRepository.findByShareCode(shareCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Link not found or access denied"));
+
+        FileMetadata file = shareLink.getFile();
+        if (!callerId.equals(file.getOwnerId())) {
+            throw new ResourceNotFoundException("Link not found or access denied");
+        }
+
+        shareLinkRepository.delete(shareLink);
+
+        // Audit logging (fail-secure)
+        try {
+            auditLogService.log(callerId, "SHARE_LINK_REVOKED", file.getId(), ipAddress,
+                    "Revoked public share link with code " + shareCode + " for file " + file.getOriginalFilename());
+        } catch (Exception e) {
+            log.error("Audit log failed for public link revocation. Failing transaction.", e);
+            throw new RuntimeException("Audit logging failed, transaction rolled back for security compliance", e);
+        }
+    }
+
     private String generateUniqueShareCode() {
         for (int attempt = 0; attempt < 10; attempt++) {
             StringBuilder sb = new StringBuilder(8);

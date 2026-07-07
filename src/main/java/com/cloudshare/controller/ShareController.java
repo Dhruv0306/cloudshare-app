@@ -4,6 +4,7 @@ import com.cloudshare.dto.*;
 import com.cloudshare.security.UserPrincipal;
 import com.cloudshare.service.FileService;
 import com.cloudshare.service.ShareService;
+import java.util.UUID;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -67,6 +68,26 @@ public class ShareController {
                 .contentType(MediaType.parseMediaType(contentType))
                 .contentLength(fileStream.getSize())
                 .body(new InputStreamResource(fileStream.getInputStream()));
+    }
+
+    @DeleteMapping("/internal/{shareId}")
+    public ResponseEntity<ApiResponse<Void>> revokeInternalShare(
+            @PathVariable("shareId") UUID shareId,
+            @AuthenticationPrincipal UserPrincipal principal,
+            HttpServletRequest servletRequest) {
+        
+        shareService.revokeInternalShare(shareId, principal.getId(), getClientIp(servletRequest));
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @DeleteMapping("/link/{shareCode}")
+    public ResponseEntity<ApiResponse<Void>> revokePublicLink(
+            @PathVariable("shareCode") String shareCode,
+            @AuthenticationPrincipal UserPrincipal principal,
+            HttpServletRequest servletRequest) {
+        
+        shareService.revokePublicLink(shareCode, principal.getId(), getClientIp(servletRequest));
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     private String getClientIp(HttpServletRequest request) {
