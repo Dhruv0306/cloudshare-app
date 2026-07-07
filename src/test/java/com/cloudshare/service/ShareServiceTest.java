@@ -321,6 +321,7 @@ class ShareServiceTest {
 
         verify(fileShareRepository, never()).delete(any());
         verify(cacheRedisTemplate, never()).delete(anyString());
+        verify(auditLogService, never()).log(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -367,6 +368,7 @@ class ShareServiceTest {
                 () -> shareService.revokePublicLink(shareCode, randomUserId, "127.0.0.1"));
 
         verify(shareLinkRepository, never()).delete(any());
+        verify(auditLogService, never()).log(any(), any(), any(), any(), any());
     }
 
     @Test
