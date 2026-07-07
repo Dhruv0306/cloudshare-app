@@ -302,6 +302,44 @@ def test_sharing_flow(url_prefix):
     download_2 = requests.get(f"{url_prefix}/api/v1/shares/link/{limit_share_code}/download")
     assert download_2.status_code == 403, f"Expected 403 (limit reached), got {download_2.status_code}. Response: {download_2.text}"
 
+    # 3.3 Revocation of internal share
+    share_id = share_res.json()["data"]["shareId"]
+
+    # Revoke by non-owner / non-sharing user (User C) -> 404 (BOLA)
+    non_owner_revoke_res = requests.delete(f"{url_prefix}/api/v1/shares/internal/{share_id}", headers=headers_c)
+    assert non_owner_revoke_res.status_code == 404, f"Expected 404 for unauthorized revocation, got {non_owner_revoke_res.status_code}"
+
+    # Revoke non-existent shareId -> 404
+    non_existent_share_uuid = str(uuid.uuid4())
+    fake_revoke_res = requests.delete(f"{url_prefix}/api/v1/shares/internal/{non_existent_share_uuid}", headers=headers_a)
+    assert fake_revoke_res.status_code == 404, f"Expected 404 for non-existent shareId, got {fake_revoke_res.status_code}"
+
+    # Revoke successfully by owner (User A) -> 200
+    owner_revoke_res = requests.delete(f"{url_prefix}/api/v1/shares/internal/{share_id}", headers=headers_a)
+    assert owner_revoke_res.status_code == 200, f"Expected 200 for successful revocation, got {owner_revoke_res.status_code}. Response: {owner_revoke_res.text}"
+
+    # User B download after revocation -> 404 Access Denied
+    download_b_after = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers_b)
+    assert download_b_after.status_code == 404, f"Expected 404 after revocation, got {download_b_after.status_code}"
+
+    # 3.4 Revocation of public sharing link
+
+    # Revoke by non-owner (User B) -> 404 (BOLA)
+    non_owner_link_revoke_res = requests.delete(f"{url_prefix}/api/v1/shares/link/{share_code}", headers=headers_b)
+    assert non_owner_link_revoke_res.status_code == 404, f"Expected 404 for unauthorized link revocation, got {non_owner_link_revoke_res.status_code}"
+
+    # Revoke non-existent link code -> 404
+    fake_link_revoke_res = requests.delete(f"{url_prefix}/api/v1/shares/link/nonexistentcode", headers=headers_a)
+    assert fake_link_revoke_res.status_code == 404, f"Expected 404 for non-existent link code, got {fake_link_revoke_res.status_code}"
+
+    # Revoke successfully by owner (User A) -> 200
+    owner_link_revoke_res = requests.delete(f"{url_prefix}/api/v1/shares/link/{share_code}", headers=headers_a)
+    assert owner_link_revoke_res.status_code == 200, f"Expected 200 for successful link revocation, got {owner_link_revoke_res.status_code}. Response: {owner_link_revoke_res.text}"
+
+    # Guest download after link revocation -> 404
+    guest_download_after = requests.get(f"{url_prefix}/api/v1/shares/link/{share_code}/download", headers=guest_headers)
+    assert guest_download_after.status_code == 404, f"Expected 404 after link revocation, got {guest_download_after.status_code}"
+
 # ----------------------------------------------------
 # 4. Auth Boundary Tests
 # ----------------------------------------------------
