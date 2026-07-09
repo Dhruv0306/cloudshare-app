@@ -57,3 +57,6 @@ tests/
 application-local.yml
 application-local.properties
 changes.diff
+
+# JavaScript Libraries
+*/node_modules/
