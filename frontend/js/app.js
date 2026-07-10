@@ -50,7 +50,7 @@ function parseJwt(token) {
     try {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
             return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
         }).join(''));
         return JSON.parse(jsonPayload);
@@ -136,7 +136,7 @@ function clearSession() {
 
     // Reset hash to login page if it's not a public share link
     const currentHash = window.location.hash;
-    if (!currentHash.startsWith('#share/')) {
+    if (!currentHash.startsWith('#share/') && currentHash !== '#register') {
         window.location.hash = '#login';
     }
 }
@@ -796,13 +796,13 @@ async function loadMfaSettings() {
     try {
         // Probe initMfa: if MFA is already enabled, the backend returns 400 Bad Request
         const res = await api.initMfa();
-        
+
         // If it succeeded, MFA is not enabled yet, show setup details
         state.user.mfaRequired = false;
         banner.className = 'mfa-status-banner disabled';
         banner.textContent = '⚠️ Multi-Factor Authentication is currently Disabled. Enable it to secure your files.';
         setupSection.classList.remove('hidden');
-        
+
         document.getElementById('mfa-qr-img').src = res.data.qrCodeDataUri;
         document.getElementById('mfa-secret-text').textContent = res.data.secret;
     } catch (err) {
