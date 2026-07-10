@@ -124,6 +124,22 @@ class ApiClient {
                     throw err;
                 }
 
+                if (!this.accessToken) {
+                    let errorData = null;
+                    try {
+                        errorData = await response.json();
+                    } catch (e) {
+                        // Not JSON
+                    }
+                    const errorMsg = (errorData && errorData.error && errorData.error.message)
+                        ? errorData.error.message
+                        : `Request failed with status ${response.status}`;
+                    const err = new Error(errorMsg);
+                    err.status = 401;
+                    err.data = errorData;
+                    throw err;
+                }
+
                 // Attempt to refresh the token
                 return new Promise((resolve, reject) => {
                     this.enqueueRequest(

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeTestUser, registerAndLogin, loginUser, expectToast } from '../helpers';
+import { makeTestUser, registerAndLogin, loginUser, expectToast, readMfaSecret } from '../helpers';
 import { generateTotp } from '../totp';
 import { promoteUserToAdmin } from '../db';
 
@@ -24,7 +24,7 @@ test.describe('Admin Console: role gating & step-up authentication (Scenarios 6 
         await registerAndLogin(page, admin);
 
         await page.locator('#nav-mfa-btn').click();
-        const secret = (await page.locator('#mfa-secret-text').textContent())!.trim();
+        const secret = await readMfaSecret(page);
         await page.locator('#mfa-verification-code').fill(generateTotp(secret));
         await page.locator('#mfa-verify-form button[type="submit"]').click();
         await expectToast(page, 'Multi-Factor Authentication enabled successfully', 'success');
@@ -66,10 +66,10 @@ test.describe('Admin Console: role gating & step-up authentication (Scenarios 6 
         await expect(page.locator('#admin-logs-tbody')).toContainText('LOGIN_SUCCESS', { timeout: 7_000 });
 
         const actionBadges = page.locator('#admin-logs-tbody .badge-action');
-        const badgeCount = await actionBadges.count();
-        expect(badgeCount, 'filtering by LOGIN_SUCCESS should return at least one row').toBeGreaterThan(0);
-        for (let i = 0; i < badgeCount; i++) {
-            await expect(actionBadges.nth(i)).toHaveText('LOGIN_SUCCESS');
+        const actionTexts = await actionBadges.allTextContents();
+        expect(actionTexts.length, 'filtering by LOGIN_SUCCESS should return at least one row').toBeGreaterThan(0);
+        for (const text of actionTexts) {
+            expect(text).toBe('LOGIN_SUCCESS');
         }
 
         // User ID filter narrows to the admin's own logs (debounced input).

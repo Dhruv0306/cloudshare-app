@@ -65,7 +65,6 @@ function parseJwt(token) {
  */
 async function checkActiveSession() {
     try {
-        // Attempt silent token refresh (uses HttpOnly refresh cookie)
         await api.performTokenRefresh();
 
         const token = api.getAccessToken();
@@ -76,19 +75,21 @@ async function checkActiveSession() {
                     id: claims.sub,
                     username: claims.username,
                     roles: claims.roles,
-                    mfaRequired: false // dynamically determined on MFA settings view load
+                    mfaRequired: false
                 };
                 setupShell();
                 router();
             } else {
                 clearSession();
+                router();
             }
         } else {
             clearSession();
+            router();
         }
     } catch (e) {
-        // Failed silent refresh, user is anonymous
         clearSession();
+        router();
     }
 }
 
@@ -134,7 +135,7 @@ function clearSession() {
     document.getElementById('auth-gateway').classList.remove('hidden');
     document.getElementById('public-share-gateway').classList.add('hidden');
 
-    // Reset hash to login page if it's not a public share link
+    // Reset hash to login page if it's not a public share link or the register page
     const currentHash = window.location.hash;
     if (!currentHash.startsWith('#share/') && currentHash !== '#register') {
         window.location.hash = '#login';

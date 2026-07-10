@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeTestUser, registerUser, loginUser, expectToast } from '../helpers';
+import { makeTestUser, registerUser, loginUser, expectToast, readMfaSecret } from '../helpers';
 import { generateTotp } from '../totp';
 
 test.describe('Authentication & MFA (Scenario 1)', () => {
@@ -19,11 +19,11 @@ test.describe('Authentication & MFA (Scenario 1)', () => {
         await expect(page.locator('#view-mfa')).not.toHaveClass(/hidden/);
         await expect(page.locator('#mfa-setup-section')).not.toHaveClass(/hidden/);
 
-        const secret = await page.locator('#mfa-secret-text').textContent();
+        const secret = await readMfaSecret(page);
         expect(secret, 'MFA secret text must be populated').toBeTruthy();
         await expect(page.locator('#mfa-qr-img')).toHaveAttribute('src', /^data:image\//);
 
-        const enrollCode = generateTotp(secret!.trim());
+        const enrollCode = generateTotp(secret);
         await page.locator('#mfa-verification-code').fill(enrollCode);
         await page.locator('#mfa-verify-form button[type="submit"]').click();
 
@@ -44,7 +44,7 @@ test.describe('Authentication & MFA (Scenario 1)', () => {
         await expect(page.locator('#app-shell')).toHaveClass(/hidden/);
 
         // 4b. Password + valid dynamic TOTP code succeeds
-        const loginCode = generateTotp(secret!.trim());
+        const loginCode = generateTotp(secret);
         await page.locator('#login-mfa').fill(loginCode);
         await page.locator('#login-form button[type="submit"]').click();
 

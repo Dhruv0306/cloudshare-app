@@ -65,6 +65,14 @@ export async function logout(page: Page): Promise<void> {
     await expect(page.locator('#auth-gateway')).not.toHaveClass(/hidden/);
 }
 
+/* --- MFA --- */
+
+export async function readMfaSecret(page: Page): Promise<string> {
+    const secretLocator = page.locator('#mfa-secret-text');
+    await expect(secretLocator).not.toHaveText('', { timeout: 10_000 });
+    return (await secretLocator.textContent())!.trim();
+}
+
 /* --- Toast assertions --- */
 
 export async function expectToast(page: Page, text: string | RegExp, type?: 'success' | 'danger' | 'info' | 'warning'): Promise<void> {
