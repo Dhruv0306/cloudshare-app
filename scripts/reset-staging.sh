@@ -14,10 +14,16 @@ if [[ "$1" != "-f" && "$1" != "--force" ]]; then
     fi
 fi
 
-echo "Stopping staging containers and wiping volumes..."
-docker compose -f docker-compose.yml -f docker-compose.staging.yml down -v
+if [ ! -f "tests/.env.staging" ]; then
+    echo "ERROR: tests/.env.staging not found. Copy tests/.env.staging.example to"
+    echo "tests/.env.staging and fill in real staging secrets first."
+    exit 1
+fi
 
-echo "Starting staging containers with production-like resource limits..."
-docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+echo "Stopping staging containers and wiping volumes..."
+docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file tests/.env.staging down -v
+
+echo "Rebuilding and starting staging containers with production-like resource limits..."
+docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file tests/.env.staging up -d --build
 
 echo "Staging environment successfully reset and started."
