@@ -30,7 +30,7 @@ bash nginx/ssl/generate-certs.sh
 
 # Run docker-compose with staging override and staging environment variables
 # Copy tests/.env.staging.example to tests/.env.staging first and customize it.
-docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file tests/.env.staging up -d
+docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file tests/.env.staging up -d --build
 ```
 
 > [!IMPORTANT]
