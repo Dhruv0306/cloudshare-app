@@ -4,9 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       target_url:
-        description: 'Target Base URL for load tests'
+        description: 'Target Base URL for load tests (must contain "localhost" to spin up local Docker stack, otherwise targets remote host directly)'
         required: true
-        default: 'https://localhost'
+        default: "https://localhost"
+      p95_api_ms:
+        description: "Gatling p95 API Latency SLA (ms)"
+        required: true
+        default: "200"
+      p95_stream_ms:
+        description: "Gatling p95 Streaming Latency SLA (ms)"
+        required: true
+        default: "1500"
 
 jobs:
   load-tests:
@@ -16,6 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create CI env file
+        if: contains(github.event.inputs.target_url, 'localhost')
         env:
           CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
           CI_JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
@@ -24,13 +33,13 @@ jobs:
           # Use secrets if available, otherwise generate secure 64-byte keys dynamically
           DB_PASSWORD="$CI_DB_PASSWORD"
           [ -z "$DB_PASSWORD" ] && DB_PASSWORD="A1000Rocks"
-          
+
           JWT_SECRET="$CI_JWT_SECRET"
           [ -z "$JWT_SECRET" ] && JWT_SECRET=$(openssl rand -hex 64)
-          
+
           CRYPTO_KEK="$CI_CRYPTO_MASTER_KEK"
           [ -z "$CRYPTO_KEK" ] && CRYPTO_KEK=$(openssl rand -hex 64)
-          
+
           echo "SPRING_DATASOURCE_USERNAME=cloudshare_user" > tests/.env.ci
           echo "SPRING_DATASOURCE_PASSWORD=$DB_PASSWORD" >> tests/.env.ci
           echo "JWT_SECRET=$JWT_SECRET" >> tests/.env.ci
@@ -42,14 +51,17 @@ jobs:
           echo "RATE_LIMIT_ENABLED=false" >> tests/.env.ci
 
       - name: Generate SSL certificates
+        if: contains(github.event.inputs.target_url, 'localhost')
         run: |
           chmod +x nginx/ssl/generate-certs.sh
           ./nginx/ssl/generate-certs.sh
 
       - name: Start stack
+        if: contains(github.event.inputs.target_url, 'localhost')
         run: docker compose --env-file tests/.env.ci up -d --build
 
       - name: Wait for Spring Boot backend
+        if: contains(github.event.inputs.target_url, 'localhost')
         run: |
           for i in {1..90}; do
             curl -sf http://localhost:8080/actuator/health && break
@@ -59,6 +71,7 @@ jobs:
           done
 
       - name: Wait for Nginx Gateway
+        if: contains(github.event.inputs.target_url, 'localhost')
         run: |
           for i in {1..90}; do
             curl -k -sf https://localhost/actuator/health && break
@@ -70,12 +83,17 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'maven'
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
 
       - name: Run Gatling Load Tests
-        run: mvn clean verify -Pperformance -Dgatling.baseUrl=${{ github.event.inputs.target_url }}
+        run: |
+          mvn clean verify -Pperformance \
+            -Dgatling.baseUrl=${{ github.event.inputs.target_url }} \
+            -Dgatling.p95ApiMs=${{ github.event.inputs.p95_api_ms }} \
+            -Dgatling.p95StreamMs=${{ github.event.inputs.p95_stream_ms }} \
+            -Dgatling.insecure=true
 
       - name: Archive Gatling Reports
         uses: actions/upload-artifact@v4
@@ -86,11 +104,11 @@ jobs:
           retention-days: 7
 
       - name: Dump logs on failure
-        if: failure()
+        if: failure() && contains(github.event.inputs.target_url, 'localhost')
         run: docker compose --env-file tests/.env.ci logs
 
       - name: Cleanup env file
-        if: always()
+        if: always() && contains(github.event.inputs.target_url, 'localhost')
         run: |
           docker compose --env-file tests/.env.ci down -v
           rm -f tests/.env.ci

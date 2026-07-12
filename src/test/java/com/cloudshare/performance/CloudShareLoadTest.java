@@ -69,6 +69,8 @@ public class CloudShareLoadTest extends Simulation {
     private final String baseUrl = System.getProperty("gatling.baseUrl", "https://localhost");
     @SuppressWarnings("unused")
     private final boolean insecure = Boolean.parseBoolean(System.getProperty("gatling.insecure", "false"));
+    private final int p95ApiMs = Integer.parseInt(System.getProperty("gatling.p95ApiMs", "200"));
+    private final int p95StreamMs = Integer.parseInt(System.getProperty("gatling.p95StreamMs", "1500"));
 
     private final HttpProtocolBuilder httpProtocol = http
         .baseUrl(baseUrl)
@@ -124,13 +126,13 @@ public class CloudShareLoadTest extends Simulation {
         ).protocols(httpProtocol)
          .assertions(
              global().failedRequests().percent().lt(0.1),
-             // p95 latency for REST API calls < 200ms
-             details("Register User").responseTime().percentile3().lt(200),
-             details("Login User").responseTime().percentile3().lt(200),
-             details("List Files").responseTime().percentile3().lt(200),
-             // p95 latency for 10MB file stream upload/download < 1500ms
-             details("Upload 10MB File").responseTime().percentile3().lt(1500),
-             details("Download File").responseTime().percentile3().lt(1500)
+             // p95 latency for REST API calls < p95ApiMs
+             details("Register User").responseTime().percentile3().lt(p95ApiMs),
+             details("Login User").responseTime().percentile3().lt(p95ApiMs),
+             details("List Files").responseTime().percentile3().lt(p95ApiMs),
+             // p95 latency for 10MB file stream upload/download < p95StreamMs
+             details("Upload 10MB File").responseTime().percentile3().lt(p95StreamMs),
+             details("Download File").responseTime().percentile3().lt(p95StreamMs)
          );
     }
 }
