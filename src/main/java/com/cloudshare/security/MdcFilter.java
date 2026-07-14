@@ -7,12 +7,16 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import lombok.RequiredArgsConstructor;
 
 import java.io.IOException;
 import java.util.UUID;
 
 @Component
+@RequiredArgsConstructor
 public class MdcFilter extends OncePerRequestFilter {
+
+    private final ClientIpResolver clientIpResolver;
 
     private static final String TRACE_ID_HEADER = "X-Trace-Id";
     private static final String MDC_TRACE_ID = "traceId";
@@ -29,7 +33,7 @@ public class MdcFilter extends OncePerRequestFilter {
             traceId = UUID.randomUUID().toString();
         }
 
-        String clientIp = getClientIp(request);
+        String clientIp = clientIpResolver.resolveIp(request);
         String httpMethod = request.getMethod();
         String requestUri = request.getRequestURI();
 
@@ -45,16 +49,4 @@ public class MdcFilter extends OncePerRequestFilter {
         } finally {
             MDC.clear();
         }
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
-    }
-}
+    }}
