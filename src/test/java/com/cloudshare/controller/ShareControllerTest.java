@@ -4,6 +4,7 @@ import com.cloudshare.dto.*;
 import com.cloudshare.security.CustomUserDetailsService;
 import com.cloudshare.security.JwtTokenProvider;
 import com.cloudshare.security.UserPrincipal;
+import com.cloudshare.security.ClientIpResolver;
 import com.cloudshare.service.FileService;
 import com.cloudshare.service.RateLimiterService;
 import com.cloudshare.service.ShareService;
@@ -48,6 +49,9 @@ class ShareControllerTest {
     private ShareService shareService;
 
     @MockitoBean
+    private ClientIpResolver clientIpResolver;
+
+    @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
@@ -62,6 +66,7 @@ class ShareControllerTest {
     @org.junit.jupiter.api.BeforeEach
     void setUpRateLimiter() {
         when(rateLimiterService.isAllowed(any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(true);
+        when(clientIpResolver.resolveIp(any())).thenReturn("127.0.0.1");
     }
 
     private UserPrincipal getMockPrincipal() {
