@@ -53,4 +53,10 @@ src/test/resources/data/
 # Staging Environments
 # ==========================================
 .env.staging
-tests/.env.staging
+tests/.env.staging
+
+# ==========================================
+# Temporary File
+# ==========================================
+cloudshare-improvement-branches.bundle
+open-prs.ps1
