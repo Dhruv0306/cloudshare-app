@@ -25,18 +25,21 @@ class MdcFilterTest {
     @Mock
     private FilterChain filterChain;
 
+    @Mock
+    private ClientIpResolver clientIpResolver;
+
     private MdcFilter mdcFilter;
 
     @BeforeEach
     void setUp() {
-        mdcFilter = new MdcFilter();
+        mdcFilter = new MdcFilter(clientIpResolver);
         MDC.clear();
     }
 
     @Test
     void testFilterWithIncomingTraceId() throws Exception {
         when(request.getHeader("X-Trace-Id")).thenReturn("test-trace-123");
-        when(request.getHeader("X-Forwarded-For")).thenReturn("10.0.0.1");
+        when(clientIpResolver.resolveIp(request)).thenReturn("10.0.0.1");
         when(request.getMethod()).thenReturn("GET");
         when(request.getRequestURI()).thenReturn("/api/v1/files");
 
@@ -59,7 +62,7 @@ class MdcFilterTest {
     @Test
     void testFilterGeneratesTraceIdIfAbsent() throws Exception {
         when(request.getHeader("X-Trace-Id")).thenReturn(null);
-        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
         when(request.getMethod()).thenReturn("POST");
         when(request.getRequestURI()).thenReturn("/api/v1/auth/login");
 
