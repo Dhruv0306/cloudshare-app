@@ -22,6 +22,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     private final RateLimiterService rateLimiterService;
     private final JwtTokenProvider tokenProvider;
+    private final ClientIpResolver clientIpResolver;
 
     @Value("${security.rate-limiting.enabled:true}")
     private boolean rateLimitingEnabled = true;
@@ -50,7 +51,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
         String method = request.getMethod();
-        String ip = getClientIp(request);
+        String ip = clientIpResolver.resolveIp(request);
 
         boolean allowed = true;
 
@@ -112,16 +113,4 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             }
         }
         return null;
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
-    }
-}
+    }}

@@ -3,6 +3,7 @@ package com.cloudshare.controller;
 import com.cloudshare.dto.ApiResponse;
 import com.cloudshare.dto.FileResponse;
 import com.cloudshare.security.UserPrincipal;
+import com.cloudshare.security.ClientIpResolver;
 import com.cloudshare.service.FileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ import java.util.UUID;
 public class FileController {
 
     private final FileService fileService;
+    private final ClientIpResolver clientIpResolver;
 
     @PostMapping("/upload")
     public ResponseEntity<ApiResponse<FileResponse>> uploadFile(
@@ -35,7 +37,7 @@ public class FileController {
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest request) {
         
-        FileResponse response = fileService.uploadFile(file, principal.getId(), getClientIp(request));
+        FileResponse response = fileService.uploadFile(file, principal.getId(), clientIpResolver.resolveIp(request));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
@@ -54,7 +56,7 @@ public class FileController {
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest request) {
         
-        FileService.DecryptedFileStream fileStream = fileService.downloadFile(id, principal.getId(), getClientIp(request));
+        FileService.DecryptedFileStream fileStream = fileService.downloadFile(id, principal.getId(), clientIpResolver.resolveIp(request));
         
         HttpHeaders headers = new HttpHeaders();
         // Force the browser to download the file as attachment instead of rendering inline
@@ -79,18 +81,6 @@ public class FileController {
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest request) {
         
-        fileService.deleteFile(id, principal.getId(), getClientIp(request));
+        fileService.deleteFile(id, principal.getId(), clientIpResolver.resolveIp(request));
         return ResponseEntity.noContent().build();
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
-    }
-}
+    }}

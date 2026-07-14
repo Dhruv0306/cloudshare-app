@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.cloudshare.security.UserPrincipal;
+import com.cloudshare.security.ClientIpResolver;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -19,17 +20,18 @@ import com.cloudshare.security.UserPrincipal;
 public class AuthController {
 
     private final AuthService authService;
+    private final ClientIpResolver clientIpResolver;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<String>> register(@Valid @RequestBody RegisterRequest request, HttpServletRequest servletRequest) {
-        authService.registerUser(request, getClientIp(servletRequest));
+        authService.registerUser(request, clientIpResolver.resolveIp(servletRequest));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("User registered successfully."));
     }
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
-        AuthService.AuthResponseAndCookie result = authService.login(request, getClientIp(servletRequest));
+        AuthService.AuthResponseAndCookie result = authService.login(request, clientIpResolver.resolveIp(servletRequest));
         
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, result.getCookie().toString())
@@ -41,7 +43,7 @@ public class AuthController {
             @CookieValue(name = "refresh_token", required = false) String refreshToken,
             HttpServletRequest servletRequest) {
         
-        AuthService.TokenRefreshResponseAndCookie result = authService.refresh(refreshToken, getClientIp(servletRequest));
+        AuthService.TokenRefreshResponseAndCookie result = authService.refresh(refreshToken, clientIpResolver.resolveIp(servletRequest));
         
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, result.getCookie().toString())
@@ -54,7 +56,7 @@ public class AuthController {
             @CookieValue(name = "refresh_token", required = false) String refreshToken,
             HttpServletRequest servletRequest) {
         
-        ResponseCookie cookie = authService.logout(authHeader, refreshToken, getClientIp(servletRequest));
+        ResponseCookie cookie = authService.logout(authHeader, refreshToken, clientIpResolver.resolveIp(servletRequest));
         
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
@@ -72,7 +74,7 @@ public class AuthController {
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody MfaVerifyRequest request,
             HttpServletRequest servletRequest) {
-        authService.verifyMfa(principal.getId(), request.getCode(), getClientIp(servletRequest));
+        authService.verifyMfa(principal.getId(), request.getCode(), clientIpResolver.resolveIp(servletRequest));
         return ResponseEntity.ok(ApiResponse.success("Multi-Factor Authentication enabled successfully."));
     }
 
@@ -82,16 +84,4 @@ public class AuthController {
             @Valid @RequestBody MfaVerifyRequest request) {
         MfaStepUpResponse response = authService.stepUpMfa(principal.getId(), request.getCode());
         return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    private String getClientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
-    }
-}
+    }}
