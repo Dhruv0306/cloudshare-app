@@ -45,7 +45,7 @@ jobs:
           echo "JWT_SECRET=$JWT_SECRET" >> tests/.env.ci
           echo "JWT_EXPIRATION=900" >> tests/.env.ci
           echo "JWT_REFRESH_EXPIRATION=604800" >> tests/.env.ci
-          echo "MINIO_ROOT_USER=minioadmin" >> tests/.env.ci
+          echo "MINIO_ROOT_USER=cloudshare_ci_minio" >> tests/.env.ci
           echo "MINIO_ROOT_PASSWORD=A1000Minio" >> tests/.env.ci
           echo "CRYPTO_MASTER_KEK=$CRYPTO_KEK" >> tests/.env.ci
           echo "RATE_LIMIT_ENABLED=false" >> tests/.env.ci

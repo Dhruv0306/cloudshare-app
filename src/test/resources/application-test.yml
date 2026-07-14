@@ -3,7 +3,7 @@ spring:
     url: jdbc:h2:mem:cloudshare;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     driver-class-name: org.h2.Driver
     username: sa
-    password:
+    password: StrongTestDBPassword123!
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
@@ -21,3 +21,14 @@ storage:
   provider: LOCAL
   local:
     directory: target/test-uploads
+  minio:
+    access-key: testminioaccesskey
+    secret-key: testminiosecretkey
+
+security:
+  jwt:
+    secret: AValid64ByteLongDummyJWTSecretKeyForTestsThatIsAtLeast512BitsLong
+
+crypto:
+  master-kek: test_crypto_master_kek_32_bytes_x
+
