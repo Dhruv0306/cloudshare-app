@@ -29,6 +29,9 @@ class RateLimitingFilterTest {
     private HttpServletRequest request;
 
     @Mock
+    private ClientIpResolver clientIpResolver;
+
+    @Mock
     private HttpServletResponse response;
 
     @Mock
@@ -38,14 +41,14 @@ class RateLimitingFilterTest {
 
     @BeforeEach
     void setUp() {
-        rateLimitingFilter = new RateLimitingFilter(rateLimiterService, tokenProvider);
+        rateLimitingFilter = new RateLimitingFilter(rateLimiterService, tokenProvider, clientIpResolver);
     }
 
     @Test
     void testFilterAllowed() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/auth/login");
         when(request.getMethod()).thenReturn("POST");
-        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
         
         when(rateLimiterService.isAllowed(anyString(), anyInt(), anyInt())).thenReturn(true);
 
@@ -59,7 +62,7 @@ class RateLimitingFilterTest {
     void testFilterBlocked() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/auth/login");
         when(request.getMethod()).thenReturn("POST");
-        when(request.getRemoteAddr()).thenReturn("127.0.0.1");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
         
         when(rateLimiterService.isAllowed(anyString(), anyInt(), anyInt())).thenReturn(false);
 
