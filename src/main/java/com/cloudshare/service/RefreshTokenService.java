@@ -60,14 +60,12 @@ public class RefreshTokenService {
      */
     public TokenRotationResult rotateRefreshToken(String oldTokenId) {
         String activeKey = "refresh:active:" + oldTokenId;
-        String userIdStr = securityRedisTemplate.opsForValue().get(activeKey);
+        String userIdStr = securityRedisTemplate.opsForValue().getAndDelete(activeKey);
 
         if (userIdStr != null) {
             UUID userId = UUID.fromString(userIdStr);
             log.debug("Valid refresh token rotation request for token {} (user {})", oldTokenId, userId);
 
-            // Invalidate the old active token
-            securityRedisTemplate.delete(activeKey);
             // Note: we keep oldTokenId in the family set and metadata to detect reuse
 
             // Generate new token
