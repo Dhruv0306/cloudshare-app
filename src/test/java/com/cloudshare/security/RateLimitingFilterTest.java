@@ -10,6 +10,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.test.util.ReflectionTestUtils;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
@@ -75,5 +77,57 @@ class RateLimitingFilterTest {
         verify(filterChain, never()).doFilter(request, response);
         verify(response).setStatus(429);
         verify(response).setContentType("application/json");
+    }
+
+    @Test
+    void testFilterMfaVerifyAllowed() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "mfaLimit", 5);
+        when(request.getRequestURI()).thenReturn("/api/v1/auth/mfa/verify");
+        when(request.getMethod()).thenReturn("POST");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+        
+        when(rateLimiterService.isAllowed(eq("limit:127.0.0.1:/api/v1/auth/mfa/verify"), eq(60), eq(5))).thenReturn(true);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        verify(response, never()).setStatus(429);
+    }
+
+    @Test
+    void testFilterMfaStepUpBlocked() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "mfaLimit", 5);
+        when(request.getRequestURI()).thenReturn("/api/v1/auth/mfa/step-up");
+        when(request.getMethod()).thenReturn("POST");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+        
+        when(rateLimiterService.isAllowed(eq("limit:127.0.0.1:/api/v1/auth/mfa/step-up"), eq(60), eq(5))).thenReturn(false);
+
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(stringWriter);
+        when(response.getWriter()).thenReturn(printWriter);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain, never()).doFilter(request, response);
+        verify(response).setStatus(429);
+    }
+
+    @Test
+    void testFilterMfaVerifyWithUserId() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "mfaLimit", 5);
+        when(request.getRequestURI()).thenReturn("/api/v1/auth/mfa/verify");
+        when(request.getMethod()).thenReturn("POST");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+        
+        when(request.getHeader("Authorization")).thenReturn("Bearer valid-jwt");
+        when(tokenProvider.validateToken("valid-jwt")).thenReturn(true);
+        when(tokenProvider.getUserIdFromToken("valid-jwt")).thenReturn("user-123");
+        
+        when(rateLimiterService.isAllowed(eq("limit:user-123:/api/v1/auth/mfa/verify"), eq(60), eq(5))).thenReturn(true);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
     }
 }
