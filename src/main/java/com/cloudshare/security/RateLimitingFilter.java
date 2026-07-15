@@ -39,6 +39,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     @Value("${security.rate-limiting.general-limit:100}")
     private int generalLimit;
 
+    @Value("${security.rate-limiting.mfa-limit:5}")
+    private int mfaLimit;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -72,6 +75,16 @@ public class RateLimitingFilter extends OncePerRequestFilter {
                 String identifier = (userId != null) ? userId : ip;
                 String key = "limit:" + identifier + ":" + path;
                 allowed = rateLimiterService.isAllowed(key, 60, uploadLimit);
+                
+            } else if ("POST".equalsIgnoreCase(method) && 
+                       (path.equals("/api/v1/auth/mfa/verify") || 
+                        path.equals("/api/v1/auth/mfa/step-up"))) {
+                
+                // MFA rate limiting
+                String userId = getUserIdFromAuthorizationHeader(request);
+                String identifier = (userId != null) ? userId : ip;
+                String key = "limit:" + identifier + ":" + path;
+                allowed = rateLimiterService.isAllowed(key, 60, mfaLimit);
                 
             } else if ("GET".equalsIgnoreCase(method) && path.startsWith("/api/v1/shares/link/")) {
                 

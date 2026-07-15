@@ -46,6 +46,7 @@ jobs:
                   # Rate limits opened up: the E2E suite logs in/enrolls MFA/refreshes
                   # tokens repeatedly against the same handful of test users.
                   echo "RATE_LIMIT_AUTH=10000" >> tests/.env.ci
+                  echo "RATE_LIMIT_MFA=10000" >> tests/.env.ci
                   echo "RATE_LIMIT_UPLOAD=10000" >> tests/.env.ci
                   echo "RATE_LIMIT_LINK=10000" >> tests/.env.ci
                   echo "RATE_LIMIT_GENERAL=10000" >> tests/.env.ci

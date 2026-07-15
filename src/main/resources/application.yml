@@ -53,6 +53,7 @@ security:
   rate-limiting:
     enabled: ${RATE_LIMIT_ENABLED:true}
     auth-limit: ${RATE_LIMIT_AUTH:5}
+    mfa-limit: ${RATE_LIMIT_MFA:5}
     upload-limit: ${RATE_LIMIT_UPLOAD:10}
     link-limit: ${RATE_LIMIT_LINK:30}
     general-limit: ${RATE_LIMIT_GENERAL:100}

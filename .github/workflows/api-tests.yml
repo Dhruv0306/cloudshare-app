@@ -38,6 +38,7 @@ jobs:
           echo "MINIO_ROOT_PASSWORD=A1000Minio" >> tests/.env.ci
           echo "CRYPTO_MASTER_KEK=$CRYPTO_KEK" >> tests/.env.ci
           echo "RATE_LIMIT_AUTH=10000" >> tests/.env.ci
+          echo "RATE_LIMIT_MFA=10000" >> tests/.env.ci
           echo "RATE_LIMIT_UPLOAD=10000" >> tests/.env.ci
           echo "RATE_LIMIT_LINK=10000" >> tests/.env.ci
           echo "RATE_LIMIT_GENERAL=10000" >> tests/.env.ci
