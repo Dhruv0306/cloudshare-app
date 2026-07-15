@@ -58,7 +58,7 @@ class RefreshTokenServiceTest {
         UUID userId = UUID.randomUUID();
 
         // Mock old token is active
-        when(valueOperations.get("refresh:active:" + oldToken)).thenReturn(userId.toString());
+        when(valueOperations.getAndDelete("refresh:active:" + oldToken)).thenReturn(userId.toString());
 
         RefreshTokenService.TokenRotationResult result = refreshTokenService.rotateRefreshToken(oldToken);
 
@@ -67,8 +67,6 @@ class RefreshTokenServiceTest {
         assertNotNull(result.getNewTokenId());
         assertNotEquals(oldToken, result.getNewTokenId());
 
-        // Verify old active token is deleted
-        verify(securityRedisTemplate).delete("refresh:active:" + oldToken);
         // Verify new token is created and stored
         verify(valueOperations).set(eq("refresh:active:" + result.getNewTokenId()), eq(userId.toString()), any(Duration.class));
     }
@@ -80,7 +78,7 @@ class RefreshTokenServiceTest {
         String otherToken = UUID.randomUUID().toString();
 
         // 1. Mock old token is NOT active
-        when(valueOperations.get("refresh:active:" + leakedOldToken)).thenReturn(null);
+        when(valueOperations.getAndDelete("refresh:active:" + leakedOldToken)).thenReturn(null);
         // 2. Mock historic owner is found in metadata
         when(valueOperations.get("refresh:metadata:" + leakedOldToken)).thenReturn(userId.toString());
         // 3. Mock token is member of family
@@ -104,7 +102,7 @@ class RefreshTokenServiceTest {
         String invalidToken = "invalid_token";
 
         // Mock both active and metadata are null
-        when(valueOperations.get("refresh:active:" + invalidToken)).thenReturn(null);
+        when(valueOperations.getAndDelete("refresh:active:" + invalidToken)).thenReturn(null);
         when(valueOperations.get("refresh:metadata:" + invalidToken)).thenReturn(null);
 
         assertThrows(IllegalArgumentException.class, () -> refreshTokenService.rotateRefreshToken(invalidToken));
