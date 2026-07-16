@@ -272,6 +272,26 @@ def test_sharing_flow(url_prefix):
     # User C downloads shared file (Access Denied -> 404)
     download_c = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers_c)
     assert download_c.status_code == 404, f"Expected 404, got {download_c.status_code}. Response: {download_c.text}"
+
+    # User B checks shared-with-me endpoint (should contain User A's file)
+    shared_with_me_res_b = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_b)
+    assert shared_with_me_res_b.status_code == 200, f"Expected 200, got {shared_with_me_res_b.status_code}. Response: {shared_with_me_res_b.text}"
+    shared_data_b = shared_with_me_res_b.json()
+    assert shared_data_b.get("success") is True
+    shared_files_b = shared_data_b["data"]["content"]
+    assert len(shared_files_b) == 1, f"Expected 1 shared file for User B, got {len(shared_files_b)}"
+    assert shared_files_b[0]["id"] == file_id
+    assert shared_files_b[0]["name"] == "shared_doc.txt"
+    assert shared_files_b[0]["sharedByUsername"] == user_a["username"]
+    assert shared_files_b[0]["permissionType"] == "READ"
+
+    # User C checks shared-with-me endpoint (should be empty)
+    shared_with_me_res_c = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_c)
+    assert shared_with_me_res_c.status_code == 200, f"Expected 200, got {shared_with_me_res_c.status_code}. Response: {shared_with_me_res_c.text}"
+    shared_data_c = shared_with_me_res_c.json()
+    assert shared_data_c.get("success") is True
+    shared_files_c = shared_data_c["data"]["content"]
+    assert len(shared_files_c) == 0, f"Expected 0 shared files for User C, got {len(shared_files_c)}"
     
     # 3.2 Public link sharing
     link_payload = {

@@ -13,20 +13,15 @@ import {
 import { createHash } from 'node:crypto';
 
 /**
- * IMPORTANT PRODUCT-GAP NOTE (found while writing this spec, not assumed
- * up front): the dashboard's "My Files" table is owner-scoped
- * (FileService.listFiles -> findByOwnerIdAndDeletedFalse). There is no
- * "Shared with me" view anywhere in the frontend, so a recipient has no UI
- * path to see or download a file that was shared with them - only the
- * owner's own files ever appear in their table.
+ * NOTE: The dashboard now has a "Shared with Me" view in the frontend,
+ * allowing recipients to view and download files shared with them.
  *
- * That means User B's side of this scenario (accessing the shared file,
- * and later losing access after revocation) cannot be driven through the
- * UI at all today - it's exercised via the API here, which accurately
- * reflects what the product currently supports rather than a testing
- * shortcut. User A's side (uploading and sharing through the actual share
- * modal) is real UI-driven coverage. Worth a follow-up phase to add a
- * recipient-facing shares view.
+ * However, to maintain test focus and stability, User B's side of this
+ * scenario (downloading the shared file, and later losing access after
+ * revocation) is still exercised via the API here. User A's side
+ * (uploading and sharing through the actual share modal) represents
+ * UI-driven coverage. Re-pointing User B to the UI represents a potential
+ * future test enhancement.
  */
 test.describe('Internal Sharing & Revocation (Scenarios 3 & 5)', () => {
     test('User A shares a file with User B via the UI; B can access it via the API while active, loses access after A revokes', async ({
