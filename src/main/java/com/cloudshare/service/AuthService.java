@@ -45,13 +45,27 @@ public class AuthService {
     @Value("${security.jwt.expiration-seconds:900}")
     private long jwtExpirationSeconds;
 
+    /**
+     * Registers a new user in the system.
+     * Note: If the email address is already registered, the method returns normally
+     * without throwing an exception to prevent account-existence enumeration attacks.
+     * A REGISTRATION_DUPLICATE_EMAIL_ATTEMPT event is logged to the audit log instead.
+     * Username collisions are still explicitly rejected as usernames are public identifiers.
+     */
     @Transactional
     public void registerUser(RegisterRequest request, String ipAddress) {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new IllegalArgumentException("Username is already taken");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email is already registered");
+            // Log audit event and return normally to prevent account enumeration via email
+            auditLogService.log(
+                    null,
+                    "REGISTRATION_DUPLICATE_EMAIL_ATTEMPT",
+                    null,
+                    ipAddress,
+                    "Duplicate registration attempt for email: " + request.getEmail());
+            return;
         }
 
         if (breachedPasswordService.isBreached(request.getPassword())) {
