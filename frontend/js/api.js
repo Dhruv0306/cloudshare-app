@@ -322,6 +322,13 @@ class ApiClient {
         return await res.json();
     }
 
+    async listSharedWithMe(page = 0, size = 10) {
+        const res = await this.request(`/api/v1/files/shared-with-me?page=${page}&size=${size}&sort=createdAt,desc`, {
+            method: 'GET'
+        });
+        return await res.json();
+    }
+
     /**
      * File upload leveraging XMLHttpRequest to support progress tracking
      */
