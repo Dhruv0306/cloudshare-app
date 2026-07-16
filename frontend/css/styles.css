@@ -1042,3 +1042,10 @@ tr:hover td {
 .toast-close:hover {
     color: var(--text-primary);
 }
+
+/* Dashboard Tables Container to stack My Files and Shared with Me vertically */
+.dashboard-tables-container {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
