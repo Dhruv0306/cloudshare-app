@@ -40,7 +40,7 @@ def generate_random_user():
     return {
         "username": f"user_{unique_suffix}",
         "email": f"user_{unique_suffix}@example.com",
-        "password": "Password123!"
+        "password": f"Pass_{unique_suffix}_2026!"
     }
 
 def generate_totp(secret_base32):
@@ -81,6 +81,17 @@ def test_auth_flow(url_prefix):
     reg_response = requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
     assert reg_response.status_code == 201, f"Expected 201, got {reg_response.status_code}. Response: {reg_response.text}"
     assert reg_response.json().get("success") is True, f"Registration failed response: {reg_response.text}"
+
+    # Test breach check is working when registering with a known breached password
+    breached_user = generate_random_user()
+    breached_user["password"] = "password123"
+    breached_res = requests.post(f"{url_prefix}/api/v1/auth/register", json=breached_user)
+    if breached_res.status_code == 400:
+        error_msg = breached_res.json().get("error", {}).get("message", "")
+        assert "Password has been found in a data breach" in error_msg, f"Expected breach error message, got: {error_msg}"
+    else:
+        assert breached_res.status_code == 201, f"Expected 201 or 400, got {breached_res.status_code}"
+
     
     # Register duplicate user
     dup_response = requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
