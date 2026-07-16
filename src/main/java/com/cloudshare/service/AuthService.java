@@ -40,6 +40,7 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final AuditLogService auditLogService;
     private final MfaService mfaService;
+    private final BreachedPasswordService breachedPasswordService;
 
     @Value("${security.jwt.expiration-seconds:900}")
     private long jwtExpirationSeconds;
@@ -51,6 +52,10 @@ public class AuthService {
         }
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email is already registered");
+        }
+
+        if (breachedPasswordService.isBreached(request.getPassword())) {
+            throw new IllegalArgumentException("Password has been found in a data breach. Please choose a different password.");
         }
 
         // Fetch ROLE_USER

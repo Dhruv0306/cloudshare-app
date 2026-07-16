@@ -57,6 +57,11 @@ security:
     upload-limit: ${RATE_LIMIT_UPLOAD:10}
     link-limit: ${RATE_LIMIT_LINK:30}
     general-limit: ${RATE_LIMIT_GENERAL:100}
+  password:
+    breach-check:
+      enabled: ${PASSWORD_BREACH_CHECK_ENABLED:true}
+      timeout-ms: ${PASSWORD_BREACH_CHECK_TIMEOUT_MS:3000}
+
 
 # ClamAV Configuration
 clamav:

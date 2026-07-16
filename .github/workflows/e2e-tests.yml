@@ -50,6 +50,7 @@ jobs:
                   echo "RATE_LIMIT_UPLOAD=10000" >> tests/.env.ci
                   echo "RATE_LIMIT_LINK=10000" >> tests/.env.ci
                   echo "RATE_LIMIT_GENERAL=10000" >> tests/.env.ci
+                  echo "PASSWORD_BREACH_CHECK_ENABLED=false" >> tests/.env.ci
 
             - name: Generate self-signed Nginx certs
               run: bash nginx/ssl/generate-certs.sh
