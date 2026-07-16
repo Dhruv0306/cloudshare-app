@@ -17,6 +17,12 @@ const state = {
         searchQuery: '',
         totalPages: 1
     },
+    sharedFiles: {
+        content: [],
+        page: 0,
+        size: 10,
+        totalPages: 1
+    },
     admin: {
         users: { content: [], page: 0, totalPages: 1 },
         logs: { content: [], page: 0, totalPages: 1, userIdFilter: '', actionFilter: '' }
@@ -257,6 +263,19 @@ function bindGlobalEvents() {
         }
     });
 
+    document.getElementById('shared-prev-btn').addEventListener('click', () => {
+        if (state.sharedFiles.page > 0) {
+            state.sharedFiles.page--;
+            loadSharedFiles();
+        }
+    });
+    document.getElementById('shared-next-btn').addEventListener('click', () => {
+        if (state.sharedFiles.page < state.sharedFiles.totalPages - 1) {
+            state.sharedFiles.page++;
+            loadSharedFiles();
+        }
+    });
+
     // Dashboard: Drag and Drop Upload
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
@@ -444,6 +463,20 @@ async function loadFilesDashboard() {
     } catch (err) {
         showToast(`Failed to load files: ${err.message}`, 'danger');
     }
+    loadSharedFiles();
+}
+
+async function loadSharedFiles() {
+    try {
+        const res = await api.listSharedWithMe(state.sharedFiles.page, state.sharedFiles.size);
+        if (res.success && res.data) {
+            state.sharedFiles.content = res.data.content || [];
+            state.sharedFiles.totalPages = res.data.totalPages || 1;
+            renderSharedFilesTable();
+        }
+    } catch (err) {
+        showToast(`Failed to load shared files: ${err.message}`, 'danger');
+    }
 }
 
 function renderFilesTable() {
@@ -545,6 +578,89 @@ function renderFilesTable() {
     document.getElementById('files-prev-btn').disabled = state.files.page === 0;
     document.getElementById('files-next-btn').disabled = state.files.page >= state.files.totalPages - 1;
     document.getElementById('files-page-info').textContent = `Page ${state.files.page + 1} of ${state.files.totalPages}`;
+}
+
+function renderSharedFilesTable() {
+    const tbody = document.getElementById('shared-tbody');
+    const emptyState = document.getElementById('shared-empty-state');
+
+    // Clear rows safely
+    tbody.textContent = '';
+
+    const files = state.sharedFiles.content;
+
+    if (files.length === 0) {
+        emptyState.classList.remove('hidden');
+        document.getElementById('shared-prev-btn').disabled = true;
+        document.getElementById('shared-next-btn').disabled = true;
+        document.getElementById('shared-page-info').textContent = 'Page 1 of 1';
+        return;
+    }
+
+    emptyState.classList.add('hidden');
+
+    // Render files safely (XSS defense: use textContent and element construction)
+    files.forEach(file => {
+        const tr = document.createElement('tr');
+
+        // File name & Icon
+        const tdName = document.createElement('td');
+        const fileDiv = document.createElement('div');
+        fileDiv.className = 'file-name-cell';
+
+        const fileIcon = document.createElement('span');
+        fileIcon.className = 'file-icon-s';
+        fileIcon.textContent = getFileEmoji(file.name);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'file-name-text';
+        nameSpan.textContent = file.name;
+
+        fileDiv.appendChild(fileIcon);
+        fileDiv.appendChild(nameSpan);
+        tdName.appendChild(fileDiv);
+
+        // Size
+        const tdSize = document.createElement('td');
+        tdSize.textContent = formatBytes(file.sizeBytes);
+
+        // Shared By
+        const tdSharedBy = document.createElement('td');
+        tdSharedBy.textContent = file.sharedByUsername;
+
+        // Shared Time
+        const tdTime = document.createElement('td');
+        tdTime.textContent = new Date(file.sharedAt).toLocaleString();
+
+        // Actions
+        const tdActions = document.createElement('td');
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'row-actions';
+
+        // Download Action
+        const btnDownload = document.createElement('button');
+        btnDownload.className = 'action-btn action-btn-download';
+        btnDownload.textContent = '📥';
+        btnDownload.title = 'Secure Download';
+        btnDownload.setAttribute('aria-label', 'Secure Download');
+        btnDownload.addEventListener('click', () => handleFileDownload(file.id, file.name));
+
+        actionsDiv.appendChild(btnDownload);
+        tdActions.appendChild(actionsDiv);
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdSize);
+        tr.appendChild(tdSharedBy);
+        tr.appendChild(tdTime);
+        tr.appendChild(tdActions);
+
+        tbody.appendChild(tr);
+    });
+
+    // Update pagination buttons state
+    document.getElementById('shared-prev-btn').disabled = state.sharedFiles.page === 0;
+    document.getElementById('shared-next-btn').disabled = state.sharedFiles.page >= state.sharedFiles.totalPages - 1;
+    document.getElementById('shared-page-info').textContent = `Page ${state.sharedFiles.page + 1} of ${state.sharedFiles.totalPages}`;
 }
 
 async function handleFileDownload(fileId, filename) {
