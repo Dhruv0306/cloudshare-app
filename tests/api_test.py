@@ -273,25 +273,7 @@ def test_sharing_flow(url_prefix):
     download_c = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers_c)
     assert download_c.status_code == 404, f"Expected 404, got {download_c.status_code}. Response: {download_c.text}"
 
-    # User B checks shared-with-me endpoint (should contain User A's file)
-    shared_with_me_res_b = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_b)
-    assert shared_with_me_res_b.status_code == 200, f"Expected 200, got {shared_with_me_res_b.status_code}. Response: {shared_with_me_res_b.text}"
-    shared_data_b = shared_with_me_res_b.json()
-    assert shared_data_b.get("success") is True
-    shared_files_b = shared_data_b["data"]["content"]
-    assert len(shared_files_b) == 1, f"Expected 1 shared file for User B, got {len(shared_files_b)}"
-    assert shared_files_b[0]["id"] == file_id
-    assert shared_files_b[0]["name"] == "shared_doc.txt"
-    assert shared_files_b[0]["sharedByUsername"] == user_a["username"]
-    assert shared_files_b[0]["permissionType"] == "READ"
-
-    # User C checks shared-with-me endpoint (should be empty)
-    shared_with_me_res_c = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_c)
-    assert shared_with_me_res_c.status_code == 200, f"Expected 200, got {shared_with_me_res_c.status_code}. Response: {shared_with_me_res_c.text}"
-    shared_data_c = shared_with_me_res_c.json()
-    assert shared_data_c.get("success") is True
-    shared_files_c = shared_data_c["data"]["content"]
-    assert len(shared_files_c) == 0, f"Expected 0 shared files for User C, got {len(shared_files_c)}"
+    # (Cleaned up: standalone Shared With Me View check added in test_shared_with_me_view)
     
     # 3.2 Public link sharing
     link_payload = {
@@ -601,6 +583,75 @@ def test_compromised_password_rejection(url_prefix):
             assert response.status_code == 201, f"Expected 201 or 400 for '{pwd}', got {response.status_code}. Response: {response.text}"
 
 # ----------------------------------------------------
+# 7. Shared With Me View Tests
+# ----------------------------------------------------
+def test_shared_with_me_view(url_prefix):
+    user_a = generate_random_user()
+    user_b = generate_random_user()
+    user_c = generate_random_user()
+
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user_a)
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user_b)
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user_c)
+
+    login_a = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": user_a["username"], "password": user_a["password"]}).json()
+    login_b = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": user_b["username"], "password": user_b["password"]}).json()
+    login_c = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": user_c["username"], "password": user_c["password"]}).json()
+
+    headers_a = {"Authorization": f"Bearer {login_a['data']['accessToken']}"}
+    headers_b = {"Authorization": f"Bearer {login_b['data']['accessToken']}"}
+    headers_c = {"Authorization": f"Bearer {login_c['data']['accessToken']}"}
+
+    # User A uploads a file
+    file_content = b"Shared with me dedicated test file content"
+    upload_res = requests.post(
+        f"{url_prefix}/api/v1/files/upload", 
+        headers=headers_a, 
+        files={"file": ("shared_view_doc.txt", file_content, "text/plain")}
+    )
+    file_id = upload_res.json()["data"]["id"]
+
+    # Before sharing, User B should have an empty shared-with-me list
+    res_before = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_b).json()
+    assert len(res_before["data"]["content"]) == 0
+
+    # User A shares internally with User B
+    share_payload = {
+        "fileId": file_id,
+        "targetUsernameOrEmail": user_b["username"],
+        "permissionType": "READ"
+    }
+    share_res = requests.post(f"{url_prefix}/api/v1/shares/internal", headers=headers_a, json=share_payload)
+    assert share_res.status_code == 201
+    share_id = share_res.json()["data"]["shareId"]
+
+    # User B checks shared-with-me endpoint
+    res_b = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_b).json()
+    assert len(res_b["data"]["content"]) == 1
+    shared_file = res_b["data"]["content"][0]
+    assert shared_file["id"] == file_id
+    assert shared_file["name"] == "shared_view_doc.txt"
+    assert shared_file["sharedByUsername"] == user_a["username"]
+    assert shared_file["permissionType"] == "READ"
+    assert "sharedAt" in shared_file
+
+    # User A checks shared-with-me endpoint (should be empty as they are the owner/sharer, not recipient)
+    res_a = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_a).json()
+    assert len(res_a["data"]["content"]) == 0
+
+    # User C checks shared-with-me endpoint (should be empty)
+    res_c = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_c).json()
+    assert len(res_c["data"]["content"]) == 0
+
+    # User A revokes the share
+    revoke_res = requests.delete(f"{url_prefix}/api/v1/shares/internal/{share_id}", headers=headers_a)
+    assert revoke_res.status_code == 200
+
+    # User B checks shared-with-me endpoint after revocation (should be empty)
+    res_b_after = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_b).json()
+    assert len(res_b_after["data"]["content"]) == 0
+
+# ----------------------------------------------------
 # Runner
 # ----------------------------------------------------
 if __name__ == "__main__":
@@ -611,6 +662,7 @@ if __name__ == "__main__":
     runner.run_case("Compromised Password Rejection", test_compromised_password_rejection, BASE_URL)
     runner.run_case("File Operations", test_file_operations, BASE_URL)
     runner.run_case("Sharing & Collaboration", test_sharing_flow, BASE_URL)
+    runner.run_case("Shared With Me View", test_shared_with_me_view, BASE_URL)
     runner.run_case("Auth Boundaries", test_auth_boundaries, BASE_URL)
     runner.run_case("Security Hardening Features", test_security_hardening, BASE_URL)
     runner.run_case("Observability & Ops", test_observability, BASE_URL)
