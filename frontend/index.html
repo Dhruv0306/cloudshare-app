@@ -49,48 +49,85 @@
                         </div>
                     </div>
 
-                    <!-- File Management Area -->
-                    <div class="dashboard-card files-card">
-                        <div class="card-header-actions">
-                            <h3>My Files</h3>
-                            <div class="search-sort-bar">
-                                <input type="text" id="file-search-input" placeholder="Search files..."
-                                    class="search-input">
-                                <select id="file-sort-select" class="sort-select">
-                                    <option value="createdAt,desc">Newest First</option>
-                                    <option value="createdAt,asc">Oldest First</option>
-                                    <option value="name,asc">Name (A-Z)</option>
-                                    <option value="name,desc">Name (Z-A)</option>
-                                    <option value="sizeBytes,desc">Size (Large)</option>
-                                    <option value="sizeBytes,asc">Size (Small)</option>
-                                </select>
+                    <!-- Tables Container -->
+                    <div class="dashboard-tables-container">
+                        <!-- File Management Area -->
+                        <div class="dashboard-card files-card">
+                            <div class="card-header-actions">
+                                <h3>My Files</h3>
+                                <div class="search-sort-bar">
+                                    <input type="text" id="file-search-input" placeholder="Search files..."
+                                        class="search-input">
+                                    <select id="file-sort-select" class="sort-select">
+                                        <option value="createdAt,desc">Newest First</option>
+                                        <option value="createdAt,asc">Oldest First</option>
+                                        <option value="name,asc">Name (A-Z)</option>
+                                        <option value="name,desc">Name (Z-A)</option>
+                                        <option value="sizeBytes,desc">Size (Large)</option>
+                                        <option value="sizeBytes,asc">Size (Small)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="table-container">
+                                <table class="files-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Size</th>
+                                            <th>Uploaded</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="files-tbody">
+                                        <!-- Populated dynamically via JS -->
+                                    </tbody>
+                                </table>
+                                <div id="files-empty-state" class="empty-state hidden">
+                                    <p>No files uploaded yet.</p>
+                                </div>
+                            </div>
+
+                            <!-- Pagination Controls -->
+                            <div class="pagination-controls">
+                                <button id="files-prev-btn" class="btn-pagination" disabled>Previous</button>
+                                <span id="files-page-info" class="page-info">Page 1 of 1</span>
+                                <button id="files-next-btn" class="btn-pagination" disabled>Next</button>
                             </div>
                         </div>
 
-                        <div class="table-container">
-                            <table class="files-table">
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Size</th>
-                                        <th>Uploaded</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="files-tbody">
-                                    <!-- Populated dynamically via JS -->
-                                </tbody>
-                            </table>
-                            <div id="files-empty-state" class="empty-state hidden">
-                                <p>No files uploaded yet.</p>
+                        <!-- Shared with Me Area -->
+                        <div class="dashboard-card files-card">
+                            <div class="card-header-actions">
+                                <h3>Shared with Me</h3>
                             </div>
-                        </div>
 
-                        <!-- Pagination Controls -->
-                        <div class="pagination-controls">
-                            <button id="files-prev-btn" class="btn-pagination" disabled>Previous</button>
-                            <span id="files-page-info" class="page-info">Page 1 of 1</span>
-                            <button id="files-next-btn" class="btn-pagination" disabled>Next</button>
+                            <div class="table-container">
+                                <table class="files-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Size</th>
+                                            <th>Shared By</th>
+                                            <th>Shared</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="shared-tbody">
+                                        <!-- Populated dynamically via JS -->
+                                    </tbody>
+                                </table>
+                                <div id="shared-empty-state" class="empty-state hidden">
+                                    <p>No files shared with you yet.</p>
+                                </div>
+                            </div>
+
+                            <!-- Pagination Controls -->
+                            <div class="pagination-controls">
+                                <button id="shared-prev-btn" class="btn-pagination" disabled>Previous</button>
+                                <span id="shared-page-info" class="page-info">Page 1 of 1</span>
+                                <button id="shared-next-btn" class="btn-pagination" disabled>Next</button>
+                            </div>
                         </div>
                     </div>
                 </div>

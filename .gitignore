@@ -60,3 +60,8 @@ tests/.env.staging
 # ==========================================
 cloudshare-improvement-branches.bundle
 open-prs.ps1
+
+# ==========================================
+# Uploads
+# ==========================================
+uploads/

@@ -2,6 +2,7 @@ package com.cloudshare.controller;
 
 import com.cloudshare.dto.ApiResponse;
 import com.cloudshare.dto.FileResponse;
+import com.cloudshare.dto.SharedFileResponse;
 import com.cloudshare.security.UserPrincipal;
 import com.cloudshare.security.ClientIpResolver;
 import com.cloudshare.service.FileService;
@@ -47,6 +48,15 @@ public class FileController {
             @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
         
         Page<FileResponse> files = fileService.listFiles(principal.getId(), pageable);
+        return ResponseEntity.ok(ApiResponse.success(files));
+    }
+
+    @GetMapping("/shared-with-me")
+    public ResponseEntity<ApiResponse<Page<SharedFileResponse>>> listSharedWithMe(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
+        
+        Page<SharedFileResponse> files = fileService.listSharedWithMe(principal.getId(), pageable);
         return ResponseEntity.ok(ApiResponse.success(files));
     }
 

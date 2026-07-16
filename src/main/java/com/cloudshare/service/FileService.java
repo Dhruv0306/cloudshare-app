@@ -1,10 +1,12 @@
 package com.cloudshare.service;
 
 import com.cloudshare.dto.FileResponse;
+import com.cloudshare.dto.SharedFileResponse;
 import com.cloudshare.exception.ResourceNotFoundException;
 import com.cloudshare.exception.UnsupportedMediaTypeException;
 import com.cloudshare.exception.VirusDetectedException;
 import com.cloudshare.model.FileMetadata;
+import com.cloudshare.model.FileShare;
 import com.cloudshare.model.PermissionType;
 import com.cloudshare.repository.FileRepository;
 import com.cloudshare.repository.FileShareRepository;
@@ -365,6 +367,27 @@ public class FileService {
     public Page<FileResponse> listFiles(UUID userId, Pageable pageable) {
         return fileRepository.findByOwnerIdAndDeletedFalse(userId, pageable)
                 .map(this::mapToFileResponse);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SharedFileResponse> listSharedWithMe(UUID userId, Pageable pageable) {
+        return fileShareRepository.findBySharedWithIdAndFileNotDeleted(userId, pageable)
+                .map(this::mapToSharedFileResponse);
+    }
+
+    private SharedFileResponse mapToSharedFileResponse(FileShare share) {
+        FileMetadata metadata = share.getFile();
+        return SharedFileResponse.builder()
+                .id(metadata.getId())
+                .name(metadata.getOriginalFilename())
+                .sizeBytes(metadata.getFileSizeBytes())
+                .mimeType(metadata.getMimeType())
+                .checksum(metadata.getChecksumSha256())
+                .uploadedAt(metadata.getCreatedAt())
+                .sharedByUsername(share.getSharedBy().getUsername())
+                .permissionType(share.getPermissionType())
+                .sharedAt(share.getCreatedAt())
+                .build();
     }
 
     // Note: JpaRepository.save() is @Transactional by default
