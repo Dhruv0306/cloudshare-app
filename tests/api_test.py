@@ -533,6 +533,36 @@ def test_soft_delete_cascade(url_prefix):
     download_b_after = requests.get(f"{url_prefix}/api/v1/files/{file_id}/download", headers=headers_b)
     assert download_b_after.status_code == 404, f"Expected 404 (cascade deleted), got {download_b_after.status_code}"
 
+def test_compromised_password_rejection(url_prefix):
+    # This test specifically ensures that compromised passwords do not pass registration (returning 400)
+    # when breach checking is active.
+    compromised_passwords = [
+        "password123",
+        "12345678",
+        "qwertyuiop",
+        "welcome1",
+        "admin123",
+        "letmein1",
+        "iloveyou",
+        "monkey123",
+        "password",
+        "sunshine"
+    ]
+    
+    for pwd in compromised_passwords:
+        user = generate_random_user()
+        user["password"] = pwd
+        
+        response = requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+        
+        if response.status_code == 400:
+            json_data = response.json()
+            assert json_data.get("success") is False
+            error_msg = json_data.get("error", {}).get("message", "")
+            assert "Password has been found in a data breach" in error_msg, f"Expected breach error message for '{pwd}', got: {error_msg}"
+        else:
+            assert response.status_code == 201, f"Expected 201 or 400 for '{pwd}', got {response.status_code}. Response: {response.text}"
+
 # ----------------------------------------------------
 # Runner
 # ----------------------------------------------------
@@ -541,6 +571,7 @@ if __name__ == "__main__":
     runner = TestRunner()
     
     runner.run_case("Authentication Flow", test_auth_flow, BASE_URL)
+    runner.run_case("Compromised Password Rejection", test_compromised_password_rejection, BASE_URL)
     runner.run_case("File Operations", test_file_operations, BASE_URL)
     runner.run_case("Sharing & Collaboration", test_sharing_flow, BASE_URL)
     runner.run_case("Auth Boundaries", test_auth_boundaries, BASE_URL)
