@@ -95,7 +95,24 @@ def test_auth_flow(url_prefix):
     
     # Register duplicate user
     dup_response = requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
-    assert dup_response.status_code == 400, f"Expected 400 for duplicate user, got {dup_response.status_code}. Response: {dup_response.text}"
+    assert dup_response.status_code == 400, f"Expected 400 for duplicate user (same username), got {dup_response.status_code}. Response: {dup_response.text}"
+
+    # Register user with new username but already registered email (should return 201 success to prevent email enumeration)
+    dup_email_user = {
+        "username": f"other_{uuid.uuid4().hex[:8]}",
+        "email": user["email"],
+        "password": "SomeOtherPassword123!"
+    }
+    dup_email_response = requests.post(f"{url_prefix}/api/v1/auth/register", json=dup_email_user)
+    assert dup_email_response.status_code == 201, f"Expected 201 for duplicate email registration, got {dup_email_response.status_code}. Response: {dup_email_response.text}"
+
+    # Try to login with the fake user created via duplicate email registration (should fail with 401 Unauthorized because user shouldn't be created)
+    fake_login_payload = {
+        "usernameOrEmail": dup_email_user["username"],
+        "password": dup_email_user["password"]
+    }
+    fake_login_response = requests.post(f"{url_prefix}/api/v1/auth/login", json=fake_login_payload)
+    assert fake_login_response.status_code == 401, f"Expected 401 for fake user login, got {fake_login_response.status_code}. Response: {fake_login_response.text}"
     
     # Login user
     session = requests.Session()
