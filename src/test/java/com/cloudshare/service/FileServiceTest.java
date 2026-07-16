@@ -297,4 +297,49 @@ class FileServiceTest {
         verifyNoInteractions(encryptionService);
         verifyNoInteractions(storageService);
     }
+
+    @Test
+    void listSharedWithMe_success() {
+        UUID userId = UUID.randomUUID();
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+
+        com.cloudshare.model.User owner = com.cloudshare.model.User.builder()
+                .id(UUID.randomUUID())
+                .username("sharerUser")
+                .build();
+
+        FileMetadata file = FileMetadata.builder()
+                .id(UUID.randomUUID())
+                .originalFilename("shared.pdf")
+                .fileSizeBytes(5000L)
+                .mimeType("application/pdf")
+                .checksumSha256("sha256checksum")
+                .createdAt(java.time.Instant.now())
+                .build();
+
+        com.cloudshare.model.FileShare share = com.cloudshare.model.FileShare.builder()
+                .id(UUID.randomUUID())
+                .file(file)
+                .sharedBy(owner)
+                .permissionType(com.cloudshare.model.PermissionType.READ)
+                .createdAt(java.time.Instant.now())
+                .build();
+
+        org.springframework.data.domain.Page<com.cloudshare.model.FileShare> sharePage = 
+                new org.springframework.data.domain.PageImpl<>(java.util.List.of(share), pageable, 1);
+
+        when(fileShareRepository.findBySharedWithIdAndFileNotDeleted(userId, pageable)).thenReturn(sharePage);
+
+        org.springframework.data.domain.Page<com.cloudshare.dto.SharedFileResponse> result = 
+                fileService.listSharedWithMe(userId, pageable);
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        com.cloudshare.dto.SharedFileResponse response = result.getContent().get(0);
+        assertEquals(file.getId(), response.getId());
+        assertEquals(file.getOriginalFilename(), response.getName());
+        assertEquals(file.getFileSizeBytes(), response.getSizeBytes());
+        assertEquals("sharerUser", response.getSharedByUsername());
+        assertEquals(com.cloudshare.model.PermissionType.READ, response.getPermissionType());
+    }
 }
