@@ -51,6 +51,7 @@ public class JwtTokenProvider {
                 .compact();
     }
 
+    // Note: Client-side step-up timer is UX-only; 5-min JWT exp below is the true security boundary (see docs/system-design/security.md#step-up-countdown--token-expiry-boundary).
     public String generateStepUpToken(String userId, String username) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + (300 * 1000)); // 5 minutes

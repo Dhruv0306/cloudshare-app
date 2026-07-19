@@ -73,6 +73,13 @@ To protect critical configurations (like viewing system logs or modifying other 
 *   **Token Generation:** The user calls `POST /api/v1/auth/mfa/step-up`, passing their current 6-digit MFA code. If valid, the backend issues a separate, short-lived JWT token (`stepUpToken`) containing the claim `step_up: true` with a strict **5-minute expiration**.
 *   **Security Interceptor:** A Spring Security filter intercepts all admin paths and verifies that the `X-StepUp-Token` is present, valid, and unexpired. This prevents session hijackers from executing administrative actions even if they possess a valid bearer access token.
 
+#### Step-Up Countdown & Token Expiry Boundary
+The client-side administrative step-up countdown is a UX-only element. It acts solely as a visual indicator to inform administrators of their remaining session time.
+
+> [!IMPORTANT]
+> The client-side countdown has **no security enforcement capability**.
+> The actual security boundary is enforced strictly by the backend verifying the server-side JWT `exp` claim (configured to 5 minutes) within the security filters. If a client-side attacker clears, ignores, or extends the local timer, any subsequent request with an expired step-up token will still be rejected by the backend.
+
 ---
 
 ## 2. Encryption Architecture
