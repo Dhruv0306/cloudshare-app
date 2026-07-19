@@ -85,7 +85,7 @@ class FileServiceTest {
                 "file",
                 "clean_report.pdf",
                 "application/pdf",
-                "Plaintext report content".getBytes(StandardCharsets.UTF_8)
+                "%PDF-1.4\nPlaintext report content".getBytes(StandardCharsets.UTF_8)
         );
 
         // Stub antivirus scanner as clean
@@ -446,5 +446,89 @@ class FileServiceTest {
         verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
         verify(valueOperations).set(eq("cache:permissions:bypass:" + fileId), eq("true"), eq(java.time.Duration.ofMinutes(10)));
         verify(auditLogService).log(eq(userId), eq("FILE_DELETE"), eq(fileId), eq(ipAddress), any(String.class));
+    }
+
+    @Test
+    void uploadFile_dangerousExtensionPhp_throwsException() throws Exception {
+        UUID ownerId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+        
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("fixtures/php_masquerading_as_png.php")) {
+            assertNotNull(is, "Fixture file not found");
+            byte[] fileContent = is.readAllBytes();
+            
+            MockMultipartFile file = new MockMultipartFile(
+                    "file",
+                    "php_masquerading_as_png.php",
+                    "image/png",
+                    fileContent
+            );
+
+            // Mock ClamAV as clean
+            when(clamAvService.scan(any(InputStream.class))).thenReturn(true);
+
+            assertThrows(UnsupportedMediaTypeException.class, () -> {
+                fileService.uploadFile(file, ownerId, ipAddress);
+            });
+
+            // Verify storage write is skipped
+            verify(storageService, never()).store(any(String.class), any(InputStream.class));
+        }
+    }
+
+    @Test
+    void uploadFile_extensionMimeMismatch_textAsJpg_throwsException() throws Exception {
+        UUID ownerId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+        
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("fixtures/text_masquerading_as_jpg.jpg")) {
+            assertNotNull(is, "Fixture file not found");
+            byte[] fileContent = is.readAllBytes();
+            
+            MockMultipartFile file = new MockMultipartFile(
+                    "file",
+                    "text_masquerading_as_jpg.jpg",
+                    "image/jpeg",
+                    fileContent
+            );
+
+            // Mock ClamAV as clean
+            when(clamAvService.scan(any(InputStream.class))).thenReturn(true);
+
+            assertThrows(UnsupportedMediaTypeException.class, () -> {
+                fileService.uploadFile(file, ownerId, ipAddress);
+            });
+
+            // Verify storage write is skipped
+            verify(storageService, never()).store(any(String.class), any(InputStream.class));
+        }
+    }
+
+    @Test
+    void uploadFile_polyglotJpegWithScript_throwsException() throws Exception {
+        UUID ownerId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+        
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("fixtures/jpeg_with_script_payload.jpg")) {
+            assertNotNull(is, "Fixture file not found");
+            byte[] fileContent = is.readAllBytes();
+            
+            MockMultipartFile file = new MockMultipartFile(
+                    "file",
+                    "jpeg_with_script_payload.jpg",
+                    "image/jpeg",
+                    fileContent
+            );
+
+            // Mock ClamAV as clean
+            when(clamAvService.scan(any(InputStream.class))).thenReturn(true);
+
+            assertThrows(UnsupportedMediaTypeException.class, () -> {
+                fileService.uploadFile(file, ownerId, ipAddress);
+            });
+
+            // Verify storage write is skipped
+            verify(storageService, never()).store(any(String.class), any(InputStream.class));
+        }
     }
 }
