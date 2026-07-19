@@ -59,6 +59,9 @@ class FileServiceTest {
     @Mock
     private HashOperations<String, Object, Object> hashOperations;
 
+    @Mock
+    private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
+
     private FileService fileService;
 
     @BeforeEach
@@ -341,5 +344,107 @@ class FileServiceTest {
         assertEquals(file.getFileSizeBytes(), response.getSizeBytes());
         assertEquals("sharerUser", response.getSharedByUsername());
         assertEquals(com.cloudshare.model.PermissionType.READ, response.getPermissionType());
+    }
+
+    @Test
+    void downloadFile_bypassMarkerPresent_staleCacheHit_revokedUser_throwsException() {
+        UUID fileId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        // Bypass marker exists
+        when(cacheRedisTemplate.hasKey("cache:permissions:bypass:" + fileId)).thenReturn(true);
+        // Self healing delete throws exception
+        doThrow(new RuntimeException("Redis connection error")).when(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+
+        // Database lookup fails (revoked user has no share in DB)
+        when(fileRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> {
+            fileService.downloadFile(fileId, userId, ipAddress);
+        });
+
+        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        // Should not write anything back to the cache while bypass is active
+        verify(cacheRedisTemplate, never()).opsForHash();
+    }
+
+    @Test
+    void downloadFile_bypassMarkerPresent_selfHealingSucceeds_resumesNormalCaching() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        FileMetadata metadata = FileMetadata.builder()
+                .id(fileId)
+                .ownerId(userId)
+                .storagePath("storage_uuid")
+                .originalFilename("sensitive_report.pdf")
+                .fileSizeBytes(1234L)
+                .mimeType("application/pdf")
+                .encryptedFek("wrapped_fek")
+                .ivGcm(Base64.getEncoder().encodeToString(new byte[12]))
+                .deleted(false)
+                .build();
+
+        // 1. Bypass marker exists
+        when(cacheRedisTemplate.hasKey("cache:permissions:bypass:" + fileId)).thenReturn(true);
+        // 2. Self healing deletes succeed
+        when(cacheRedisTemplate.delete("cache:permissions:" + fileId)).thenReturn(true);
+        when(cacheRedisTemplate.delete("cache:permissions:bypass:" + fileId)).thenReturn(true);
+
+        // 3. Normal cache miss flows
+        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
+        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn(null);
+        when(cacheRedisTemplate.hasKey("cache:permissions:" + fileId)).thenReturn(false);
+
+        // 4. DB contains the file metadata
+        when(fileRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.of(metadata));
+        when(fileRepository.findAccessibleFile(fileId, userId)).thenReturn(Optional.of(metadata));
+
+        // Stub decryption keys
+        SecretKey mockFek = new SecretKeySpec(new byte[32], "AES");
+        when(encryptionService.unwrapFek("wrapped_fek", 1)).thenReturn(mockFek);
+        
+        ByteArrayInputStream mockEncryptedStream = new ByteArrayInputStream("Encrypted Data".getBytes(StandardCharsets.UTF_8));
+        when(storageService.retrieve("storage_uuid")).thenReturn(mockEncryptedStream);
+
+        FileService.DecryptedFileStream result = fileService.downloadFile(fileId, userId, ipAddress);
+
+        assertNotNull(result);
+        assertEquals("sensitive_report.pdf", result.getFilename());
+
+        // Verify self-healing deletes occurred
+        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        verify(cacheRedisTemplate).delete("cache:permissions:bypass:" + fileId);
+        // Verify we wrote back to the cache because self-healing succeeded
+        verify(hashOperations).putAll(eq("cache:permissions:" + fileId), any(java.util.Map.class));
+    }
+
+    @Test
+    void deleteFile_evictionThrows_setsBypassMarker() {
+        UUID fileId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        FileMetadata metadata = FileMetadata.builder()
+                .id(fileId)
+                .ownerId(userId)
+                .originalFilename("temp.txt")
+                .deleted(false)
+                .build();
+
+        when(fileRepository.findByIdAndOwnerIdAndDeletedFalse(fileId, userId)).thenReturn(Optional.of(metadata));
+        // Eviction delete throws
+        doThrow(new RuntimeException("Redis error")).when(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        when(cacheRedisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        fileService.deleteFile(fileId, userId, ipAddress);
+
+        assertTrue(metadata.isDeleted());
+        verify(fileRepository).save(metadata);
+        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        verify(valueOperations).set(eq("cache:permissions:bypass:" + fileId), eq("true"), eq(java.time.Duration.ofMinutes(10)));
+        verify(auditLogService).log(eq(userId), eq("FILE_DELETE"), eq(fileId), eq(ipAddress), any(String.class));
     }
 }
