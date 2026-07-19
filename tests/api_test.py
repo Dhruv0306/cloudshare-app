@@ -444,7 +444,12 @@ def test_security_hardening(url_prefix):
     
     step_up_token = step_up_res.json()["data"]["stepUpToken"]
     assert step_up_token is not None
-    
+
+    # Case C: Step-up token presented as standard Bearer token on a general endpoint should be rejected (401)
+    bearer_stepup_headers = {"Authorization": f"Bearer {step_up_token}"}
+    bearer_stepup_res = requests.get(f"{url_prefix}/api/v1/files", headers=bearer_stepup_headers)
+    assert bearer_stepup_res.status_code == 401, f"Expected 401 for step-up token used as bearer token, got {bearer_stepup_res.status_code}. Response: {bearer_stepup_res.text}"
+
     # 5.6 Admin role boundaries
     # Note: Standard user lacks ROLE_ADMIN. The step-up token is only meaningful for admin users.
     # A standard user attempting to access admin endpoints (e.g. GET /api/v1/admin/users)
