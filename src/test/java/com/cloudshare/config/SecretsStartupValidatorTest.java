@@ -81,4 +81,40 @@ class SecretsStartupValidatorTest {
         assertTrue(ex.getMessage().contains("crypto.master-kek"));
         assertTrue(ex.getMessage().contains("known insecure former default"));
     }
+
+    @Test
+    void validateSecrets_invalidKekShape_fails() {
+        CryptoProperties properties = new CryptoProperties();
+        // 31 bytes raw string is not 32 bytes
+        properties.setMasterKek("1234567890123456789012345678901");
+        properties.getKek().setAllowRawPassphrase(false);
+        ReflectionTestUtils.setField(validator, "cryptoProperties", properties);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> validator.validateSecrets());
+        assertTrue(ex.getMessage().contains("master KEK"));
+        assertTrue(ex.getMessage().contains("not exactly 32 bytes"));
+    }
+
+    @Test
+    void validateSecrets_invalidKekShape_allowRawPassphrase_succeeds() {
+        CryptoProperties properties = new CryptoProperties();
+        properties.setMasterKek("1234567890123456789012345678901");
+        properties.getKek().setAllowRawPassphrase(true);
+        ReflectionTestUtils.setField(validator, "cryptoProperties", properties);
+
+        assertDoesNotThrow(() -> validator.validateSecrets());
+    }
+
+    @Test
+    void validateSecrets_invalidVersionedKekShape_fails() {
+        CryptoProperties properties = new CryptoProperties();
+        properties.setMasterKek(java.util.Base64.getEncoder().encodeToString(new byte[32])); // valid master (exactly 32 bytes decoded)
+        properties.getKeks().put(2, "short_key"); // 9 bytes (not 32)
+        properties.getKek().setAllowRawPassphrase(false);
+        ReflectionTestUtils.setField(validator, "cryptoProperties", properties);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> validator.validateSecrets());
+        assertTrue(ex.getMessage().contains("version 2"));
+        assertTrue(ex.getMessage().contains("not exactly 32 bytes"));
+    }
 }
