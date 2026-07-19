@@ -42,6 +42,7 @@ class ShareServiceTest {
     @Mock private EncryptionService encryptionService;
     @Mock private StorageService storageService;
     @Mock private StringRedisTemplate cacheRedisTemplate;
+    @Mock private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
 
     private ShareService shareService;
 
@@ -379,5 +380,92 @@ class ShareServiceTest {
 
         assertThrows(com.cloudshare.exception.ResourceNotFoundException.class, 
                 () -> shareService.revokePublicLink(shareCode, callerId, "127.0.0.1"));
+    }
+
+    @Test
+    void shareFileInternally_evictionDeleteThrows_setsBypassMarker() {
+        UUID ownerId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        InternalShareRequest request = InternalShareRequest.builder()
+                .fileId(fileId)
+                .targetUsernameOrEmail("janedoe")
+                .permissionType("READ")
+                .build();
+
+        FileMetadata file = FileMetadata.builder().id(fileId).ownerId(ownerId).originalFilename("report.pdf").deleted(false).build();
+        User targetUser = User.builder().id(targetId).username("janedoe").email("janedoe@example.com").build();
+        User ownerUser = User.builder().id(ownerId).username("john").email("john@example.com").build();
+
+        when(fileRepository.findByIdAndOwnerIdAndDeletedFalse(fileId, ownerId)).thenReturn(Optional.of(file));
+        when(userRepository.findByUsernameOrEmail("janedoe", "janedoe")).thenReturn(Optional.of(targetUser));
+        when(userRepository.findById(ownerId)).thenReturn(Optional.of(ownerUser));
+        when(fileShareRepository.findByFileIdAndSharedWithId(fileId, targetId)).thenReturn(Optional.empty());
+
+        FileShare savedShare = FileShare.builder()
+                .id(UUID.randomUUID())
+                .file(file)
+                .sharedBy(ownerUser)
+                .sharedWith(targetUser)
+                .permissionType(PermissionType.READ)
+                .build();
+        when(fileShareRepository.save(any(FileShare.class))).thenReturn(savedShare);
+
+        // Make cacheRedisTemplate.delete throw exception
+        doThrow(new RuntimeException("Redis error")).when(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        when(cacheRedisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        InternalShareResponse response = shareService.shareFileInternally(request, ownerId, ipAddress);
+
+        assertNotNull(response);
+        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        verify(valueOperations).set(eq("cache:permissions:bypass:" + fileId), eq("true"), eq(java.time.Duration.ofMinutes(10)));
+        verify(auditLogService).log(eq(ownerId), eq("SHARE_CREATED"), eq(fileId), eq(ipAddress), any(String.class));
+    }
+
+    @Test
+    void shareFileInternally_evictionDeleteAndBypassSetThrow_doesNotCrash() {
+        UUID ownerId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UUID fileId = UUID.randomUUID();
+        String ipAddress = "192.168.1.10";
+
+        InternalShareRequest request = InternalShareRequest.builder()
+                .fileId(fileId)
+                .targetUsernameOrEmail("janedoe")
+                .permissionType("READ")
+                .build();
+
+        FileMetadata file = FileMetadata.builder().id(fileId).ownerId(ownerId).originalFilename("report.pdf").deleted(false).build();
+        User targetUser = User.builder().id(targetId).username("janedoe").email("janedoe@example.com").build();
+        User ownerUser = User.builder().id(ownerId).username("john").email("john@example.com").build();
+
+        when(fileRepository.findByIdAndOwnerIdAndDeletedFalse(fileId, ownerId)).thenReturn(Optional.of(file));
+        when(userRepository.findByUsernameOrEmail("janedoe", "janedoe")).thenReturn(Optional.of(targetUser));
+        when(userRepository.findById(ownerId)).thenReturn(Optional.of(ownerUser));
+        when(fileShareRepository.findByFileIdAndSharedWithId(fileId, targetId)).thenReturn(Optional.empty());
+
+        FileShare savedShare = FileShare.builder()
+                .id(UUID.randomUUID())
+                .file(file)
+                .sharedBy(ownerUser)
+                .sharedWith(targetUser)
+                .permissionType(PermissionType.READ)
+                .build();
+        when(fileShareRepository.save(any(FileShare.class))).thenReturn(savedShare);
+
+        // Make cacheRedisTemplate.delete throw exception
+        doThrow(new RuntimeException("Redis error")).when(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        when(cacheRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        doThrow(new RuntimeException("Redis write error")).when(valueOperations).set(anyString(), anyString(), any(java.time.Duration.class));
+
+        InternalShareResponse response = shareService.shareFileInternally(request, ownerId, ipAddress);
+
+        assertNotNull(response);
+        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        verify(valueOperations).set(eq("cache:permissions:bypass:" + fileId), eq("true"), eq(java.time.Duration.ofMinutes(10)));
+        verify(auditLogService).log(eq(ownerId), eq("SHARE_CREATED"), eq(fileId), eq(ipAddress), any(String.class));
     }
 }

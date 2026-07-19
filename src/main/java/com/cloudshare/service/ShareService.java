@@ -327,12 +327,18 @@ public class ShareService {
     }
 
     private void evictPermissionsCache(UUID fileId) {
+        String cacheKey = "cache:permissions:" + fileId;
         try {
-            String cacheKey = "cache:permissions:" + fileId;
             cacheRedisTemplate.delete(cacheKey);
             log.debug("Evicted permissions cache for file: {}", fileId);
         } catch (Exception e) {
-            log.error("Failed to evict permissions cache for file: {}", fileId, e);
+            log.error("[PERMISSION_CACHE_EVICTION_FAILED] Failed to evict permissions cache for file: {}. Setting bypass marker.", fileId, e);
+            try {
+                String bypassKey = "cache:permissions:bypass:" + fileId;
+                cacheRedisTemplate.opsForValue().set(bypassKey, "true", java.time.Duration.ofMinutes(10));
+            } catch (Exception ex) {
+                log.error("[PERMISSION_CACHE_EVICTION_FAILED] Failed to set bypass marker for file: {}", fileId, ex);
+            }
         }
     }
 }
