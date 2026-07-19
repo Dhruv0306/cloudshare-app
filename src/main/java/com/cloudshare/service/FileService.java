@@ -239,29 +239,51 @@ public class FileService {
 
     public void verifyFileAccess(UUID fileId, UUID userId, PermissionType requiredPermission) {
         String cacheKey = "cache:permissions:" + fileId;
-        
+        String bypassKey = "cache:permissions:bypass:" + fileId;
+        boolean bypassActive = false;
+
         try {
-            // Check cache hit
-            String cachedPermission = (String) cacheRedisTemplate.opsForHash().get(cacheKey, userId.toString());
-            if (cachedPermission != null) {
-                if (hasRequiredPermission(cachedPermission, requiredPermission)) {
-                    return; // Access allowed
+            Boolean hasBypass = cacheRedisTemplate.hasKey(bypassKey);
+            if (Boolean.TRUE.equals(hasBypass)) {
+                bypassActive = true;
+                try {
+                    cacheRedisTemplate.delete(cacheKey);
+                    cacheRedisTemplate.delete(bypassKey);
+                    bypassActive = false;
+                    log.info("Self-healing retry of cache eviction succeeded for file: {}", fileId);
+                } catch (Exception retryEx) {
+                    log.error("[PERMISSION_CACHE_EVICTION_FAILED] Self-healing retry of cache eviction failed for file: {}", fileId, retryEx);
                 }
-                throw new ResourceNotFoundException("File not found or access denied");
             }
-            
-            // Check if key exists (could be key exists but user not in hash, meaning no access)
-            Boolean keyExists = cacheRedisTemplate.hasKey(cacheKey);
-            if (Boolean.TRUE.equals(keyExists)) {
-                throw new ResourceNotFoundException("File not found or access denied");
-            }
-        } catch (ResourceNotFoundException e) {
-            throw e;
         } catch (Exception e) {
-            log.warn("Redis error during permission check, falling back to database", e);
+            log.error("[PERMISSION_CACHE_EVICTION_FAILED] Redis error checking bypass marker for file: {}", fileId, e);
+            bypassActive = true;
+        }
+
+        if (!bypassActive) {
+            try {
+                // Check cache hit
+                String cachedPermission = (String) cacheRedisTemplate.opsForHash().get(cacheKey, userId.toString());
+                if (cachedPermission != null) {
+                    if (hasRequiredPermission(cachedPermission, requiredPermission)) {
+                        return; // Access allowed
+                    }
+                    throw new ResourceNotFoundException("File not found or access denied");
+                }
+                
+                // Check if key exists (could be key exists but user not in hash, meaning no access)
+                Boolean keyExists = cacheRedisTemplate.hasKey(cacheKey);
+                if (Boolean.TRUE.equals(keyExists)) {
+                    throw new ResourceNotFoundException("File not found or access denied");
+                }
+            } catch (ResourceNotFoundException e) {
+                throw e;
+            } catch (Exception e) {
+                log.warn("Redis error during permission check, falling back to database", e);
+            }
         }
         
-        // Cache Miss or Redis error: Query DB
+        // Cache Miss or Redis error or Bypass Active: Query DB
         FileMetadata file = fileRepository.findByIdAndDeletedFalse(fileId)
                 .orElseThrow(() -> new ResourceNotFoundException("File not found or access denied"));
         
@@ -276,11 +298,13 @@ public class FileService {
         }
         
         // Write to Redis with 1 Hour TTL
-        try {
-            cacheRedisTemplate.opsForHash().putAll(cacheKey, permissionMap);
-            cacheRedisTemplate.expire(cacheKey, java.time.Duration.ofHours(1));
-        } catch (Exception e) {
-            log.error("Failed to write permissions to Redis cache", e);
+        if (!bypassActive) {
+            try {
+                cacheRedisTemplate.opsForHash().putAll(cacheKey, permissionMap);
+                cacheRedisTemplate.expire(cacheKey, java.time.Duration.ofHours(1));
+            } catch (Exception e) {
+                log.error("Failed to write permissions to Redis cache", e);
+            }
         }
         
         String userPermission = permissionMap.get(userId.toString());
@@ -321,7 +345,13 @@ public class FileService {
             cacheRedisTemplate.delete(cacheKey);
             log.debug("Evicted permissions cache for deleted file: {}", fileId);
         } catch (Exception e) {
-            log.error("Failed to evict permissions cache for deleted file: {}", fileId, e);
+            log.error("[PERMISSION_CACHE_EVICTION_FAILED] Failed to evict permissions cache for deleted file: {}. Setting bypass marker.", fileId, e);
+            try {
+                String bypassKey = "cache:permissions:bypass:" + fileId;
+                cacheRedisTemplate.opsForValue().set(bypassKey, "true", java.time.Duration.ofMinutes(10));
+            } catch (Exception ex) {
+                log.error("[PERMISSION_CACHE_EVICTION_FAILED] Failed to set bypass marker for deleted file: {}", fileId, ex);
+            }
         }
 
         // Log delete audit event
