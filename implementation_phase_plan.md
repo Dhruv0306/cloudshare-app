@@ -12,13 +12,17 @@
 
 ---
 
-## H2 — resolved as a consequence of C2
+## H2 — resolved as a consequence of C2 (COMPLETED)
 
 **Problem:** general-API rate limiting falls back to raw IP for unauthenticated callers; combined with C2 (spoofable `X-Real-IP` if `:8080` was reachable directly), the IP-keyed buckets weren't trustworthy.
 
-**Plan:** No standalone code change. This was a second-order effect of the port-exposure fix, not an independent bug — once `app:8080` and friends are no longer publicly reachable and `ClientIpResolver`'s trust assumption (Nginx is the only path in) holds, the IP-keyed rate-limit buckets are trustworthy again. **Action item:** add one regression test confirming a direct request to the app container (bypassing gateway, e.g. in an integration test hitting the app context directly) with a forged `X-Real-IP` header doesn't get a free pass — mostly a documentation/verification step, not new logic.
+**Resolution:** No standalone code change. The security boundary was successfully established under C2 by removing public port exposures in `docker-compose.yml` for all backend services (including the app container `app:8080`). External clients can only access the services through the Nginx gateway, which overrides the `X-Real-IP` header with the true connection source IP (`$remote_addr`). 
 
-**Files:** none functionally; optionally a new integration test asserting the network topology assumption, e.g. in `RateLimitingFilterTest` or a docker-compose smoke test.
+**Verification & Documentation:**
+1. Added `test_gateway_ip_spoofing_mitigation` regression test in `tests/api_test.py` verifying that direct requests to the backend container fail from outside the Docker network and that spoofed `X-Real-IP` headers sent through the gateway are handled cleanly (overwritten).
+2. Documented the Client IP resolution architecture and gateway trust assumptions in `docs/system-design/caching-strategy.md` and linked it in `docs/system-design/security.md`.
+
+**Files:** `tests/api_test.py`, `docs/system-design/caching-strategy.md`, `docs/system-design/security.md`.
 
 ---
 
