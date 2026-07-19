@@ -39,20 +39,18 @@
 
 ---
 
-## H4 — `security/kek-fail-closed` (Option B: opt-in fallback, loud)
+## H4 — `security/kek-fail-closed` (Option B: opt-in fallback, loud) (COMPLETED)
 
 **Problem:** `EncryptionService.getMasterKek` silently SHA-256-digests any KEK that isn't exactly 32 bytes after Base64 decode, rather than failing startup — a misconfigured KEK boots successfully and silently encrypts under an unintended derived key.
 
-**Plan:**
-1. `CryptoProperties`: add `allowRawPassphrase` (bool), bound to `crypto.kek.allow-raw-passphrase`, default `false`.
-2. `application.yml`: wire `crypto.kek.allow-raw-passphrase: ${CRYPTO_KEK_ALLOW_RAW_PASSPHRASE:false}`.
-3. `SecretsStartupValidator`: new `validateKekShape` step, run alongside existing secret-presence checks. Decode every configured KEK (master + versioned map). If any isn't exactly 32 bytes:
-   - `allowRawPassphrase=false` → throw `IllegalStateException` naming the offending KEK version, abort startup.
-   - `allowRawPassphrase=true` → allow through, `log.warn` naming the version that will be digested.
-4. `EncryptionService.getMasterKek`: keep the digest fallback (now provably gated by the validator) but add a `log.warn` on first use per version instead of silent digestion.
-5. Tests: `SecretsStartupValidatorTest` — 31-byte KEK + flag off → startup fails; 31-byte KEK + flag on → startup succeeds with a captured `WARN` log. `EncryptionServiceTest` — existing 32-byte-KEK tests unchanged (no warning logged); new test confirms warn-log emission on the fallback path.
+**Resolution:**
+1. Added `allowRawPassphrase` configuration property nested under `crypto.kek` in `CryptoProperties.java`, defaulting to `false`.
+2. Configured and wired `crypto.kek.allow-raw-passphrase` in `application.yml`.
+3. Created a `validateKekShape` method in `SecretsStartupValidator.java` checking that all configured KEKs (master and versioned KEKs) decode to exactly 32 bytes. If not, it fails startup with an `IllegalStateException` unless `allowRawPassphrase` is `true` (in which case it logs a warning).
+4. Modified `EncryptionService.java` to log a warning on the first use of a digested KEK version.
+5. Added unit and integration tests verifying correct validation and logging behaviors.
 
-**Files:** `CryptoProperties.java`, `application.yml`, `SecretsStartupValidator.java`, `EncryptionService.java`, `SecretsStartupValidatorTest.java`, `EncryptionServiceTest.java`.
+**Files:** `CryptoProperties.java`, `application.yml`, `SecretsStartupValidator.java`, `EncryptionService.java`, `SecretsStartupValidatorTest.java`, `EncryptionServiceTest.java`, `application-test.yml`.
 
 ---
 

@@ -2,14 +2,20 @@ package com.cloudshare.config;
 
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Set;
 
 @Component
 @Slf4j
 public class SecretsStartupValidator {
+
+    @Autowired
+    private CryptoProperties cryptoProperties;
 
     @Value("${spring.datasource.password:}")
     private String dbPassword;
@@ -43,7 +49,52 @@ public class SecretsStartupValidator {
         validateSecret("storage.minio.secret-key", minioSecretKey, 8);
         validateSecret("crypto.master-kek", masterKek, 32);
 
+        validateKekShape();
+
         log.info("All application secrets validated successfully.");
+    }
+
+    private void validateKekShape() {
+        if (cryptoProperties == null) {
+            return;
+        }
+
+        boolean allowRaw = cryptoProperties.getKek() != null && cryptoProperties.getKek().isAllowRawPassphrase();
+
+        // Validate master KEK if it is configured and not already overridden by version 1 in keks map
+        String masterKekVal = cryptoProperties.getMasterKek();
+        if (masterKekVal != null && !masterKekVal.trim().isEmpty() && !cryptoProperties.getKeks().containsKey(1)) {
+            checkKekShape("master KEK", masterKekVal, allowRaw);
+        }
+
+        // Validate all versioned KEKs in the map
+        cryptoProperties.getKeks().forEach((version, kekVal) -> {
+            if (kekVal != null && !kekVal.trim().isEmpty()) {
+                checkKekShape("version " + version, kekVal, allowRaw);
+            }
+        });
+    }
+
+    private void checkKekShape(String versionLabel, String kekStr, boolean allowRaw) {
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(kekStr.trim());
+        } catch (IllegalArgumentException e) {
+            keyBytes = kekStr.getBytes(StandardCharsets.UTF_8);
+        }
+
+        if (keyBytes.length != 32) {
+            if (!allowRaw) {
+                throw new IllegalStateException(String.format(
+                        "KEK for %s is not exactly 32 bytes after Base64 decoding. " +
+                        "If you intend to use a raw passphrase and digest it, set crypto.kek.allow-raw-passphrase=true.",
+                        versionLabel));
+            } else {
+                log.warn("KEK for {} is not exactly 32 bytes after Base64 decoding. " +
+                        "It will be digested using SHA-256 fallback because crypto.kek.allow-raw-passphrase=true.",
+                        versionLabel);
+            }
+        }
     }
 
     private void validateSecret(String name, String value, int minLength) {

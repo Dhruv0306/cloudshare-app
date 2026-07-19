@@ -31,4 +31,6 @@ security:
 
 crypto:
   master-kek: test_crypto_master_kek_32_bytes_x
+  kek:
+    allow-raw-passphrase: true
 

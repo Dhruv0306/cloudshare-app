@@ -1,14 +1,19 @@
 package com.cloudshare.service;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.cloudshare.config.CryptoProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import javax.crypto.SecretKey;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -68,5 +73,62 @@ class EncryptionServiceTest {
 
         String decryptedText = decryptedOut.toString(StandardCharsets.UTF_8);
         assertEquals(originalText, decryptedText);
+    }
+
+    @Test
+    void testNoWarningFor32ByteKek() throws Exception {
+        CryptoProperties properties = new CryptoProperties();
+        properties.setMasterKek(Base64.getEncoder().encodeToString(new byte[32]));
+        
+        EncryptionService service = new EncryptionService(properties);
+
+        Logger logger = (Logger) LoggerFactory.getLogger(EncryptionService.class);
+        ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
+        listAppender.start();
+        logger.addAppender(listAppender);
+
+        try {
+            SecretKey fek = service.generateFek();
+            String wrapped = service.wrapFek(fek, 1);
+            assertNotNull(wrapped);
+        } finally {
+            logger.detachAppender(listAppender);
+        }
+
+        List<ILoggingEvent> logs = listAppender.list;
+        boolean hasWarn = logs.stream().anyMatch(event -> event.getLevel().toString().equals("WARN"));
+        assertFalse(hasWarn, "Should not log a warning for a valid 32-byte KEK");
+    }
+
+    @Test
+    void testWarningLoggedExactlyOnceForNon32ByteKek() throws Exception {
+        CryptoProperties properties = new CryptoProperties();
+        properties.setMasterKek("short_key");
+        
+        EncryptionService service = new EncryptionService(properties);
+
+        Logger logger = (Logger) LoggerFactory.getLogger(EncryptionService.class);
+        ListAppender<ILoggingEvent> listAppender = new ListAppender<>();
+        listAppender.start();
+        logger.addAppender(listAppender);
+
+        try {
+            SecretKey fek = service.generateFek();
+            String wrapped = service.wrapFek(fek, 1);
+            assertNotNull(wrapped);
+            
+            SecretKey unwrapped = service.unwrapFek(wrapped, 1);
+            assertNotNull(unwrapped);
+        } finally {
+            logger.detachAppender(listAppender);
+        }
+
+        List<ILoggingEvent> logs = listAppender.list;
+        long warnCount = logs.stream()
+                .filter(event -> event.getLevel().toString().equals("WARN"))
+                .filter(event -> event.getFormattedMessage().contains("not exactly 32 bytes"))
+                .count();
+
+        assertEquals(1, warnCount, "Should log a warning exactly once for the non-32-byte KEK");
     }
 }

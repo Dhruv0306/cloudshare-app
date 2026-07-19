@@ -111,6 +111,7 @@ flowchart TD
 1.  **Key Hierarchy:**
     *   **Data Encryption Key / File Encryption Key (FEK):** A unique, cryptographically random AES-256 key generated for *each* uploaded file.
     *   **Key Encryption Key (KEK):** A master key stored securely outside the database (e.g., in a Key Management Service (KMS) or an environment variable on a secure, restricted container).
+        *   **Fail-Closed Startup Enforcement (H4):** On startup, the `SecretsStartupValidator` validates the shape of all configured KEKs (both the master KEK and versioned keys map) by trying to Base64-decode them. If any KEK is not exactly 32 bytes (256 bits), the application aborts startup to prevent encrypting data under an unintended derived key. If a legacy raw passphrase or non-32-byte key is intended, administrators must explicitly opt-in by setting `crypto.kek.allow-raw-passphrase=true`, which will emit loud warning alerts both during startup and on the first cryptographic use of that KEK version.
 2.  **File Upload (Encryption):**
     *   When a user uploads a file, the application generates a random 256-bit FEK.
     *   The file data is encrypted using AES-256-GCM, generating cipher data and a 16-byte authentication tag (ensuring integrity).

@@ -20,6 +20,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -30,6 +31,7 @@ public class EncryptionService {
     private final CryptoProperties cryptoProperties;
     private final SecureRandom secureRandom = new SecureRandom();
     private final Map<Integer, SecretKey> resolvedKeks = new ConcurrentHashMap<>();
+    private final Set<Integer> loggedDigestWarnings = ConcurrentHashMap.newKeySet();
 
     private SecretKey getMasterKek(int version) {
         return resolvedKeks.computeIfAbsent(version, v -> {
@@ -54,6 +56,9 @@ public class EncryptionService {
 
             // If the key is not exactly 256 bits (32 bytes), digest it to enforce correctness
             if (keyBytes.length != 32) {
+                if (loggedDigestWarnings.add(v)) {
+                    log.warn("KEK for version {} is not exactly 32 bytes after Base64 decoding. Digesting using SHA-256 fallback.", v);
+                }
                 try {
                     MessageDigest digest = MessageDigest.getInstance("SHA-256");
                     keyBytes = digest.digest(keyBytes);

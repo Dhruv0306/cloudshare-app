@@ -83,6 +83,8 @@ storage:
 # Cryptography
 crypto:
   master-kek: ${CRYPTO_MASTER_KEK:}
+  kek:
+    allow-raw-passphrase: ${CRYPTO_KEK_ALLOW_RAW_PASSPHRASE:false}
 
 # Scheduler Configurations
 app:
