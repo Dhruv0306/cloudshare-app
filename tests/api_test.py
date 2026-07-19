@@ -5,7 +5,19 @@ import hashlib
 import uuid
 import requests
 
-BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8080")
+# Disable SSL verification warnings for local testing against the Nginx gateway
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Monkeypatch requests to default verify=False for localhost/127.0.0.1 (Nginx self-signed SSL)
+_orig_request = requests.Session.request
+def _patched_request(self, method, url, *args, **kwargs):
+    if "localhost" in url or "127.0.0.1" in url:
+        kwargs["verify"] = False
+    return _orig_request(self, method, url, *args, **kwargs)
+requests.Session.request = _patched_request
+
+BASE_URL = os.environ.get("API_BASE_URL", "https://localhost")
 
 EICAR_STRING = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 
@@ -475,10 +487,20 @@ def test_observability(url_prefix):
     health_data = health_res.json()
     assert health_data.get("status") == "UP", f"Expected status to be UP, got {health_data.get('status')}"
 
-    # 2. Prometheus metrics endpoint (internal access)
+    # 2. Prometheus metrics endpoint (internal access only)
     prometheus_res = requests.get(f"{url_prefix}/actuator/prometheus")
-    assert prometheus_res.status_code == 200, f"Expected 200 for prometheus endpoint, got {prometheus_res.status_code}"
-    assert "# HELP" in prometheus_res.text, "Expected # HELP in prometheus metrics response"
+    if (prometheus_res.status_code != 200 or "# HELP" not in prometheus_res.text) and ("localhost" in url_prefix or "127.0.0.1" in url_prefix):
+        import subprocess
+        try:
+            cmd = ["docker", "compose", "exec", "-T", "app", "wget", "-O-", "-q", "http://localhost:8080/actuator/prometheus"]
+            res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            prometheus_text = res.stdout
+            assert "# HELP" in prometheus_text, "Expected # HELP in prometheus metrics response"
+        except Exception as e:
+            assert False, f"Direct access returned {prometheus_res.status_code} and internal container check failed: {e}"
+    else:
+        assert prometheus_res.status_code == 200, f"Expected 200 for prometheus endpoint, got {prometheus_res.status_code}"
+        assert "# HELP" in prometheus_res.text, "Expected # HELP in prometheus metrics response"
 
     # 3. X-Trace-Id echo-back
     trace_id_value = "my-test-trace-123"

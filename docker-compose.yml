@@ -20,8 +20,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudshare
@@ -59,8 +57,6 @@ services:
       - POSTGRES_DB=cloudshare
       - POSTGRES_USER=${SPRING_DATASOURCE_USERNAME}
       - POSTGRES_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -68,8 +64,6 @@ services:
   cache-aside:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
     volumes:
       - redisdata-aside:/data
 
@@ -77,24 +71,17 @@ services:
   cache-security:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
-    ports:
-      - "6380:6379" # Exposed on port 6380 on the host to prevent conflict
     volumes:
       - redisdata-security:/data
 
   # ClamAV Virus Scanner Daemon
   clamav:
     image: clamav/clamav:latest
-    ports:
-      - "3310:3310"
 
   # MinIO S3-Compatible Object Storage (Free local S3)
   storage:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000" # MinIO API
-      - "9001:9001" # MinIO Console Web UI
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
