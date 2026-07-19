@@ -16,4 +16,12 @@ public class CryptoProperties {
     private String masterKek;
     private int currentKekVersion = 1;
     private Map<Integer, String> keks = new HashMap<>();
+    private KekProperties kek = new KekProperties();
+
+    @Getter
+    @Setter
+    public static class KekProperties {
+        private boolean allowRawPassphrase = false;
+    }
 }
+
