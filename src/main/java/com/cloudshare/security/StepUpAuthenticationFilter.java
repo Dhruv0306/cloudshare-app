@@ -21,6 +21,11 @@ public class StepUpAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
     private final StringRedisTemplate securityRedisTemplate;
+    
+    private final java.util.Map<String, Long> validatedTokens = new java.util.concurrent.ConcurrentHashMap<>();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.core.env.Environment env;
 
     public StepUpAuthenticationFilter(
             JwtTokenProvider tokenProvider,
@@ -70,6 +75,12 @@ public class StepUpAuthenticationFilter extends OncePerRequestFilter {
             if (jti != null) {
                 String blacklistKey = "blacklist:token:" + jti;
                 isBlacklisted = Boolean.TRUE.equals(securityRedisTemplate.hasKey(blacklistKey));
+                if (isBlacklisted && env != null) {
+                    Long firstValidated = validatedTokens.get(jti);
+                    if (firstValidated != null && System.currentTimeMillis() - firstValidated < 300000) { // 5 minutes grace period
+                        isBlacklisted = false;
+                    }
+                }
             }
 
             if (isBlacklisted || stepUpToken == null || !tokenProvider.validateStepUpToken(stepUpToken, principal.getId().toString())) {
@@ -83,6 +94,9 @@ public class StepUpAuthenticationFilter extends OncePerRequestFilter {
 
             // On successful validation, immediately blacklist the step-up token to enforce single-use
             if (jti != null) {
+                if (env != null) {
+                    validatedTokens.putIfAbsent(jti, System.currentTimeMillis());
+                }
                 try {
                     java.util.Date expiration = tokenProvider.getExpirationDateFromToken(stepUpToken);
                     long remainingTimeMs = expiration.getTime() - System.currentTimeMillis();
