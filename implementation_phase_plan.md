@@ -1,69 +1,58 @@
-## H1 — `security/fail-loud-permission-cache`
+## LM1 — `security/secrets-hygiene-audit`
 
-**Problem:** `ShareService.evictPermissionsCache` swallows Redis delete failures with a log-only catch. If Redis errors at the exact moment of a revoke, the DB-level revocation succeeds but the cached permission hash survives for up to an hour — a revoked user keeps read access with no retry, no alert, no compensating check.
-
-**Plan:**
-1. `ShareService.evictPermissionsCache`: on delete failure, write a short-TTL bypass marker (`cache:permissions:bypass:<fileId>`, ~10 min TTL) instead of just logging.
-2. `FileService.verifyFileAccess`: check for the bypass marker before trusting the cached hash. If present, attempt a self-healing retry of the delete; if that also fails, skip the cache entirely and authorize from a fresh DB query for this request only (don't repopulate the cache while the bypass is active).
-3. Tag the failure log distinctly (`PERMISSION_CACHE_EVICTION_FAILED`) so it's greppable/alertable later.
-4. Tests: `ShareServiceTest` — delete-throws → bypass marker set. `FileServiceTest` — bypass marker present + stale hash still grants access to a revoked user → `verifyFileAccess` throws anyway (DB wins over stale cache); retry-succeeds path clears the marker and resumes normal caching.
-
-**Files:** `ShareService.java`, `FileService.java`, `ShareServiceTest.java`, `FileServiceTest.java`.
-
----
-
-## H2 — resolved as a consequence of C2 (COMPLETED)
-
-**Problem:** general-API rate limiting falls back to raw IP for unauthenticated callers; combined with C2 (spoofable `X-Real-IP` if `:8080` was reachable directly), the IP-keyed buckets weren't trustworthy.
-
-**Resolution:** No standalone code change. The security boundary was successfully established under C2 by removing public port exposures in `docker-compose.yml` for all backend services (including the app container `app:8080`). External clients can only access the services through the Nginx gateway, which overrides the `X-Real-IP` header with the true connection source IP (`$remote_addr`). 
-
-**Verification & Documentation:**
-1. Added `test_gateway_ip_spoofing_mitigation` regression test in `tests/api_test.py` verifying that direct requests to the backend container fail from outside the Docker network and that spoofed `X-Real-IP` headers sent through the gateway are handled cleanly (overwritten).
-2. Documented the Client IP resolution architecture and gateway trust assumptions in `docs/system-design/caching-strategy.md` and linked it in `docs/system-design/security.md`.
-
-**Files:** `tests/api_test.py`, `docs/system-design/caching-strategy.md`, `docs/system-design/security.md`.
-
----
-
-## H3 — `docs/step-up-timer-clarification` (docs-only)
-
-**Problem:** the admin UI's client-side step-up countdown could be mistaken by a future contributor for a security control, when the real boundary is the server-side JWT `exp` claim.
+**Problem:** never actually confirmed no real secret (KEK, JWT signing key, DB/MinIO creds) ever touched a committed file — `.env.example` looked clean in the snapshot I reviewed, but "looked clean in the current tree" and "never appeared in history" are different guarantees, especially heading into a v1.1 tag.
 
 **Plan:**
-1. `docs/system-design/security.md`: add a subsection under MFA/step-up stating explicitly that the client countdown is UX only, has no security effect, and that the 5-minute JWT expiry enforced in `StepUpAuthenticationFilter` is the actual boundary — a client that clears, ignores, or extends its local timer gains nothing.
-2. Add a one-line comment directly above `JwtTokenProvider.generateStepUpToken` pointing at that doc section, so a reader lands on the explanation without hunting for it.
-3. No test changes — this is documentation, not behavior.
+1. Run `git log -p --all -- .env .env.* '**/application*.yml'` and grep the full diff history for patterns that look like real secrets (long base64/hex strings in a `KEK`/`JWT_SECRET`/`PASSWORD` context) rather than the `${VAR:-default}` placeholders you use everywhere else.
+2. Cross-check `.gitignore` actually covers `.env` (not just `.env.example`) and has covered it since the first commit that could have contained one — a `.gitignore` added late doesn't retroactively scrub history.
+3. If anything real is found: rotate that secret immediately (KEK rotation already has tooling via `ReKeyWorker`; JWT secret rotation just needs a deploy + forces re-login for all sessions), then decide whether to rewrite history (`git filter-repo`) — only worth it pre-wide-distribution, skip if the repo already has external clones/forks.
+4. If clean: no code change, just close the item with a note in `docs/system-design/secrets-key-management.md` recording that the audit was done and when.
 
-**Files:** `docs/system-design/security.md`, `JwtTokenProvider.java` (comment only).
-
----
-
-## H4 — `security/kek-fail-closed` (Option B: opt-in fallback, loud) (COMPLETED)
-
-**Problem:** `EncryptionService.getMasterKek` silently SHA-256-digests any KEK that isn't exactly 32 bytes after Base64 decode, rather than failing startup — a misconfigured KEK boots successfully and silently encrypts under an unintended derived key.
-
-**Resolution:**
-1. Added `allowRawPassphrase` configuration property nested under `crypto.kek` in `CryptoProperties.java`, defaulting to `false`.
-2. Configured and wired `crypto.kek.allow-raw-passphrase` in `application.yml`.
-3. Created a `validateKekShape` method in `SecretsStartupValidator.java` checking that all configured KEKs (master and versioned KEKs) decode to exactly 32 bytes. If not, it fails startup with an `IllegalStateException` unless `allowRawPassphrase` is `true` (in which case it logs a warning).
-4. Modified `EncryptionService.java` to log a warning on the first use of a digested KEK version.
-5. Added unit and integration tests verifying correct validation and logging behaviors.
-
-**Files:** `CryptoProperties.java`, `application.yml`, `SecretsStartupValidator.java`, `EncryptionService.java`, `SecretsStartupValidatorTest.java`, `EncryptionServiceTest.java`, `application-test.yml`.
+**Files:** none (if clean) or the affected secret's rotation path + `secrets-key-management.md` note.
+**Tests:** none — this is an audit, not a code change.
 
 ---
 
-## H5 — `security/link-rate-limit-scoping`
+## LM2 — `infra/minio-console-lockdown`
 
-**Problem:** public share-link access (`GET /api/v1/shares/link/**`) is rate-limited on a single blanket `limit:<ip>:/api/v1/shares/link` key. One abusive anonymous client on a shared IP (NAT/corporate proxy) can exhaust the bucket for every legitimate user behind that same egress IP, across every share link.
+**Problem:** MinIO console (port 9001) is enabled and, pre-C2-fix, was publicly reachable; even with C2 fixed (internal-only network), it's still running and reachable by anything on the Docker network with only root credentials guarding it — more attack surface than a file-sharing app's object store needs.
 
 **Plan:**
-1. `RateLimitingFilter`: replace the single key with a two-tier scheme, both of which must pass:
-   - **Per-link bucket:** `limit:link:<shareCode>:<ip>` at the existing `linkLimit` (default 30/min) — bounds hammering one specific link.
-   - **Per-IP coarse bucket:** `limit:linkglobal:<ip>` at a new, higher ceiling — bounds one IP enumerating many share codes without starving other NAT-mates out of any single link they legitimately hold.
-2. Extract `shareCode` from the request path (`/api/v1/shares/link/{shareCode}`) via simple path parsing — no new dependency.
-3. New config property `security.rate-limiting.link-global-limit` (default 100), wired the same way as the existing `*-limit` properties; corresponding `RATE_LIMIT_LINK_GLOBAL` env var added to `docker-compose.yml` / `.env.example` for consistency with the existing pattern.
-4. Tests: `RateLimitingFilterTest` — 30 requests to link A from one IP blocks link A but not link B from the same IP; 100 requests to distinct links from one IP trips the global bucket regardless of per-link state.
+1. `docker-compose.yml`: change the MinIO `command` to drop `--console-address ":9001"` in staging/prod-like profiles, or gate it behind a compose profile (e.g. `profiles: ["dev-tools"]`) so it's opt-in locally and absent by default.
+2. Confirm nothing in `MinIoStorageServiceImpl` or app startup depends on the console being up (it shouldn't — the console is a human UI, the S3 API on 9000 is what the app uses).
+3. Document the operational alternative in `docs/system-design/infrastructure-cicd.md`: bucket inspection via `mc` (MinIO client CLI) run ad hoc against the internal network or through an SSH tunnel, rather than a standing web console.
+4. If you still want the console available for local dev convenience, that's fine — just make sure the staging/prod compose path doesn't inherit it (same "override doesn't remove ports" trap you hit in C2 — verify explicitly rather than assuming).
 
-**Files:** `RateLimitingFilter.java`, `application.yml`, `docker-compose.yml`, `.env.example`, `RateLimitingFilterTest.java`.
+**Files:** `docker-compose.yml`, `docs/system-design/infrastructure-cicd.md`.
+**Tests:** none (infra config, not app logic) — verify manually post-deploy that `9001` isn't reachable where you didn't intend it.
+
+---
+
+## LM3 — `perf/rate-limit-single-jwt-parse`
+
+**Problem:** `RateLimitingFilter.getUserIdFromAuthorizationHeader` and `JwtAuthenticationFilter` each independently parse and validate the same JWT per request — correct today, just duplicated CPU work.
+
+I flagged in the original review that fixing this by having `RateLimitingFilter` run *after* auth and read `SecurityContextHolder` trades away some defense-in-depth (rate limiting currently applies before a full auth context is built, which matters if JWT parsing itself were ever a DoS vector). Given that tradeoff, I'd suggest **not** reordering the filters, and instead just avoiding the duplicate parse without changing filter order:
+
+**Plan:**
+1. Add a lightweight request-scoped cache: after `JwtAuthenticationFilter` runs (it's already `addFilterBefore(rateLimitingFilter, JwtAuthenticationFilter.class)` — wait, currently `RateLimitingFilter` runs *before* `JwtAuthenticationFilter`, so it can't reuse anything from it yet). Given the current order is rate-limit → JWT-auth, the cheapest real fix is: have `RateLimitingFilter` parse the JWT once into a small local record (`userId`, validity) and stash it as a request attribute (`request.setAttribute("resolvedUserId", ...)`), then have `JwtAuthenticationFilter` check for that attribute before re-parsing, falling back to its own parse if absent (keeps each filter independently correct/testable).
+2. This keeps the current security ordering (rate limiting still gates before full auth context exists) while removing the duplicate parse in the common case.
+3. Tests: add a test asserting `JwtAuthenticationFilter` uses the pre-resolved attribute when present (e.g. via a spy/mock verifying the token parser is called at most once across both filters for a single request), and that it still works correctly (falls back to its own parse) when the attribute is absent — covers the case where `RateLimitingFilter` is disabled (`rateLimitingEnabled=false`).
+
+**Files:** `RateLimitingFilter.java`, `JwtAuthenticationFilter.java`, `RateLimitingFilterTest.java`, a small addition to `JwtAuthenticationFilter`'s test coverage (create one if it doesn't exist yet — I didn't see a dedicated `JwtAuthenticationFilterTest` in the file list, only `AuthenticationMdcFilterTest`, `MdcFilterTest`, `RateLimitingFilterTest`, `StepUpAuthenticationFilterTest`).
+
+**Note:** this is genuinely optional — it's a CPU-cycle optimization, not a correctness or security fix. Given everything else on your plate, I'd rank this last of the five LOW/MEDIUM items.
+
+---
+
+## LM4 — `testing/polyglot-upload-regression`
+
+**Problem:** upload pipeline order (ClamAV scan → Tika MIME detection → dangerous-extension/MIME check → encrypt) is correct, but there's no test proving a polyglot file (valid image header + trailing malicious payload, or a file whose extension and magic bytes disagree) is actually caught by the MIME/extension check rather than relying on ClamAV signature coverage alone.
+
+**Plan:**
+1. Add fixture files under `src/test/resources/fixtures/`: e.g. a PNG with a `.php` extension, a plain-text file renamed to `.jpg`, and a valid JPEG with an appended `<script>` payload after EOF (classic polyglot pattern) — all non-malicious payloads, just mismatched-signature test data, so nothing ClamAV-flagged needs to be checked into the repo.
+2. `FileServiceTest`: new tests calling `uploadFile` with each fixture, asserting `UnsupportedMediaTypeException` is thrown based on Tika's detected MIME type disagreeing with the extension/dangerous-type list — independent of ClamAV's mocked response (mock ClamAV as "clean" in these tests specifically, to isolate that the MIME check is the thing catching it, not the scanner).
+3. Optionally extend `tests/e2e/specs/dashboard.spec.ts` (or a new spec) with one real end-to-end polyglot upload attempt through the full stack, since Playwright fixtures already exist for upload flows — lower priority than the unit-level `FileServiceTest` coverage, which is the part actually missing.
+
+**Files:** `src/test/resources/fixtures/*` (new), `FileServiceTest.java`, optionally `tests/e2e/specs/*.spec.ts`.
+
