@@ -130,4 +130,76 @@ class RateLimitingFilterTest {
 
         verify(filterChain).doFilter(request, response);
     }
+
+    @Test
+    void testPublicLinkRateLimiting_PerLinkBlocked_AllowsOtherLinks() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "linkLimit", 30);
+        ReflectionTestUtils.setField(rateLimitingFilter, "linkGlobalLimit", 100);
+
+        // Setup request for link A
+        when(request.getRequestURI()).thenReturn("/api/v1/shares/link/linkA");
+        when(request.getMethod()).thenReturn("GET");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+
+        // Mock RateLimiterService: linkA key is blocked (returns false), global key is allowed (returns true)
+        when(rateLimiterService.isAllowed(eq("limit:link:linkA:127.0.0.1"), eq(60), eq(30))).thenReturn(false);
+        when(rateLimiterService.isAllowed(eq("limit:linkglobal:127.0.0.1"), eq(60), eq(100))).thenReturn(true);
+
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(stringWriter);
+        when(response.getWriter()).thenReturn(printWriter);
+
+        // Execute filter
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        // Verify link A request is blocked (429)
+        verify(filterChain, never()).doFilter(request, response);
+        verify(response).setStatus(429);
+
+        // Reset mocks for request B testing
+        reset(request, response, filterChain, rateLimiterService);
+
+        // Setup request for link B (same IP)
+        when(request.getRequestURI()).thenReturn("/api/v1/shares/link/linkB");
+        when(request.getMethod()).thenReturn("GET");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+
+        // Mock RateLimiterService: linkB key is allowed, global key is allowed
+        when(rateLimiterService.isAllowed(eq("limit:link:linkB:127.0.0.1"), eq(60), eq(30))).thenReturn(true);
+        when(rateLimiterService.isAllowed(eq("limit:linkglobal:127.0.0.1"), eq(60), eq(100))).thenReturn(true);
+
+        // Execute filter
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        // Verify link B request is allowed (goes to next filter)
+        verify(filterChain).doFilter(request, response);
+        verify(response, never()).setStatus(429);
+    }
+
+    @Test
+    void testPublicLinkRateLimiting_GlobalBlocked_BlocksAllLinks() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "linkLimit", 30);
+        ReflectionTestUtils.setField(rateLimitingFilter, "linkGlobalLimit", 100);
+
+        // Setup request for link A
+        when(request.getRequestURI()).thenReturn("/api/v1/shares/link/linkA");
+        when(request.getMethod()).thenReturn("GET");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+
+        // Mock RateLimiterService: linkA is allowed (true), but global is blocked (false)
+        when(rateLimiterService.isAllowed(eq("limit:link:linkA:127.0.0.1"), eq(60), eq(30))).thenReturn(true);
+        when(rateLimiterService.isAllowed(eq("limit:linkglobal:127.0.0.1"), eq(60), eq(100))).thenReturn(false);
+
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(stringWriter);
+        when(response.getWriter()).thenReturn(printWriter);
+
+        // Execute filter
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        // Verify request is blocked (429)
+        verify(filterChain, never()).doFilter(request, response);
+        verify(response).setStatus(429);
+    }
 }
+

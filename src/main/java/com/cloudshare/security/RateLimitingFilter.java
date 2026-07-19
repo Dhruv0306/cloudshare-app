@@ -42,6 +42,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     @Value("${security.rate-limiting.mfa-limit:5}")
     private int mfaLimit;
 
+    @Value("${security.rate-limiting.link-global-limit:100}")
+    private int linkGlobalLimit;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -89,8 +92,16 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             } else if ("GET".equalsIgnoreCase(method) && path.startsWith("/api/v1/shares/link/")) {
                 
                 // Public link access rate limiting
-                String key = "limit:" + ip + ":/api/v1/shares/link";
-                allowed = rateLimiterService.isAllowed(key, 60, linkLimit);
+                String remaining = path.substring(20); // Length of "/api/v1/shares/link/"
+                int slashIdx = remaining.indexOf('/');
+                String shareCode = (slashIdx != -1) ? remaining.substring(0, slashIdx) : remaining;
+
+                String linkKey = "limit:link:" + shareCode + ":" + ip;
+                String globalKey = "limit:linkglobal:" + ip;
+
+                boolean linkAllowed = rateLimiterService.isAllowed(linkKey, 60, linkLimit);
+                boolean globalAllowed = rateLimiterService.isAllowed(globalKey, 60, linkGlobalLimit);
+                allowed = linkAllowed && globalAllowed;
                 
             } else {
                 
