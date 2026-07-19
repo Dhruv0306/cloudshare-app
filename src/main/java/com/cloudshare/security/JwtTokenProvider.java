@@ -39,6 +39,7 @@ public class JwtTokenProvider {
         Map<String, Object> claims = new HashMap<>();
         claims.put("username", username);
         claims.put("roles", roles);
+        claims.put("type", "access");
 
         return Jwts.builder()
                 .id(java.util.UUID.randomUUID().toString())
@@ -57,6 +58,7 @@ public class JwtTokenProvider {
         Map<String, Object> claims = new HashMap<>();
         claims.put("username", username);
         claims.put("step_up", true);
+        claims.put("type", "step_up");
 
         return Jwts.builder()
                 .id(java.util.UUID.randomUUID().toString())
@@ -72,12 +74,22 @@ public class JwtTokenProvider {
         try {
             Claims claims = getAllClaimsFromToken(token);
             Boolean stepUp = claims.get("step_up", Boolean.class);
+            String type = claims.get("type", String.class);
             String userId = claims.getSubject();
-            return stepUp != null && stepUp && userId != null && userId.equals(expectedUserId);
+            return stepUp != null && stepUp && "step_up".equals(type) && userId != null && userId.equals(expectedUserId);
         } catch (JwtException | IllegalArgumentException ex) {
             log.debug("Invalid step-up token: {}", ex.getMessage());
         }
         return false;
+    }
+
+    public String getTokenType(String token) {
+        try {
+            Claims claims = getAllClaimsFromToken(token);
+            return claims.get("type", String.class);
+        } catch (JwtException | IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     public String getUserIdFromToken(String token) {

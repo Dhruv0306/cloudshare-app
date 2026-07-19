@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -34,13 +36,19 @@ class StepUpAuthenticationFilterTest {
     private HttpServletResponse response;
 
     @Mock
+    private StringRedisTemplate securityRedisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> valueOperations;
+
+    @Mock
     private FilterChain filterChain;
 
     private StepUpAuthenticationFilter stepUpAuthenticationFilter;
 
     @BeforeEach
     void setUp() {
-        stepUpAuthenticationFilter = new StepUpAuthenticationFilter(tokenProvider);
+        stepUpAuthenticationFilter = new StepUpAuthenticationFilter(tokenProvider, securityRedisTemplate);
         SecurityContextHolder.clearContext();
     }
 
@@ -116,11 +124,60 @@ class StepUpAuthenticationFilterTest {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         when(request.getHeader("X-StepUp-Token")).thenReturn("valid-stepup-token");
+        when(tokenProvider.getJtiFromToken("valid-stepup-token")).thenReturn("jti-123");
+        when(securityRedisTemplate.hasKey("blacklist:token:jti-123")).thenReturn(false);
         when(tokenProvider.validateStepUpToken("valid-stepup-token", principal.getId().toString())).thenReturn(true);
+        when(tokenProvider.getExpirationDateFromToken("valid-stepup-token")).thenReturn(new java.util.Date(System.currentTimeMillis() + 300000));
+        when(securityRedisTemplate.opsForValue()).thenReturn(valueOperations);
 
         stepUpAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
         verify(filterChain).doFilter(request, response);
         verify(response, never()).setStatus(401);
+    }
+
+    @Test
+    void testAdminPathAuthenticatedValidTokenBlacklistedAfterUse() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/v1/admin/users");
+        
+        User user = User.builder()
+                .id(UUID.randomUUID())
+                .username("admin")
+                .email("admin@example.com")
+                .roles(Collections.singleton(new Role(1L, "ROLE_ADMIN")))
+                .build();
+        UserPrincipal principal = new UserPrincipal(user);
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities()
+        );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        when(request.getHeader("X-StepUp-Token")).thenReturn("valid-stepup-token");
+        when(tokenProvider.getJtiFromToken("valid-stepup-token")).thenReturn("jti-123");
+        when(securityRedisTemplate.hasKey("blacklist:token:jti-123")).thenReturn(false);
+        when(tokenProvider.validateStepUpToken("valid-stepup-token", principal.getId().toString())).thenReturn(true);
+        when(tokenProvider.getExpirationDateFromToken("valid-stepup-token")).thenReturn(new java.util.Date(System.currentTimeMillis() + 300000));
+        when(securityRedisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        // First call - succeeds and blacklists the token
+        stepUpAuthenticationFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        verify(valueOperations).set(eq("blacklist:token:jti-123"), eq("blacklisted"), any(java.time.Duration.class));
+
+        // Reset verification mocks for second call
+        reset(filterChain, response);
+
+        // Second call with same token, now blacklisted
+        when(securityRedisTemplate.hasKey("blacklist:token:jti-123")).thenReturn(true);
+        
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(stringWriter);
+        when(response.getWriter()).thenReturn(printWriter);
+
+        stepUpAuthenticationFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain, never()).doFilter(request, response);
+        verify(response).setStatus(401);
     }
 }

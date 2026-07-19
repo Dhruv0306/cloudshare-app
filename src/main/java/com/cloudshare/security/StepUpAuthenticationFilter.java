@@ -4,8 +4,9 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -15,11 +16,18 @@ import java.io.IOException;
 import java.time.Instant;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class StepUpAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
+    private final StringRedisTemplate securityRedisTemplate;
+
+    public StepUpAuthenticationFilter(
+            JwtTokenProvider tokenProvider,
+            @Qualifier("securityRedisTemplate") StringRedisTemplate securityRedisTemplate) {
+        this.tokenProvider = tokenProvider;
+        this.securityRedisTemplate = securityRedisTemplate;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -49,13 +57,47 @@ public class StepUpAuthenticationFilter extends OncePerRequestFilter {
             UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
             String stepUpToken = request.getHeader("X-StepUp-Token");
 
-            if (stepUpToken == null || !tokenProvider.validateStepUpToken(stepUpToken, principal.getId().toString())) {
+            String jti = null;
+            try {
+                if (stepUpToken != null) {
+                    jti = tokenProvider.getJtiFromToken(stepUpToken);
+                }
+            } catch (Exception e) {
+                log.debug("Failed to extract JTI from step-up token: {}", e.getMessage());
+            }
+
+            boolean isBlacklisted = false;
+            if (jti != null) {
+                String blacklistKey = "blacklist:token:" + jti;
+                isBlacklisted = Boolean.TRUE.equals(securityRedisTemplate.hasKey(blacklistKey));
+            }
+
+            if (isBlacklisted || stepUpToken == null || !tokenProvider.validateStepUpToken(stepUpToken, principal.getId().toString())) {
                 log.warn("Step-up validation failed for user {} attempting to access {}", principal.getUsername(), path);
                 
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType("application/json");
                 response.getWriter().write("{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid bearer/step-up token.\"},\"timestamp\":\"" + Instant.now() + "\"}");
                 return;
+            }
+
+            // On successful validation, immediately blacklist the step-up token to enforce single-use
+            if (jti != null) {
+                try {
+                    java.util.Date expiration = tokenProvider.getExpirationDateFromToken(stepUpToken);
+                    long remainingTimeMs = expiration.getTime() - System.currentTimeMillis();
+                    if (remainingTimeMs > 0) {
+                        String blacklistKey = "blacklist:token:" + jti;
+                        securityRedisTemplate.opsForValue().set(
+                                blacklistKey,
+                                "blacklisted",
+                                java.time.Duration.ofMillis(remainingTimeMs)
+                        );
+                        log.debug("Blacklisted step-up token jti={} with remaining lifetime {} ms", jti, remainingTimeMs);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to blacklist step-up token jti={}", jti, e);
+                }
             }
         }
 
