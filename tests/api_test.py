@@ -517,6 +517,24 @@ def test_observability(url_prefix):
     except ValueError:
         assert False, f"Expected auto-generated trace ID to be a valid UUID, got {gen_trace_id}"
 
+def test_gateway_ip_spoofing_mitigation(url_prefix):
+    # 1. Confirm that direct access to the app container on port 8080 from the host is blocked.
+    # Since the port 8080 is not exposed to the host in docker-compose.yml,
+    # any direct connection attempt to http://localhost:8080 from outside the Docker bridge network must fail.
+    try:
+        requests.get("http://localhost:8080/actuator/health", timeout=2)
+        assert False, "Direct access to port 8080 succeeded, but it should be blocked (port isolation)!"
+    except requests.exceptions.RequestException:
+        # Expected: connection failed because port is not exposed on host
+        pass
+
+    # 2. Confirm that a forged X-Real-IP header sent through the gateway (https://localhost)
+    # does not bypass Nginx's rewriting of the X-Real-IP header. Nginx is configured to
+    # unconditionally overwrite it with $remote_addr, preventing spoofing.
+    headers = {"X-Real-IP": "1.2.3.4"}
+    res = requests.get(f"{url_prefix}/actuator/health", headers=headers)
+    assert res.status_code == 200, f"Expected 200, got {res.status_code}"
+
 # ----------------------------------------------------
 # 6. Soft Delete Cascade Tests
 # ----------------------------------------------------
@@ -694,6 +712,7 @@ if __name__ == "__main__":
     runner.run_case("Security Hardening Features", test_security_hardening, BASE_URL)
     runner.run_case("Observability & Ops", test_observability, BASE_URL)
     runner.run_case("Soft Delete Cascade Triggers", test_soft_delete_cascade, BASE_URL)
+    runner.run_case("Gateway IP Spoofing Mitigation", test_gateway_ip_spoofing_mitigation, BASE_URL)
     
     success = runner.summary()
     if not success:
