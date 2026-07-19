@@ -480,6 +480,33 @@ def test_security_hardening(url_prefix):
     with_stepup_res = requests.get(f"{url_prefix}/api/v1/admin/users", headers=stepup_headers)
     assert with_stepup_res.status_code == 403, f"Expected 403 for non-admin on admin endpoint with valid step-up token, got {with_stepup_res.status_code}. Response: {with_stepup_res.text}"
 
+    # 5.7 Polyglot and Extension Mismatch Upload Rejections (LM4)
+    # A: Dangerous extension (.php)
+    res_php = requests.post(
+        f"{url_prefix}/api/v1/files/upload",
+        headers=headers,
+        files={"file": ("malicious.php", b"<?php echo 'Hello'; ?>", "image/png")}
+    )
+    assert res_php.status_code == 415, f"Expected 415 for dangerous extension (.php), got {res_php.status_code}. Response: {res_php.text}"
+
+    # B: Extension-MIME mismatch (plain text masquerading as JPEG)
+    res_mismatch = requests.post(
+        f"{url_prefix}/api/v1/files/upload",
+        headers=headers,
+        files={"file": ("spoof.jpg", b"This is plain text content masquerading as a JPEG image.", "image/jpeg")}
+    )
+    assert res_mismatch.status_code == 415, f"Expected 415 for extension-MIME mismatch, got {res_mismatch.status_code}. Response: {res_mismatch.text}"
+
+    # C: Polyglot image with script payload
+    # Start with a valid JPEG header, then append HTML script tag
+    jpeg_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00d\x00d\x00\x00\xff\xd9<script>alert('XSS')</script>"
+    res_polyglot = requests.post(
+        f"{url_prefix}/api/v1/files/upload",
+        headers=headers,
+        files={"file": ("polyglot.jpg", jpeg_bytes, "image/jpeg")}
+    )
+    assert res_polyglot.status_code == 415, f"Expected 415 for polyglot image, got {res_polyglot.status_code}. Response: {res_polyglot.text}"
+
 def test_observability(url_prefix):
     # 1. Actuator health endpoint
     health_res = requests.get(f"{url_prefix}/actuator/health")
