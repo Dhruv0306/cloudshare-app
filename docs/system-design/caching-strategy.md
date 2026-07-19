@@ -83,6 +83,20 @@ end
 *   **Public Link Access (`GET /api/v1/shares/link/*`):** Max 30 requests per minute per IP.
 *   **General REST APIs:** Max 100 requests per minute per User ID.
 
+### 3.2 Client IP Resolution & Spoofing Protection (H2 / C2)
+For unauthenticated rate limiting (e.g., login attempts, public share link accesses), the application maps rate-limiting buckets using client IP addresses.
+
+To guarantee the integrity of these IP-keyed rate limits and prevent attackers from spoofing their source address via custom headers, CloudShare relies on a secure network design:
+1. **Gateway Trust Assumption (C2):** The Spring Boot application container (`app:8080`) is not exposed publicly to the host or internet. All inbound traffic must pass through the Nginx API gateway (`gateway:443`).
+2. **IP Header Overwriting:** Nginx unconditionally overrides the incoming `X-Real-IP` and `X-Forwarded-For` HTTP headers with the socket's actual connection IP (`$remote_addr`) before forwarding requests upstream to the app:
+   ```nginx
+   proxy_set_header X-Real-IP $remote_addr;
+   proxy_set_header X-Forwarded-For $remote_addr;
+   ```
+3. **Application IP Resolution:** The backend `ClientIpResolver` reads the `X-Real-IP` header. Since direct access to the app container port is blocked by the network topology, the application can safely trust the `X-Real-IP` header because Nginx is guaranteed to have populated it securely from the actual remote client IP.
+
+This design ensures IP rate limiting is fully protected against header-spoofing bypass attacks.
+
 ---
 
 ## 4. Redis Configuration & Tuning Spec
