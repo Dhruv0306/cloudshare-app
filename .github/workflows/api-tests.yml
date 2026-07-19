@@ -44,6 +44,9 @@ jobs:
           echo "RATE_LIMIT_GENERAL=10000" >> tests/.env.ci
           echo "PASSWORD_BREACH_CHECK_ENABLED=false" >> tests/.env.ci
 
+      - name: Generate self-signed Nginx certs
+        run: bash nginx/ssl/generate-certs.sh
+
       - name: Start stack
         run: docker compose --env-file tests/.env.ci up -d --build
 
