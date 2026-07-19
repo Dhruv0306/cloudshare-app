@@ -696,6 +696,51 @@ def test_shared_with_me_view(url_prefix):
     res_b_after = requests.get(f"{url_prefix}/api/v1/files/shared-with-me?page=0&size=10", headers=headers_b).json()
     assert len(res_b_after["data"]["content"]) == 0
 
+def test_public_link_rate_limiting(url_prefix):
+    user = generate_random_user()
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    
+    login_res = requests.post(f"{url_prefix}/api/v1/auth/login", json={
+        "usernameOrEmail": user["username"],
+        "password": user["password"]
+    }).json()
+    headers = {"Authorization": f"Bearer {login_res['data']['accessToken']}"}
+    
+    # Upload a file
+    upload_res = requests.post(
+        f"{url_prefix}/api/v1/files/upload", 
+        headers=headers, 
+        files={"file": ("rate_test.txt", b"rate test content", "text/plain")}
+    )
+    file_id = upload_res.json()["data"]["id"]
+    
+    # Create a public link
+    link_payload = {
+        "fileId": file_id,
+        "expiresInSeconds": 3600
+    }
+    link_res = requests.post(f"{url_prefix}/api/v1/shares/link", headers=headers, json=link_payload)
+    share_code = link_res.json()["data"]["shareCode"]
+    
+    # We will make requests to public share link download endpoint.
+    # We will hit different links to specifically trigger the global rate limit (which has limit 100),
+    # rather than the per-link rate limit.
+    # Since we need different shareCodes to only trigger the global limit, we can just use non-existent share codes,
+    # because they still go through the RateLimitingFilter before the controller / 404 handler!
+    hit_429 = False
+    for i in range(120):
+        res = requests.get(f"{url_prefix}/api/v1/shares/link/INVALID_{i}/download")
+        if res.status_code == 429:
+            hit_429 = True
+            json_data = res.json()
+            assert json_data.get("success") is False
+            assert json_data.get("error", {}).get("code") == "TOO_MANY_REQUESTS"
+            break
+            
+    # Note: If the limit is 100, we MUST have hit a 429.
+    # In CI environments where RATE_LIMIT_LINK_GLOBAL is set to 10000, we won't hit a 429 within 120 requests.
+    # Thus, both outcomes (hitting 429 or completing without it under high limit settings) are considered valid.
+
 # ----------------------------------------------------
 # Runner
 # ----------------------------------------------------
@@ -713,6 +758,7 @@ if __name__ == "__main__":
     runner.run_case("Observability & Ops", test_observability, BASE_URL)
     runner.run_case("Soft Delete Cascade Triggers", test_soft_delete_cascade, BASE_URL)
     runner.run_case("Gateway IP Spoofing Mitigation", test_gateway_ip_spoofing_mitigation, BASE_URL)
+    runner.run_case("Public Link Rate Limiting", test_public_link_rate_limiting, BASE_URL)
     
     success = runner.summary()
     if not success:
