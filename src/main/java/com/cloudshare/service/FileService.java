@@ -21,6 +21,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
+import java.util.List;
 
 import javax.crypto.SecretKey;
 import java.io.IOException;
@@ -100,6 +103,19 @@ public class FileService {
                 auditLogService.log(ownerId, "FILE_UPLOAD_FAILED", null, ipAddress, 
                         "Blocked upload of disallowed file type: " + file.getOriginalFilename());
                 throw new UnsupportedMediaTypeException("This file type or media extension is not allowed");
+            }
+
+            if (!isMimeTypeCompatibleWithExtension(file.getOriginalFilename(), detectedMimeType)) {
+                auditLogService.log(ownerId, "FILE_UPLOAD_FAILED", null, ipAddress, 
+                        "Blocked upload of spoofed/mismatched file: " + file.getOriginalFilename() + " (detected MIME: " + detectedMimeType + ")");
+                throw new UnsupportedMediaTypeException("File content does not match the file extension");
+            }
+
+            boolean isImageOrPdf = detectedMimeType.startsWith("image/") || detectedMimeType.equals("application/pdf");
+            if (isImageOrPdf && containsDangerousMarkup(tempFile)) {
+                auditLogService.log(ownerId, "FILE_UPLOAD_FAILED", null, ipAddress, 
+                        "Blocked upload of polyglot file with embedded markup: " + file.getOriginalFilename());
+                throw new UnsupportedMediaTypeException("File content contains invalid or dangerous markup");
             }
 
             // Sanitize filename to prevent HTTP Header Injection in Content-Disposition
@@ -443,7 +459,56 @@ public class FileService {
                lower.endsWith(".cmd") || lower.endsWith(".sh") || lower.endsWith(".bash") ||
                lower.endsWith(".scr") || lower.endsWith(".pif") || lower.endsWith(".vbs") ||
                lower.endsWith(".js") || lower.endsWith(".jar") || lower.endsWith(".msi") ||
-               lower.endsWith(".jsp") || lower.endsWith(".asp") || lower.endsWith(".aspx");
+               lower.endsWith(".jsp") || lower.endsWith(".asp") || lower.endsWith(".aspx") ||
+               lower.endsWith(".php") || lower.endsWith(".htm") || lower.endsWith(".html");
+    }
+
+    private boolean isMimeTypeCompatibleWithExtension(String filename, String detectedMimeType) {
+        if (filename == null || detectedMimeType == null) {
+            return false;
+        }
+
+        List<MediaType> expectedMediaTypes = MediaTypeFactory.getMediaTypes(filename);
+        if (expectedMediaTypes.isEmpty()) {
+            // Extension is unknown/unmapped, default to allow for flexibility
+            return true;
+        }
+
+        try {
+            MediaType detected = MediaType.parseMediaType(detectedMimeType);
+            for (MediaType expected : expectedMediaTypes) {
+                if (expected.isCompatibleWith(detected)) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error parsing or checking media type compatibility: detected={}, filename={}", detectedMimeType, filename, e);
+            return false;
+        }
+
+        return false;
+    }
+
+    private boolean containsDangerousMarkup(Path path) {
+        try (InputStream in = Files.newInputStream(path)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            StringBuilder sb = new StringBuilder();
+            while ((read = in.read(buffer)) != -1) {
+                String chunk = new String(buffer, 0, read, java.nio.charset.StandardCharsets.US_ASCII);
+                sb.append(chunk);
+                if (sb.length() > 5000) {
+                    sb.delete(0, 4000);
+                }
+                String lower = sb.toString().toLowerCase();
+                if (lower.contains("<script") || lower.contains("<?php") || lower.contains("<html")) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error scanning file content for dangerous markup", e);
+        }
+        return false;
     }
 
     private boolean isDangerousMimeType(String mimeType) {

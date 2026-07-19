@@ -177,3 +177,16 @@ public class ReKeyWorker implements CommandLineRunner {
 For credentials (DB password, Redis token, SMTP credentials):
 *   **Development:** Injected via a local `.env` file read by Docker-Compose (never committed to git).
 *   **Production (Kubernetes):** Externalized using `Kubernetes Secrets` mapped as environment variables in the pod manifest.
+
+---
+
+## 5. Secrets Hygiene Audit & Verification History
+
+A thorough audit of the project's entire Git history was performed on July 19, 2026. The findings are summarized below:
+- **Git Commit History Analysis**: Audited all historical branches (`git log -p --all`) targeting `.env`, `.env.*`, and `application*.yml` configuration patterns.
+- **Identified Secrets**:
+  - Found that a temporary test environment file `tests/.env.ci` was committed in `1a4e35a7ab4ac786dce4f5118760e22b13a0d7c2` containing non-production/non-staging dummy parameters (e.g., `A1000Rocks` and `A1000Minio`) for automated CI testing.
+  - This file was promptly removed in `fb57f06bdf335cf99930d9d90d0768d4df9bac46`.
+  - No active, staging, or production credentials, KEKs, or signing keys have ever been committed.
+- **Gitignore Enforcement**: Checked the history of `.gitignore` and confirmed `.env` has been actively ignored since the project's inception (`820d0a84e606ab0949df5f3eb3997a0486267445`). Additional staging settings (e.g. `.env.staging`, `tests/.env.staging`) were also verified to be correctly gitignored since commit `7d2b2717a100467c08ab8cf22e365930346d2b40`.
+- **Verdict**: Clean. No active secret rotation or historical rewrite (`git filter-repo`) was required, as no real-world or production secrets were leaked.
