@@ -37,6 +37,10 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file te
 > **Environment File Safeguards**
 > The `tests/.env.staging` and `.env.staging` files containing actual staging passwords/keys are explicitly added to `.gitignore`. They must **NEVER** be committed to Git. Always use `tests/.env.staging.example` as a template reference.
 
+> [!IMPORTANT]
+> **Cloud Network Security Lists & Firewalls (Out-of-band configuration)**
+> When deploying the staging environment to Oracle Cloud Infrastructure (OCI) or another cloud host, ensure that the cloud's security lists or network security groups (NSGs) are configured to strictly permit inbound traffic on ports **80** and **443** only. Direct access to all other backend service ports (such as database port 5432, Redis ports, storage ports, and application port 8080) must be blocked externally, as they are now fully secured within the internal Docker bridge network.
+
 ---
 
 ## 3. Data Lifecycle Maintenance
