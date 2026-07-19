@@ -1,42 +1,67 @@
-## Plan: `security/step-up-token-scope` (C1)
+## H1 — `security/fail-loud-permission-cache`
 
-**Goal:** step-up tokens become single-purpose and single-use; they can no longer authenticate general requests.
+**Problem:** `ShareService.evictPermissionsCache` swallows Redis delete failures with a log-only catch. If Redis errors at the exact moment of a revoke, the DB-level revocation succeeds but the cached permission hash survives for up to an hour — a revoked user keeps read access with no retry, no alert, no compensating check.
 
-1. **`JwtTokenProvider`**
-   - Add a `type` claim to both token constructors: `generateAccessToken` → `"type": "access"`, `generateStepUpToken` → `"type": "step_up"`.
-   - Add `getTokenType(String token)` helper.
+**Plan:**
+1. `ShareService.evictPermissionsCache`: on delete failure, write a short-TTL bypass marker (`cache:permissions:bypass:<fileId>`, ~10 min TTL) instead of just logging.
+2. `FileService.verifyFileAccess`: check for the bypass marker before trusting the cached hash. If present, attempt a self-healing retry of the delete; if that also fails, skip the cache entirely and authorize from a fresh DB query for this request only (don't repopulate the cache while the bypass is active).
+3. Tag the failure log distinctly (`PERMISSION_CACHE_EVICTION_FAILED`) so it's greppable/alertable later.
+4. Tests: `ShareServiceTest` — delete-throws → bypass marker set. `FileServiceTest` — bypass marker present + stale hash still grants access to a revoked user → `verifyFileAccess` throws anyway (DB wins over stale cache); retry-succeeds path clears the marker and resumes normal caching.
 
-2. **`JwtAuthenticationFilter`**
-   - After `validateToken(jwt)` succeeds, also require `"access".equals(tokenProvider.getTokenType(jwt))`. If not, treat as unauthenticated (skip `SecurityContext` population) rather than 500ing — let downstream 401 handling take over.
-
-3. **`StepUpAuthenticationFilter`**
-   - `validateStepUpToken` already checks `step_up == true` — keep that, but move to checking `type == "step_up"` for consistency with the new claim.
-   - **Single-use enforcement:** on successful validation, immediately write the step-up token's `jti` to the same Redis blacklist used for access-token revocation (`blacklist:token:<jti>`), with TTL = remaining token lifetime. This makes `JwtAuthenticationFilter`'s existing blacklist check *also* catch reused step-up tokens if someone tries to replay one as a bearer token — one mechanism, two enforcement points.
-   - This requires injecting `StringRedisTemplate` (qualified `securityRedisTemplate`) into `StepUpAuthenticationFilter`.
-
-4. **Tests to update/add**
-   - `StepUpAuthenticationFilterTest`: assert step-up token is blacklisted after one successful use; second use with same token fails even within the 5-minute window.
-   - New test in `JwtAuthenticationFilterTest` (doesn't exist yet — I'll add it) or extend an existing security test: a valid, unexpired, non-blacklisted step-up token presented as `Authorization: Bearer` on a non-admin route is rejected (no `SecurityContext` set → 401).
-   - `AuthServiceTest`/`AuthControllerTest`: no change expected, but re-run since `stepUpMfa` response shape is untouched.
-
-**Files touched:** `JwtTokenProvider.java`, `JwtAuthenticationFilter.java`, `StepUpAuthenticationFilter.java`, + 2 test files.
+**Files:** `ShareService.java`, `FileService.java`, `ShareServiceTest.java`, `FileServiceTest.java`.
 
 ---
 
-## Plan: `infra/lock-down-compose-network` (C2)
+## H2 — resolved as a consequence of C2
 
-**Goal:** only `gateway` (80/443) is reachable from outside the Docker network, in both dev and staging compose.
+**Problem:** general-API rate limiting falls back to raw IP for unauthenticated callers; combined with C2 (spoofable `X-Real-IP` if `:8080` was reachable directly), the IP-keyed buckets weren't trustworthy.
 
-1. **`docker-compose.yml`**
-   - Remove `ports:` from `db`, `cache-aside`, `cache-security`, `clamav`, `storage`.
-   - Remove `ports: - "8080:8080"` from `app`. If you want host-machine debugging access on Windows, replace with `127.0.0.1:8080:8080` — I'd default to removing it entirely and hitting the app through `https://localhost` via gateway, matching prod topology. Your call — I'll ask below.
-   - MinIO console (`9001`): same treatment — internal-only. If you need the console during dev, `127.0.0.1:9001:9001` is reasonable since it's local-only anyway.
+**Plan:** No standalone code change. This was a second-order effect of the port-exposure fix, not an independent bug — once `app:8080` and friends are no longer publicly reachable and `ClientIpResolver`'s trust assumption (Nginx is the only path in) holds, the IP-keyed rate-limit buckets are trustworthy again. **Action item:** add one regression test confirming a direct request to the app container (bypassing gateway, e.g. in an integration test hitting the app context directly) with a forged `X-Real-IP` header doesn't get a free pass — mostly a documentation/verification step, not new logic.
 
-2. **`docker-compose.staging.yml`**
-   - This file only currently overlays resource limits, so removing `ports:` in the base file is enough — nothing to override here. I'll add a comment noting *why* there's no `ports:` override, so a future edit doesn't accidentally reintroduce one.
+**Files:** none functionally; optionally a new integration test asserting the network topology assumption, e.g. in `RateLimitingFilterTest` or a docker-compose smoke test.
 
-3. **Out of band (I can't do this part — it's on Oracle Cloud, not in this repo):** once you do stand up the Oracle A1 staging box, the Security List/NSG needs to independently allow only 80/443 inbound. I'll drop a one-line reminder in `docs/staging-environment.md` so it's not lost, but this is a manual cloud-console step for you.
+---
 
-4. **Verification step:** after the compose change, `docker compose up` then confirm from the host: `curl localhost:5432` / `redis-cli -p 6379 ping` / `curl localhost:9001` all fail to connect, while `https://localhost/api/v1/auth/...` still works through gateway.
+## H3 — `docs/step-up-timer-clarification` (docs-only)
 
-**Files touched:** `docker-compose.yml`, `docs/staging-environment.md` (comment only).
+**Problem:** the admin UI's client-side step-up countdown could be mistaken by a future contributor for a security control, when the real boundary is the server-side JWT `exp` claim.
+
+**Plan:**
+1. `docs/system-design/security.md`: add a subsection under MFA/step-up stating explicitly that the client countdown is UX only, has no security effect, and that the 5-minute JWT expiry enforced in `StepUpAuthenticationFilter` is the actual boundary — a client that clears, ignores, or extends its local timer gains nothing.
+2. Add a one-line comment directly above `JwtTokenProvider.generateStepUpToken` pointing at that doc section, so a reader lands on the explanation without hunting for it.
+3. No test changes — this is documentation, not behavior.
+
+**Files:** `docs/system-design/security.md`, `JwtTokenProvider.java` (comment only).
+
+---
+
+## H4 — `security/kek-fail-closed` (Option B: opt-in fallback, loud)
+
+**Problem:** `EncryptionService.getMasterKek` silently SHA-256-digests any KEK that isn't exactly 32 bytes after Base64 decode, rather than failing startup — a misconfigured KEK boots successfully and silently encrypts under an unintended derived key.
+
+**Plan:**
+1. `CryptoProperties`: add `allowRawPassphrase` (bool), bound to `crypto.kek.allow-raw-passphrase`, default `false`.
+2. `application.yml`: wire `crypto.kek.allow-raw-passphrase: ${CRYPTO_KEK_ALLOW_RAW_PASSPHRASE:false}`.
+3. `SecretsStartupValidator`: new `validateKekShape` step, run alongside existing secret-presence checks. Decode every configured KEK (master + versioned map). If any isn't exactly 32 bytes:
+   - `allowRawPassphrase=false` → throw `IllegalStateException` naming the offending KEK version, abort startup.
+   - `allowRawPassphrase=true` → allow through, `log.warn` naming the version that will be digested.
+4. `EncryptionService.getMasterKek`: keep the digest fallback (now provably gated by the validator) but add a `log.warn` on first use per version instead of silent digestion.
+5. Tests: `SecretsStartupValidatorTest` — 31-byte KEK + flag off → startup fails; 31-byte KEK + flag on → startup succeeds with a captured `WARN` log. `EncryptionServiceTest` — existing 32-byte-KEK tests unchanged (no warning logged); new test confirms warn-log emission on the fallback path.
+
+**Files:** `CryptoProperties.java`, `application.yml`, `SecretsStartupValidator.java`, `EncryptionService.java`, `SecretsStartupValidatorTest.java`, `EncryptionServiceTest.java`.
+
+---
+
+## H5 — `security/link-rate-limit-scoping`
+
+**Problem:** public share-link access (`GET /api/v1/shares/link/**`) is rate-limited on a single blanket `limit:<ip>:/api/v1/shares/link` key. One abusive anonymous client on a shared IP (NAT/corporate proxy) can exhaust the bucket for every legitimate user behind that same egress IP, across every share link.
+
+**Plan:**
+1. `RateLimitingFilter`: replace the single key with a two-tier scheme, both of which must pass:
+   - **Per-link bucket:** `limit:link:<shareCode>:<ip>` at the existing `linkLimit` (default 30/min) — bounds hammering one specific link.
+   - **Per-IP coarse bucket:** `limit:linkglobal:<ip>` at a new, higher ceiling — bounds one IP enumerating many share codes without starving other NAT-mates out of any single link they legitimately hold.
+2. Extract `shareCode` from the request path (`/api/v1/shares/link/{shareCode}`) via simple path parsing — no new dependency.
+3. New config property `security.rate-limiting.link-global-limit` (default 100), wired the same way as the existing `*-limit` properties; corresponding `RATE_LIMIT_LINK_GLOBAL` env var added to `docker-compose.yml` / `.env.example` for consistency with the existing pattern.
+4. Tests: `RateLimitingFilterTest` — 30 requests to link A from one IP blocks link A but not link B from the same IP; 100 requests to distinct links from one IP trips the global bucket regardless of per-link state.
+
+**Files:** `RateLimitingFilter.java`, `application.yml`, `docker-compose.yml`, `.env.example`, `RateLimitingFilterTest.java`.
