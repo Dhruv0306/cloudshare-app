@@ -18,6 +18,21 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * Filter that authenticates incoming requests bearing a valid JWT access token in the {@code Authorization: Bearer <token>} header.
+ * <p>
+ * <b>Why attribute hand-off and blacklist verification exist:</b>
+ * <ul>
+ *   <li><b>Performance Optimization:</b> Checks if {@link RateLimitingFilter} already parsed and validated the token into a
+ *   {@link ResolvedJwt} request attribute ({@link ResolvedJwt#REQUEST_ATTRIBUTE}). If present, it re-uses the pre-validated identity
+ *   to avoid redundant HMAC-SHA256 signature verifications and JSON parsing.</li>
+ *   <li><b>Instant Token Revocation:</b> Queries the dedicated <b>Redis Security</b> instance for {@code blacklist:token:<jti>}.
+ *   If blacklisted (e.g., user logout or compromised token family revocation), authentication is rejected immediately with HTTP 401.</li>
+ *   <li><b>Strict Type Enforcement:</b> Only tokens with {@code tokenType == "access"} are accepted for general API authentication,
+ *   preventing step-up or refresh tokens from being passed as general bearer tokens.</li>
+ * </ul>
+ * </p>
+ */
 @Component
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {

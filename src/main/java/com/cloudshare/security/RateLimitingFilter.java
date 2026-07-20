@@ -15,6 +15,27 @@ import org.springframework.beans.factory.annotation.Value;
 import java.io.IOException;
 import java.time.Instant;
 
+/**
+ * Security filter executing distributed sliding-window rate limiting via Redis Lua scripts before authentication.
+ * <p>
+ * <b>Why multi-tier rate limiting and request attribute hand-off exist:</b>
+ * <ul>
+ *   <li><b>Multi-Tier Protection:</b> Enforces route-specific thresholds to protect against brute-force and DoS:
+ *     <ul>
+ *       <li><b>Authentication (5/min per IP):</b> {@code /api/v1/auth/login}, {@code /register}, {@code /refresh}</li>
+ *       <li><b>MFA Verification (5/min per User/IP):</b> {@code /api/v1/auth/mfa/verify}, {@code /step-up}</li>
+ *       <li><b>File Uploads (10/min per User/IP):</b> {@code /api/v1/files/upload}</li>
+ *       <li><b>Public Link Access (Two-Tier):</b> Per-link+IP limit (30/min) AND Global IP limit (100/min) to prevent link scraping.</li>
+ *       <li><b>General REST Endpoints (100/min per User/IP):</b> All other {@code /api/v1/*} routes.</li>
+ *     </ul>
+ *   </li>
+ *   <li><b>Client IP Trust:</b> Delegates to {@link ClientIpResolver}. Secure because backend containers are internal-network-only;
+ *   Nginx edge proxy unconditionally overwrites {@code X-Real-IP} with the true remote socket address.</li>
+ *   <li><b>JWT Memoization:</b> Parses the Bearer token once to identify user ID, attaching {@link ResolvedJwt} to
+ *   {@link HttpServletRequest#setAttribute} so downstream {@link JwtAuthenticationFilter} avoids redundant parsing.</li>
+ * </ul>
+ * </p>
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j

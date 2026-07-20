@@ -36,6 +36,32 @@ import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.UUID;
 
+/**
+ * Service orchestrating file uploads, downloads, access authorization, and lifecycle soft-deletion/purges.
+ * <p>
+ * <b>Architecture & Pipeline Specifications:</b>
+ * <ul>
+ *   <li><b>Upload Pipeline Order:</b>
+ *     <ol>
+ *       <li>Disk Buffering (low RAM footprint)</li>
+ *       <li>ClamAV Antivirus Daemon Scanning</li>
+ *       <li>Apache Tika Magic-Byte MIME Detection & Extension Mismatch Blocking</li>
+ *       <li>Polyglot Script Markup Detection</li>
+ *       <li>On-the-Fly AES-256-GCM Encryption & SHA-256 Checksum Calculation</li>
+ *       <li>Storage Service Upload (MinIO/Local)</li>
+ *       <li>FEK Wrapping via KEK</li>
+ *       <li>Database Metadata Persistence</li>
+ *       <li>Compliance Audit Logging (Fail-Secure stance: audit failure aborts operation)</li>
+ *     </ol>
+ *   </li>
+ *   <li><b>Permission Caching & Bypass Self-Healing:</b> {@link #verifyFileAccess} uses Redis hash key {@code cache:permissions:<file_id>}.
+ *   If permission cache eviction fails during a share mutation or deletion, a 10-minute bypass marker key
+ *   ({@code cache:permissions:bypass:<file_id>}) is set. This forces permission checks for that file to bypass stale cache
+ *   and query PostgreSQL directly while attempting self-healing eviction retries.</li>
+ *   <li><b>BOLA Safety:</b> All database lookups enforce ownership or active share joins via {@link FileRepository#findAccessibleFile}.</li>
+ * </ul>
+ * </p>
+ */
 @Service
 @Slf4j
 public class FileService {

@@ -23,6 +23,21 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Service performing cryptographic envelope encryption operations for stored files.
+ * <p>
+ * <b>Cryptographic Design Rationale:</b>
+ * <ul>
+ *   <li><b>Envelope Encryption:</b> Each file is encrypted with a unique, randomly generated 256-bit AES File Encryption Key (FEK).
+ *   The FEK is then wrapped using an RFC 3394 AESWrap Key Encryption Key (KEK). This ensures that a single FEK compromise affects only
+ *   one file, and allows KEK rotation (migrating files to a new master key version) by re-wrapping FEKs without re-encrypting raw file contents.</li>
+ *   <li><b>Authenticated Streaming Encryption:</b> Stream encryption and decryption use AES-256-GCM (Galois/Counter Mode) with 12-byte IVs
+ *   and 128-bit authentication tags. This guarantees both confidentiality and ciphertext tamper-detection prior to releasing plaintext to clients.</li>
+ *   <li><b>KEK Key Shape Enforcement:</b> KEKs are expected to be 32 Base64-decoded bytes. If a raw non-32-byte passphrase is supplied,
+ *   it is digested via SHA-256 only when permitted by configuration.</li>
+ * </ul>
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j

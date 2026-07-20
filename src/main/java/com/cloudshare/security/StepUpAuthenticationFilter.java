@@ -15,6 +15,17 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.time.Instant;
 
+/**
+ * Filter enforcing Multi-Factor Step-Up Authentication for administrative API paths ({@code /api/v1/admin/*}).
+ * <p>
+ * <b>Why single-use Redis blacklisting is strictly enforced:</b> Administrative actions require heightened
+ * security boundaries beyond standard bearer JWTs. Step-up tokens issued via MFA verification carry a 5-minute
+ * TTL and must be strictly <b>single-use</b>. Upon successful step-up validation, this filter immediately writes
+ * {@code blacklist:token:<jti>} to the dedicated <b>Redis Security</b> instance for the remaining token lifetime.
+ * Any re-use attempt of the same step-up JTI (even within the 5-minute window) is blocked with HTTP 401 Unauthorized.
+ * The Redis blacklist is the single source of truth across all application nodes; no in-memory grace periods exist.
+ * </p>
+ */
 @Component
 @Slf4j
 public class StepUpAuthenticationFilter extends OncePerRequestFilter {

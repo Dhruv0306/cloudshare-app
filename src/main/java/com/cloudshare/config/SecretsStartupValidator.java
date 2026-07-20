@@ -10,6 +10,20 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Set;
 
+/**
+ * Startup component that validates database passwords, JWT secrets, MinIO credentials, and Master KEK shapes.
+ * <p>
+ * <b>Why validation happens at startup (Fail-Closed stance):</b> Cryptographic key shapes and operational secrets
+ * are evaluated during application initialization ({@link PostConstruct}). If an insecure default secret, an undersized password,
+ * or a malformed KEK (not exactly 32 bytes / 256 bits after Base64 decoding) is detected, startup fails immediately with an
+ * {@link IllegalStateException}. This prevents serving traffic with insecure configurations or corrupting encrypted data.
+ * </p>
+ * <p>
+ * <b>Opt-In Raw Passphrase Fallback:</b> If an administrator intentionally configures a raw passphrase KEK instead of a 32-byte
+ * Base64-encoded key, they must explicitly set {@code crypto.kek.allow-raw-passphrase=true}. Otherwise, non-32-byte KEKs trigger
+ * a hard startup abort.
+ * </p>
+ */
 @Component
 @Slf4j
 public class SecretsStartupValidator {

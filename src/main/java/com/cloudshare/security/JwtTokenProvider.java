@@ -15,6 +15,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
+/**
+ * Service component responsible for generating, parsing, and validating JSON Web Tokens (JWTs).
+ * <p>
+ * <b>Why explicit token types exist:</b> To protect against JWT type-confusion attacks where a valid token
+ * issued for one context (e.g., administrative step-up authentication or refresh tokens) is presented to an
+ * endpoint expecting standard bearer access authorization. Every JWT issued includes an explicit {@code type}
+ * claim ({@code "access"} vs {@code "step_up"}) and a unique cryptographic JTI (JWT ID) to enable precise
+ * blacklisting and single-use enforcement.
+ * </p>
+ */
 @Component
 @Slf4j
 public class JwtTokenProvider {
@@ -32,6 +42,18 @@ public class JwtTokenProvider {
         this.key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * Generates a standard bearer access token for authenticated API requests.
+     * <p>
+     * <b>Why {@code type: "access"} is set:</b> Enforces that standard bearer tokens cannot be misused in
+     * step-up authorization filters or refresh token endpoints.
+     * </p>
+     *
+     * @param userId   the authenticated user's UUID string
+     * @param username the authenticated user's username
+     * @param roles    list of GrantedAuthority string representations
+     * @return signed JWT access token string
+     */
     public String generateAccessToken(String userId, String username, List<String> roles) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + (jwtExpirationSeconds * 1000));
@@ -51,9 +73,19 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // Note: Client-side step-up timer is UX-only; 5-min JWT exp below is the true
-    // security boundary (see
-    // docs/system-design/security.md#step-up-countdown--token-expiry-boundary).
+    /**
+     * Generates a short-lived MFA step-up authorization token required for sensitive administrative paths.
+     * <p>
+     * <b>Why 5-minute TTL & separate claims exist:</b> Client-side countdown timers are UX visual aids only.
+     * The 5-minute server-side JWT expiration claim combined with single-use JTI Redis blacklisting forms the
+     * true security boundary. The {@code step_up: true} and {@code type: "step_up"} claims ensure the token
+     * is distinct from regular access tokens and cannot be substituted.
+     * </p>
+     *
+     * @param userId   the administrative user's UUID string
+     * @param username the administrative user's username
+     * @return signed JWT step-up token string with 300-second expiration
+     */
     public String generateStepUpToken(String userId, String username) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + (300 * 1000)); // 5 minutes
@@ -73,6 +105,17 @@ public class JwtTokenProvider {
                 .compact();
     }
 
+    /**
+     * Validates a step-up token against signature integrity, type claims, and expected user identity.
+     * <p>
+     * <b>Why user binding is checked:</b> Ensures step-up tokens issued to one administrator cannot be stolen
+     * or replayed by another authenticated account to bypass MFA requirements.
+     * </p>
+     *
+     * @param token          the step-up token string passed in {@code X-StepUp-Token} header
+     * @param expectedUserId the UUID string of the current SecurityContext principal
+     * @return {@code true} if valid, unexpired, bound to expectedUserId, and typed as "step_up"
+     */
     public boolean validateStepUpToken(String token, String expectedUserId) {
         try {
             Claims claims = getAllClaimsFromToken(token);
@@ -87,6 +130,12 @@ public class JwtTokenProvider {
         return false;
     }
 
+    /**
+     * Extracts the explicit {@code type} claim from a JWT.
+     *
+     * @param token JWT string
+     * @return type string (e.g. "access", "step_up") or {@code null} if invalid
+     */
     public String getTokenType(String token) {
         try {
             Claims claims = getAllClaimsFromToken(token);
@@ -96,6 +145,12 @@ public class JwtTokenProvider {
         }
     }
 
+    /**
+     * Extracts subject user ID from a valid JWT.
+     *
+     * @param token JWT string
+     * @return user ID string
+     */
     public String getUserIdFromToken(String token) {
         return getClaimFromToken(token, claims -> claims.getSubject());
     }
@@ -132,6 +187,17 @@ public class JwtTokenProvider {
                 .getPayload();
     }
 
+    /**
+     * Resolves a JWT into an immutable {@link ResolvedJwt} summary record.
+     * <p>
+     * <b>Why this method exists:</b> Allows filters early in the filter chain (such as {@link RateLimitingFilter})
+     * to parse and validate a token once, storing the resulting {@link ResolvedJwt} in request attributes so
+     * downstream filters (such as {@link JwtAuthenticationFilter}) do not incur duplicate cryptographic overhead.
+     * </p>
+     *
+     * @param token JWT string from request header
+     * @return populated {@link ResolvedJwt} object
+     */
     public ResolvedJwt resolveToken(String token) {
         if (!org.springframework.util.StringUtils.hasText(token)) {
             return new ResolvedJwt(token, false, null, null, null);
@@ -150,6 +216,12 @@ public class JwtTokenProvider {
         }
     }
 
+    /**
+     * Validates signature and expiration of a JWT.
+     *
+     * @param authToken JWT string
+     * @return {@code true} if signature is valid and token is unexpired
+     */
     public boolean validateToken(String authToken) {
         try {
             Jwts.parser().verifyWith(key).build().parseSignedClaims(authToken);

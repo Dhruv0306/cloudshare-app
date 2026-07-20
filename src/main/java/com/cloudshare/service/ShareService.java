@@ -29,6 +29,21 @@ import java.util.Base64;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Service managing internal file sharing, public access link creation, downloads, and share revocations.
+ * <p>
+ * <b>Cache Eviction & Fail-Loud Bypass Rationale:</b>
+ * <ul>
+ *   <li><b>Permission Cache Eviction:</b> Whenever internal shares are granted, modified, or revoked, {@link #evictPermissionsCache(UUID)}
+ *   deletes the corresponding Redis key ({@code cache:permissions:<file_id>}) to maintain permission consistency.</li>
+ *   <li><b>Bypass Marker (Self-Healing):</b> If Redis fails to evict the cache key (e.g. transient Redis network disconnect),
+ *   a 10-minute bypass marker key ({@code cache:permissions:bypass:<file_id>}) is set. When present, {@code FileService.verifyFileAccess}
+ *   bypasses Redis permission caches and queries PostgreSQL directly while attempting to self-heal the stale cache. This prevents
+ *   revoked users from accessing files due to stale cache entries.</li>
+ *   <li><b>Fail-Secure Compliance:</b> Audit logging is executed inside database transactions. Any audit failure aborts the operation and triggers a transaction rollback.</li>
+ * </ul>
+ * </p>
+ */
 @Service
 @Slf4j
 public class ShareService {
