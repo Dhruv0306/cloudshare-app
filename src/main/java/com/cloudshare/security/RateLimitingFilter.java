@@ -47,8 +47,8 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
 
         if (!rateLimitingEnabled) {
             filterChain.doFilter(request, response);
@@ -62,35 +62,35 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         boolean allowed = true;
 
         if (path.startsWith("/api/v1/")) {
-            if ("POST".equalsIgnoreCase(method) && 
-                (path.equals("/api/v1/auth/login") || 
-                 path.equals("/api/v1/auth/register") || 
-                 path.equals("/api/v1/auth/refresh"))) {
-                
+            if ("POST".equalsIgnoreCase(method) &&
+                    (path.equals("/api/v1/auth/login") ||
+                            path.equals("/api/v1/auth/register") ||
+                            path.equals("/api/v1/auth/refresh"))) {
+
                 // Auth rate limiting
                 String key = "limit:" + ip + ":" + path;
                 allowed = rateLimiterService.isAllowed(key, 60, authLimit);
-                
+
             } else if ("POST".equalsIgnoreCase(method) && path.equals("/api/v1/files/upload")) {
-                
+
                 // File upload rate limiting
                 String userId = getUserIdFromAuthorizationHeader(request);
                 String identifier = (userId != null) ? userId : ip;
                 String key = "limit:" + identifier + ":" + path;
                 allowed = rateLimiterService.isAllowed(key, 60, uploadLimit);
-                
-            } else if ("POST".equalsIgnoreCase(method) && 
-                       (path.equals("/api/v1/auth/mfa/verify") || 
-                        path.equals("/api/v1/auth/mfa/step-up"))) {
-                
+
+            } else if ("POST".equalsIgnoreCase(method) &&
+                    (path.equals("/api/v1/auth/mfa/verify") ||
+                            path.equals("/api/v1/auth/mfa/step-up"))) {
+
                 // MFA rate limiting
                 String userId = getUserIdFromAuthorizationHeader(request);
                 String identifier = (userId != null) ? userId : ip;
                 String key = "limit:" + identifier + ":" + path;
                 allowed = rateLimiterService.isAllowed(key, 60, mfaLimit);
-                
+
             } else if ("GET".equalsIgnoreCase(method) && path.startsWith("/api/v1/shares/link/")) {
-                
+
                 // Public link access rate limiting
                 String remaining = path.substring(20); // Length of "/api/v1/shares/link/"
                 int slashIdx = remaining.indexOf('/');
@@ -102,9 +102,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
                 boolean linkAllowed = rateLimiterService.isAllowed(linkKey, 60, linkLimit);
                 boolean globalAllowed = rateLimiterService.isAllowed(globalKey, 60, linkGlobalLimit);
                 allowed = linkAllowed && globalAllowed;
-                
+
             } else {
-                
+
                 // General REST API rate limiting
                 String userId = getUserIdFromAuthorizationHeader(request);
                 String identifier = (userId != null) ? userId : ip;
@@ -117,7 +117,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             log.warn("Rate limit exceeded for path={} method={} IP={}", path, method, ip);
             response.setStatus(429);
             response.setContentType("application/json");
-            response.getWriter().write("{\"success\":false,\"error\":{\"code\":\"TOO_MANY_REQUESTS\",\"message\":\"Rate limit exceeded. Please try again later.\"},\"timestamp\":\"" + Instant.now() + "\"}");
+            response.getWriter().write(
+                    "{\"success\":false,\"error\":{\"code\":\"TOO_MANY_REQUESTS\",\"message\":\"Rate limit exceeded. Please try again later.\"},\"timestamp\":\""
+                            + Instant.now() + "\"}");
             return;
         }
 
@@ -129,12 +131,25 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             String jwt = bearerToken.substring(7);
             try {
-                if (tokenProvider.validateToken(jwt)) {
-                    return tokenProvider.getUserIdFromToken(jwt);
+                ResolvedJwt resolved = (ResolvedJwt) request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE);
+                if (resolved == null || !jwt.equals(resolved.token())) {
+                    resolved = tokenProvider.resolveToken(jwt);
+                    if (resolved == null) {
+                        // Fallback for mock/legacy provider stubs
+                        boolean valid = tokenProvider.validateToken(jwt);
+                        String userId = valid ? tokenProvider.getUserIdFromToken(jwt) : null;
+                        resolved = new ResolvedJwt(jwt, valid, userId, null, null);
+                    }
+                    request.setAttribute(ResolvedJwt.REQUEST_ATTRIBUTE, resolved);
+                }
+                if (resolved.valid()) {
+                    return resolved.userId();
                 }
             } catch (Exception e) {
-                log.debug("Silent failure parsing Bearer token for rate limiting user identification: {}", e.getMessage());
+                log.debug("Silent failure parsing Bearer token for rate limiting user identification: {}",
+                        e.getMessage());
             }
         }
         return null;
-    }}
+    }
+}
