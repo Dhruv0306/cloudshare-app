@@ -51,7 +51,7 @@ class RateLimitingFilterTest {
         when(request.getRequestURI()).thenReturn("/api/v1/auth/login");
         when(request.getMethod()).thenReturn("POST");
         when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
-        
+
         when(rateLimiterService.isAllowed(anyString(), anyInt(), anyInt())).thenReturn(true);
 
         rateLimitingFilter.doFilterInternal(request, response, filterChain);
@@ -65,7 +65,7 @@ class RateLimitingFilterTest {
         when(request.getRequestURI()).thenReturn("/api/v1/auth/login");
         when(request.getMethod()).thenReturn("POST");
         when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
-        
+
         when(rateLimiterService.isAllowed(anyString(), anyInt(), anyInt())).thenReturn(false);
 
         StringWriter stringWriter = new StringWriter();
@@ -85,8 +85,9 @@ class RateLimitingFilterTest {
         when(request.getRequestURI()).thenReturn("/api/v1/auth/mfa/verify");
         when(request.getMethod()).thenReturn("POST");
         when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
-        
-        when(rateLimiterService.isAllowed(eq("limit:127.0.0.1:/api/v1/auth/mfa/verify"), eq(60), eq(5))).thenReturn(true);
+
+        when(rateLimiterService.isAllowed(eq("limit:127.0.0.1:/api/v1/auth/mfa/verify"), eq(60), eq(5)))
+                .thenReturn(true);
 
         rateLimitingFilter.doFilterInternal(request, response, filterChain);
 
@@ -100,8 +101,9 @@ class RateLimitingFilterTest {
         when(request.getRequestURI()).thenReturn("/api/v1/auth/mfa/step-up");
         when(request.getMethod()).thenReturn("POST");
         when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
-        
-        when(rateLimiterService.isAllowed(eq("limit:127.0.0.1:/api/v1/auth/mfa/step-up"), eq(60), eq(5))).thenReturn(false);
+
+        when(rateLimiterService.isAllowed(eq("limit:127.0.0.1:/api/v1/auth/mfa/step-up"), eq(60), eq(5)))
+                .thenReturn(false);
 
         StringWriter stringWriter = new StringWriter();
         PrintWriter printWriter = new PrintWriter(stringWriter);
@@ -119,12 +121,13 @@ class RateLimitingFilterTest {
         when(request.getRequestURI()).thenReturn("/api/v1/auth/mfa/verify");
         when(request.getMethod()).thenReturn("POST");
         when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
-        
+
         when(request.getHeader("Authorization")).thenReturn("Bearer valid-jwt");
         when(tokenProvider.validateToken("valid-jwt")).thenReturn(true);
         when(tokenProvider.getUserIdFromToken("valid-jwt")).thenReturn("user-123");
-        
-        when(rateLimiterService.isAllowed(eq("limit:user-123:/api/v1/auth/mfa/verify"), eq(60), eq(5))).thenReturn(true);
+
+        when(rateLimiterService.isAllowed(eq("limit:user-123:/api/v1/auth/mfa/verify"), eq(60), eq(5)))
+                .thenReturn(true);
 
         rateLimitingFilter.doFilterInternal(request, response, filterChain);
 
@@ -141,7 +144,8 @@ class RateLimitingFilterTest {
         when(request.getMethod()).thenReturn("GET");
         when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
 
-        // Mock RateLimiterService: linkA key is blocked (returns false), global key is allowed (returns true)
+        // Mock RateLimiterService: linkA key is blocked (returns false), global key is
+        // allowed (returns true)
         when(rateLimiterService.isAllowed(eq("limit:link:linkA:127.0.0.1"), eq(60), eq(30))).thenReturn(false);
         when(rateLimiterService.isAllowed(eq("limit:linkglobal:127.0.0.1"), eq(60), eq(100))).thenReturn(true);
 
@@ -186,7 +190,8 @@ class RateLimitingFilterTest {
         when(request.getMethod()).thenReturn("GET");
         when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
 
-        // Mock RateLimiterService: linkA is allowed (true), but global is blocked (false)
+        // Mock RateLimiterService: linkA is allowed (true), but global is blocked
+        // (false)
         when(rateLimiterService.isAllowed(eq("limit:link:linkA:127.0.0.1"), eq(60), eq(30))).thenReturn(true);
         when(rateLimiterService.isAllowed(eq("limit:linkglobal:127.0.0.1"), eq(60), eq(100))).thenReturn(false);
 
@@ -201,5 +206,24 @@ class RateLimitingFilterTest {
         verify(filterChain, never()).doFilter(request, response);
         verify(response).setStatus(429);
     }
-}
 
+    @Test
+    void testPopulatesResolvedJwtAttribute() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "uploadLimit", 10);
+        when(request.getRequestURI()).thenReturn("/api/v1/files/upload");
+        when(request.getMethod()).thenReturn("POST");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+
+        String token = "valid-token";
+        ResolvedJwt resolved = new ResolvedJwt(token, true, "user-456", "access", "jti-123");
+
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(tokenProvider.resolveToken(token)).thenReturn(resolved);
+        when(rateLimiterService.isAllowed(eq("limit:user-456:/api/v1/files/upload"), eq(60), eq(10))).thenReturn(true);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(request).setAttribute(eq(ResolvedJwt.REQUEST_ATTRIBUTE), eq(resolved));
+        verify(filterChain).doFilter(request, response);
+    }
+}
