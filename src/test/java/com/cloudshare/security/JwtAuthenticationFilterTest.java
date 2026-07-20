@@ -49,7 +49,8 @@ class JwtAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        jwtAuthenticationFilter = new JwtAuthenticationFilter(tokenProvider, customUserDetailsService, securityRedisTemplate);
+        jwtAuthenticationFilter = new JwtAuthenticationFilter(tokenProvider, customUserDetailsService,
+                securityRedisTemplate);
         SecurityContextHolder.clearContext();
     }
 
@@ -122,5 +123,47 @@ class JwtAuthenticationFilterTest {
         verify(filterChain, never()).doFilter(request, response);
         verify(response).setStatus(401);
         verify(response).setContentType("application/json");
+    }
+
+    @Test
+    void testUsesCachedResolvedJwtAttributeWithoutCallingTokenProvider() throws Exception {
+        String token = "cached-access-token";
+        UUID userId = UUID.randomUUID();
+        ResolvedJwt cachedJwt = new ResolvedJwt(token, true, userId.toString(), "access", "jti-999");
+
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE)).thenReturn(cachedJwt);
+        when(securityRedisTemplate.hasKey("blacklist:token:jti-999")).thenReturn(false);
+        when(customUserDetailsService.loadUserById(userId)).thenReturn(userDetails);
+
+        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertNotNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(customUserDetailsService).loadUserById(userId);
+
+        // Verify tokenProvider methods were NEVER invoked because the cached attribute
+        // was used
+        verify(tokenProvider, never()).resolveToken(anyString());
+        verify(tokenProvider, never()).validateToken(anyString());
+    }
+
+    @Test
+    void testFallbackWhenCachedAttributeIsMissing() throws Exception {
+        String token = "uncached-access-token";
+        UUID userId = UUID.randomUUID();
+        ResolvedJwt resolved = new ResolvedJwt(token, true, userId.toString(), "access", "jti-888");
+
+        when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
+        when(request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE)).thenReturn(null);
+        when(tokenProvider.resolveToken(token)).thenReturn(resolved);
+        when(securityRedisTemplate.hasKey("blacklist:token:jti-888")).thenReturn(false);
+        when(customUserDetailsService.loadUserById(userId)).thenReturn(userDetails);
+
+        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertNotNull(SecurityContextHolder.getContext().getAuthentication());
+        verify(tokenProvider).resolveToken(token);
     }
 }

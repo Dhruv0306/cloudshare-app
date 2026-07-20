@@ -51,7 +51,9 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    // Note: Client-side step-up timer is UX-only; 5-min JWT exp below is the true security boundary (see docs/system-design/security.md#step-up-countdown--token-expiry-boundary).
+    // Note: Client-side step-up timer is UX-only; 5-min JWT exp below is the true
+    // security boundary (see
+    // docs/system-design/security.md#step-up-countdown--token-expiry-boundary).
     public String generateStepUpToken(String userId, String username) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + (300 * 1000)); // 5 minutes
@@ -77,7 +79,8 @@ public class JwtTokenProvider {
             Boolean stepUp = claims.get("step_up", Boolean.class);
             String type = claims.get("type", String.class);
             String userId = claims.getSubject();
-            return stepUp != null && stepUp && "step_up".equals(type) && userId != null && userId.equals(expectedUserId);
+            return stepUp != null && stepUp && "step_up".equals(type) && userId != null
+                    && userId.equals(expectedUserId);
         } catch (JwtException | IllegalArgumentException ex) {
             log.debug("Invalid step-up token: {}", ex.getMessage());
         }
@@ -127,6 +130,24 @@ public class JwtTokenProvider {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    public ResolvedJwt resolveToken(String token) {
+        if (!org.springframework.util.StringUtils.hasText(token)) {
+            return new ResolvedJwt(token, false, null, null, null);
+        }
+        try {
+            Claims claims = getAllClaimsFromToken(token);
+            return new ResolvedJwt(
+                    token,
+                    true,
+                    claims.getSubject(),
+                    claims.get("type", String.class),
+                    claims.getId());
+        } catch (JwtException | IllegalArgumentException ex) {
+            log.debug("Invalid JWT token: {}", ex.getMessage());
+            return new ResolvedJwt(token, false, null, null, null);
+        }
     }
 
     public boolean validateToken(String authToken) {

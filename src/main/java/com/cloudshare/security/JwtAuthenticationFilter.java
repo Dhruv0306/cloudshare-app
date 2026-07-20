@@ -37,38 +37,55 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
         try {
             String jwt = getJwtFromRequest(request);
 
-            if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt) && "access".equals(tokenProvider.getTokenType(jwt))) {
-                String jti = tokenProvider.getJtiFromToken(jwt);
-                
-                // Verify blacklist status in Redis Security
-                boolean isBlacklisted = false;
-                if (jti != null) {
-                    String blacklistKey = "blacklist:token:" + jti;
-                    isBlacklisted = Boolean.TRUE.equals(securityRedisTemplate.hasKey(blacklistKey));
+            if (StringUtils.hasText(jwt)) {
+                ResolvedJwt resolved = (ResolvedJwt) request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE);
+                if (resolved == null || !jwt.equals(resolved.token())) {
+                    resolved = tokenProvider.resolveToken(jwt);
+                    if (resolved == null) {
+                        // Fallback for mock/legacy provider stubs
+                        boolean valid = tokenProvider.validateToken(jwt);
+                        String tokenType = valid ? tokenProvider.getTokenType(jwt) : null;
+                        String jti = valid ? tokenProvider.getJtiFromToken(jwt) : null;
+                        String userIdStr = valid ? tokenProvider.getUserIdFromToken(jwt) : null;
+                        resolved = new ResolvedJwt(jwt, valid, userIdStr, tokenType, jti);
+                    }
                 }
 
-                if (isBlacklisted) {
-                    log.warn("Attempted access with blacklisted JWT access token jti={}", jti);
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType("application/json");
-                    response.getWriter().write("{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Token is blacklisted/revoked.\"},\"timestamp\":\"" + java.time.Instant.now() + "\"}");
-                    return;
+                if (resolved.valid() && "access".equals(resolved.tokenType())) {
+                    String jti = resolved.jti();
+
+                    // Verify blacklist status in Redis Security
+                    boolean isBlacklisted = false;
+                    if (jti != null) {
+                        String blacklistKey = "blacklist:token:" + jti;
+                        isBlacklisted = Boolean.TRUE.equals(securityRedisTemplate.hasKey(blacklistKey));
+                    }
+
+                    if (isBlacklisted) {
+                        log.warn("Attempted access with blacklisted JWT access token jti={}", jti);
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json");
+                        response.getWriter().write(
+                                "{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Token is blacklisted/revoked.\"},\"timestamp\":\""
+                                        + java.time.Instant.now() + "\"}");
+                        return;
+                    }
+
+                    String userIdStr = resolved.userId();
+                    UUID userId = UUID.fromString(userIdStr);
+
+                    UserDetails userDetails = customUserDetailsService.loadUserById(userId);
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
-
-                String userIdStr = tokenProvider.getUserIdFromToken(jwt);
-                UUID userId = UUID.fromString(userIdStr);
-
-                UserDetails userDetails = customUserDetailsService.loadUserById(userId);
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context", ex);
