@@ -180,4 +180,37 @@ class StepUpAuthenticationFilterTest {
         verify(filterChain, never()).doFilter(request, response);
         verify(response).setStatus(401);
     }
+
+    @Test
+    void testAdminPathAuthenticatedBlacklistedTokenBlockedWithEnvironment() throws Exception {
+        org.springframework.mock.env.MockEnvironment env = new org.springframework.mock.env.MockEnvironment();
+        env.setProperty("spring.profiles.active", "prod");
+
+        when(request.getRequestURI()).thenReturn("/api/v1/admin/users");
+
+        User user = User.builder()
+                .id(UUID.randomUUID())
+                .username("admin")
+                .email("admin@example.com")
+                .roles(Collections.singleton(new Role(1L, "ROLE_ADMIN")))
+                .build();
+        UserPrincipal principal = new UserPrincipal(user);
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                principal, null, principal.getAuthorities()
+        );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        when(request.getHeader("X-StepUp-Token")).thenReturn("blacklisted-stepup-token");
+        when(tokenProvider.getJtiFromToken("blacklisted-stepup-token")).thenReturn("jti-blacklisted");
+        when(securityRedisTemplate.hasKey("blacklist:token:jti-blacklisted")).thenReturn(true);
+
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(stringWriter);
+        when(response.getWriter()).thenReturn(printWriter);
+
+        stepUpAuthenticationFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain, never()).doFilter(request, response);
+        verify(response).setStatus(401);
+    }
 }
