@@ -66,19 +66,20 @@ CloudShare supports two-factor authentication using the **Time-Based One-Time Pa
     *   The backend calculates the expected code for the current time window (allowing a drift window of +/- 1 interval).
     *   If correct, the backend permanently saves the secret key in the `users` table and toggles `mfa_enabled = true`.
 
-### Administrative Step-Up Authentication
+#### Administrative Step-Up Authentication
 To protect critical configurations (like viewing system logs or modifying other user accounts), endpoints protected by `ROLE_ADMIN` require **step-up authentication**:
 
 *   **Logic:** When accessing `/api/v1/admin/*`, the client must present an `X-StepUp-Token` header.
-*   **Token Generation:** The user calls `POST /api/v1/auth/mfa/step-up`, passing their current 6-digit MFA code. If valid, the backend issues a separate, short-lived JWT token (`stepUpToken`) containing the claim `step_up: true` with a strict **5-minute expiration**.
-*   **Security Interceptor:** A Spring Security filter intercepts all admin paths and verifies that the `X-StepUp-Token` is present, valid, and unexpired. This prevents session hijackers from executing administrative actions even if they possess a valid bearer access token.
+*   **Token Generation:** The user calls `POST /api/v1/auth/mfa/step-up`, passing their current 6-digit MFA code. If valid, the backend issues a separate, short-lived JWT token (`stepUpToken`) containing the claims `step_up: true` and `type: "step_up"` with a strict **5-minute expiration**.
+*   **Security Interceptor & Single-Use Enforcement:** `StepUpAuthenticationFilter` intercepts all admin paths and verifies that `X-StepUp-Token` is present, valid, unexpired, and not blacklisted.
+*   **Redis-Backed Single-Use Blacklisting:** Upon successful step-up token validation for an admin request, the filter immediately writes the token's JTI to the **Redis Security** instance under `blacklist:token:<jti>` with a TTL matching the token's remaining lifetime. Any subsequent request attempting to reuse the same step-up token is immediately rejected with HTTP 401 Unauthorized. No in-memory grace period exists; Redis blacklisting is the single source of truth across all app nodes.
 
 #### Step-Up Countdown & Token Expiry Boundary
 The client-side administrative step-up countdown is a UX-only element. It acts solely as a visual indicator to inform administrators of their remaining session time.
 
 > [!IMPORTANT]
 > The client-side countdown has **no security enforcement capability**.
-> The actual security boundary is enforced strictly by the backend verifying the server-side JWT `exp` claim (configured to 5 minutes) within the security filters. If a client-side attacker clears, ignores, or extends the local timer, any subsequent request with an expired step-up token will still be rejected by the backend.
+> The actual security boundary is enforced strictly by the backend verifying the server-side JWT `exp` claim (configured to 5 minutes) and checking the Redis single-use blacklist within `StepUpAuthenticationFilter`. If a client-side attacker clears, ignores, or extends the local timer, any subsequent request with an expired or previously consumed step-up token will still be rejected by the backend.
 
 ---
 
@@ -86,12 +87,12 @@ The client-side administrative step-up countdown is a UX-only element. It acts s
 
 ### 2.1 Encryption-in-Transit
 *   **Protocols:** The API gateway (Nginx) enforces **TLS 1.3** (with TLS 1.2 as a minimum fallback). Older, insecure TLS versions (1.0, 1.1) and SSL are disabled.
+*   **Internal Network Topology:** Only the `gateway` container publishes public host ports (80/443). All backing services (`app`, `db`, `cache-aside`, `cache-security`, `clamav`, `storage`) operate exclusively on the internal Docker/Kubernetes network without published host ports to enforce single-point edge ingress control and prevent header-spoofing bypasses.
 *   **HSTS:** HTTP Strict Transport Security (HSTS) headers are injected to force client browsers to communicate exclusively over HTTPS:
     ```http
     Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
     ```
 *   **Cipher Suites:** Restricts connections to highly secure ciphers, e.g., `TLS_AES_256_GCM_SHA384` and `TLS_CHACHA20_POLY1305_SHA256`.
-*   **Header Protection in Transit:** Sensitive parameters (like the public link access password `X-Share-Password`) are transmitted exclusively within the TLS 1.3 encrypted tunnel, protecting them from wire sniffing. At the reverse proxy level, Nginx is configured to strip these headers before writing the standard access logs, preventing cleartext leaks in operational logs. No weak client-side pre-hashing is used as it acts as a static password equivalence; transport security is managed entirely via TLS 1.3.
 
 ### 2.2 Encryption-at-Rest: Envelope Encryption
 To secure stored files against physical disk compromise or unauthorized access to the S3 bucket/local directory, CloudShare uses **Envelope Encryption** powered by **AES-256-GCM** (Galois/Counter Mode).
@@ -111,23 +112,23 @@ flowchart TD
 1.  **Key Hierarchy:**
     *   **Data Encryption Key / File Encryption Key (FEK):** A unique, cryptographically random AES-256 key generated for *each* uploaded file.
     *   **Key Encryption Key (KEK):** A master key stored securely outside the database (e.g., in a Key Management Service (KMS) or an environment variable on a secure, restricted container).
-        *   **Fail-Closed Startup Enforcement (H4):** On startup, the `SecretsStartupValidator` validates the shape of all configured KEKs (both the master KEK and versioned keys map) by trying to Base64-decode them. If any KEK is not exactly 32 bytes (256 bits), the application aborts startup to prevent encrypting data under an unintended derived key. If a legacy raw passphrase or non-32-byte key is intended, administrators must explicitly opt-in by setting `crypto.kek.allow-raw-passphrase=true`, which will emit loud warning alerts both during startup and on the first cryptographic use of that KEK version.
+        *   **Fail-Closed Startup Enforcement:** On startup, `SecretsStartupValidator` validates the shape of all configured KEKs (both the master KEK and versioned keys map) by Base64-decoding them. If any KEK is not exactly 32 bytes (256 bits), the application aborts startup to prevent encrypting data under an unintended key. If a legacy raw passphrase or non-32-byte key is intended, administrators must explicitly opt-in by setting `crypto.kek.allow-raw-passphrase=true`, which will digest the raw passphrase via SHA-256 and emit loud warning alerts both during startup and on the first cryptographic use of that KEK version.
 2.  **File Upload (Encryption):**
     *   When a user uploads a file, the application generates a random 256-bit FEK.
     *   The file data is encrypted using AES-256-GCM, generating cipher data and a 16-byte authentication tag (ensuring integrity).
-    *   The FEK is encrypted using the KEK (Envelope Encryption).
+    *   The FEK is encrypted using the KEK via RFC 3394 `AESWrap`.
     *   The encrypted file is stored in MinIO/local storage.
-    *   The encrypted FEK, the GCM Initialization Vector (IV), and file metadata are saved in the PostgreSQL database.
+    *   The encrypted FEK, the GCM Initialization Vector (IV), KEK version, and file metadata are saved in the PostgreSQL database.
 3.  **File Download (Decryption):**
     *   The backend retrieves the encrypted FEK and GCM IV from the database.
-    *   The KEK decrypts the encrypted FEK back to cleartext in memory.
-    *   The backend streams the encrypted file from storage, decrypts it block-by-block using the FEK, and streams the cleartext file directly to the client response stream. The decrypted file is never stored on disk.
+    *   The KEK decrypts the encrypted FEK back to cleartext in memory using `AESWrap`.
+    *   The backend streams the encrypted file from storage, decrypts it using the FEK, and streams the cleartext file directly to the client response stream. The decrypted file is never stored unencrypted on disk.
 
 ---
 
-## 3. Secure File Upload Pipeline
+## 3. Secure File Upload & Permission Caching Pipeline
 
-Allowing arbitrary file uploads presents severe vulnerabilities (malware, remote code execution, denial of service). CloudShare implements a strict sanitization pipeline:
+Allowing arbitrary file uploads presents severe vulnerabilities (malware, remote code execution, denial of service). CloudShare implements a strict sanitization pipeline and fail-loud permission caching:
 
 ```mermaid
 flowchart TD
@@ -144,7 +145,7 @@ flowchart TD
     Store --> WriteDB[Write File Metadata to PostgreSQL]
 ```
 
-### Sanitization Mechanisms
+### Sanitization & Cache Integrity Mechanisms
 1.  **Size Validation:** Strict size limits (e.g., max 100MB per file) are verified at the gateway level (Nginx `client_max_body_size`) and backend application properties to prevent RAM exhaustion or Denial of Service (DoS) attacks.
 2.  **Filename Sanitization & Path Traversal Prevention:**
     *   Users might upload files containing path traversal sequences (e.g., `../../../etc/passwd`).
@@ -152,11 +153,16 @@ flowchart TD
     *   **Physical Isolation:** The actual file is written to storage using a random `UUIDv4` as its identifier. The user's input filename is kept only as an encoded text column in the metadata database.
 3.  **Magic Number Verification:**
     *   Do not trust the `Content-Type` header sent by the browser or the file extension.
-    *   The backend reads the first few bytes (magic numbers) using an library like Apache Tika to determine the true MIME type. If a user uploads an executable masquerading as a PDF, it is rejected.
+    *   The backend reads the first few bytes (magic numbers) using Apache Tika to determine the true MIME type. If a user uploads an executable masquerading as a PDF, it is rejected.
 4.  **Virus Scanning (ClamAV Integration):**
     *   The backend establishes a socket connection to a ClamAV daemon.
     *   The file stream is split: one stream is scanned by ClamAV in chunked format, and the other is buffered in memory/temp file.
     *   If ClamAV detects malware, the transaction is immediately rolled back, the storage is wiped, and a high-priority audit warning is triggered.
+5.  **Permission Cache Eviction & Bypass-Marker Fail-Loud Self-Healing:**
+    *   File access permissions are cached in Redis (`cache:permissions:<file_id>`).
+    *   When shares are created, updated, revoked, or files are deleted, the permission cache key is evicted.
+    *   If Redis cache eviction fails (e.g. transient network fault), the system writes a **bypass marker key** (`cache:permissions:bypass:<file_id>`) with a 10-minute TTL.
+    *   When `FileService.verifyFileAccess` detects an active bypass marker, it bypasses the stale Redis permission cache, queries PostgreSQL directly, and attempts a self-healing eviction of the cache and bypass marker, preventing unauthorized access via stale cached permissions.
 
 ---
 
@@ -164,9 +170,9 @@ flowchart TD
 
 | Vulnerability | Threat Vector in File Sharing | CloudShare Mitigation Strategy |
 | :--- | :--- | :--- |
-| **Broken Object Level Authorization (BOLA)** | User accesses another user's private file by guessing the database ID. | Files are identified via random `UUIDv4` instead of sequential IDs. Access control queries enforce ownership check: `SELECT * FROM files WHERE id = :fileId AND owner_id = :currentUserId`. |
-| **Cross-Site Scripting (XSS)** | Attacker uploads an HTML/SVG file containing malicious JS, which executes when another user downloads/views it. | All file downloads force the `Content-Disposition: attachment; filename="sanitized.ext"` and `Content-Type: application/octet-stream` headers, preventing the browser from rendering files inline. In addition, Nginx sets a strict `Content-Security-Policy (CSP)`. |
-| **SQL Injection (SQLi)** | Attacker inputs SQL commands in the filename search query. | Use Spring Data JPA with standard repository queries which run Parameterized Queries under the hood, neutralizing injection. |
+| **Broken Object Level Authorization (BOLA)** | User accesses another user's private file by guessing the database ID. | Files are identified via random `UUIDv4` instead of sequential IDs. Access control queries enforce ownership/share check via BOLA-safe query patterns (`FileRepository.findAccessibleFile` and `findByIdAndOwnerIdAndDeletedFalse`). |
+| **Cross-Site Scripting (XSS)** | Attacker uploads an HTML/SVG file containing malicious JS, which executes when another user downloads/views it. | All file downloads force `Content-Disposition: attachment; filename="sanitized.ext"` and `Content-Type: application/octet-stream` headers, preventing inline execution. Nginx sets a strict `Content-Security-Policy (CSP)`. |
+| **SQL Injection (SQLi)** | Attacker inputs SQL commands in search queries. | Use Spring Data JPA with standard repository queries running parameterized queries under the hood. |
 | **Path Traversal** | Attacker uploads files with path parameters, overwriting system files. | Absolute separation between user-facing metadata name and backend storage name (random UUID folder/file structure on disk). |
-| **Cross-Site Request Forgery (CSRF)** | Attacker triggers state changes (like deleting files) on behalf of a logged-in user. | Stateless JWTs are not sent via standard cookies; they must be provided in the `Authorization: Bearer <JWT>` request header, which browsers do not automatically attach to cross-site requests. The refresh token cookie is configured as `SameSite=Strict`. |
-| **Rate Limiting & Brute Force** | Attackers perform automated login guessing or script file downloads to crash the server. | Redis token bucket rate limiters filter IP ranges and user IDs. Client IP resolution is secured by blocking direct application container port access (`app:8080` port isolation) and configuring the Nginx gateway to unconditionally overwrite proxy headers (`X-Real-IP`), preventing spoofing (see [Client IP Resolution & Spoofing Protection](caching-strategy.md#32-client-ip-resolution--spoofing-protection-h2--c2)). |
+| **Cross-Site Request Forgery (CSRF)** | Attacker triggers state changes on behalf of a logged-in user. | Stateless JWTs are passed via `Authorization: Bearer <JWT>` headers. Refresh token cookies use `SameSite=Strict` and `HttpOnly`. |
+| **Rate Limiting & Brute Force** | Attackers perform automated login guessing or script file downloads. | Redis sliding-window rate limiters filter requests across auth (5/min per IP), uploads (10/min per user/IP), MFA (5/min per user/IP), public link access (two-tier: 30/min per link+IP AND 100/min global per IP), and general APIs (100/min per user/IP). Gateway network topology blocks direct container access, trusting Nginx's sanitized `X-Real-IP`. |

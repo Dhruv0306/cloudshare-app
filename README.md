@@ -17,15 +17,17 @@ CloudShare is a production-ready, highly secure, enterprise-grade file-sharing w
 *   **PostgreSQL 17**: Core relational storage managed via **Flyway Schema Migrations**.
     *   *Audit Log Range Partitioning*: The audit log table is range-partitioned monthly (e.g., `audit_logs_y2026m10`, `audit_logs_y2026m11`) to prevent tablespace performance degradation.
 *   **Dual-Redis Architecture**: Two independent Redis deployments to optimize resources and lifecycle policies:
-    *   **Cache-Aside (Port 6379)**: Metadata caching, session store, configured with a `256MB maxmemory` and `allkeys-lru` eviction policy.
-    *   **Security & Rate-Limiter (Port 6380)**: Token blacklisting, Multi-Factor Authentication verification keys, and sliding-window rate limiting. Configured with a `noeviction` policy to prevent premature rate-limit or security state loss.
+    *   **Cache-Aside**: Metadata caching, permission checks (with fail-loud bypass marker self-healing), configured with a `256MB maxmemory` and `allkeys-lru` eviction policy.
+    *   **Security & Rate-Limiter**: Token blacklisting (including single-use step-up JWT enforcement), Multi-Factor Authentication verification keys, and multi-tier sliding-window rate limiting. Configured with a `noeviction` policy to prevent security state loss.
 *   **Pluggable Object Storage**: Supports local filesystem storage for development, MinIO (S3-compatible API) for self-hosted container deployments, or AWS S3 for production.
 
 ### 🛡️ Hardened Security & Anti-Malware
-*   **Envelope Encryption**: All stored files are encrypted using an individual AES-256 **File Encryption Key (FEK)**. The FEK is wrapped with a version-aware 256-bit **Key Encrypting Key (KEK)** derived from a Master KEK.
+*   **Envelope Encryption**: All stored files are encrypted using an individual AES-256 **File Encryption Key (FEK)** wrapped with a version-aware **Key Encrypting Key (KEK)** via AESWrap. Enforces fail-closed 32-byte KEK shape validation at startup (with opt-in raw passphrase fallback).
+*   **Administrative Step-Up Authentication**: Enforces short-lived MFA step-up tokens for `/api/v1/admin/*` paths with Redis-backed single-use blacklisting upon consumption.
+*   **Permission Cache Invalidation**: Write-through cache eviction on share/delete mutations, augmented with a 10-minute fail-loud bypass marker for self-healing authorization checks if Redis eviction fails.
 *   **Anti-Virus Scanning**: Inbound files pass through a **ClamAV** container daemon sidecar before persistence.
-*   **MIME Validation**: Strict magic-byte structure check via **Apache Tika** preventing filename/extension spoofing.
-*   **Security Controls**: CSRF protection, CORS policies, XSS mitigation, secure cookies, and distributed sliding-window rate limiting.
+*   **MIME Validation**: Strict magic-byte structure check via **Apache Tika** preventing filename/extension spoofing and polyglot script markup.
+*   **Security Controls & Network Topology**: CSRF protection, CORS policies, XSS mitigation, secure cookies, two-tier public link rate limiting (per-link 30/min + global 100/min), and an internal-network-only container topology where Nginx (`gateway`) is the sole edge ingress.
 
 ### 🎭 Modern Glassmorphic Frontend
 *   **Vanilla JS SPA**: A sleek Single Page Application built with HTML5 and Vanilla CSS using modern dark glassmorphic design principles.

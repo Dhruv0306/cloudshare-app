@@ -57,11 +57,13 @@ ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 
 ## 2. Local Docker-Compose Environment (`docker-compose.yml`)
 
-The following compose configuration builds a local copy of CloudShare side-by-side with PostgreSQL, Redis, MinIO (for free, S3-compliant object storage), ClamAV (for scanning uploads), and an Nginx reverse proxy.
+The following compose configuration builds a local copy of CloudShare side-by-side with PostgreSQL, Dual-Redis, MinIO, ClamAV, and Nginx.
+
+> [!IMPORTANT]
+> **Internal-Network-Only Topology:** Notice that **no service except `gateway` publishes a host port**.
+> Backing services (`app`, `db`, `cache-aside`, `cache-security`, `clamav`, `storage`) run strictly on the internal bridge network. This enforces edge ingress control through Nginx (`gateway`), preventing direct external access to internal ports (e.g. bypassing rate limiting or spoofing client IP headers).
 
 ```yaml
-version: '3.8'
-
 services:
   # Nginx Gateway & Static Asset Router
   gateway:
@@ -84,20 +86,28 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudshare
-      - SPRING_DATASOURCE_USERNAME=cloudshare_user
-      - SPRING_DATASOURCE_PASSWORD=StrongDBPassword123!
+      - SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - SPRING_DATA_REDIS_HOST=cache-aside
       - SPRING_DATA_REDIS_PORT=6379
       - SECURITY_REDIS_HOST=cache-security
       - SECURITY_REDIS_PORT=6379
       - CLAMAV_HOST=clamav
       - CLAMAV_PORT=3310
-      - STORAGE_PROVIDER=MINIO # Toggles storage service to MinIO
+      - STORAGE_PROVIDER=MINIO
       - MINIO_ENDPOINT=http://storage:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
       - MINIO_BUCKET_NAME=cloudshare-bucket
-      - CRYPTO_MASTER_KEK=32ByteHexadecimalMasterKeyEncryptKek
+      - CRYPTO_MASTER_KEK=${CRYPTO_MASTER_KEK}
+      - CRYPTO_KEK_ALLOW_RAW_PASSPHRASE=${CRYPTO_KEK_ALLOW_RAW_PASSPHRASE:-false}
+      - JWT_SECRET=${JWT_SECRET}
+      - RATE_LIMIT_AUTH=${RATE_LIMIT_AUTH:-5}
+      - RATE_LIMIT_UPLOAD=${RATE_LIMIT_UPLOAD:-10}
+      - RATE_LIMIT_LINK=${RATE_LIMIT_LINK:-30}
+      - RATE_LIMIT_LINK_GLOBAL=${RATE_LIMIT_LINK_GLOBAL:-100}
+      - RATE_LIMIT_GENERAL=${RATE_LIMIT_GENERAL:-100}
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
     depends_on:
       - db
       - cache-aside
@@ -107,13 +117,11 @@ services:
 
   # PostgreSQL Relational Metadata Database
   db:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       - POSTGRES_DB=cloudshare
-      - POSTGRES_USER=cloudshare_user
-      - POSTGRES_PASSWORD=StrongDBPassword123!
-    ports:
-      - "5432:5432"
+      - POSTGRES_USER=${SPRING_DATASOURCE_USERNAME}
+      - POSTGRES_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -121,8 +129,6 @@ services:
   cache-aside:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
     volumes:
       - redisdata-aside:/data
 
@@ -130,24 +136,20 @@ services:
   cache-security:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
-    ports:
-      - "6380:6379" # Exposed on port 6380 on the host to prevent conflict
     volumes:
       - redisdata-security:/data
 
   # ClamAV Virus Scanner Daemon
   clamav:
     image: clamav/clamav:latest
-    ports:
-      - "3310:3310"
 
-  # MinIO S3-Compatible Object Storage (Free local S3)
+  # MinIO S3-Compatible Object Storage
   storage:
     image: minio/minio:latest
     command: server /data
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
       - MINIO_BROWSER=off
     volumes:
       - miniadata:/data

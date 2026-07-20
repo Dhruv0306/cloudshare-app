@@ -13,9 +13,10 @@ To prevent eviction of security-critical keys (like JWT blacklists and rate limi
 
 | Target Instance | Dataset Category | Redis Key Pattern | Data Structure | TTL | Eviction Policy |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Redis Security** | **Revoked JWTs** | `blacklist:token:<jti>` | String | Token expiry | **No Eviction** |
-| **Redis Security** | **API Rate Limits** | `limit:<ip_or_userid>:<endpoint>` | Sorted Set | 1 Minute | **No Eviction** |
+| **Redis Security** | **Revoked / Single-Use JWTs** | `blacklist:token:<jti>` | String | Token expiry | **No Eviction** |
+| **Redis Security** | **API Rate Limits** | `limit:<ip_or_userid>:<endpoint>` <br> `limit:link:<shareCode>:<ip>` <br> `limit:linkglobal:<ip>` | Sorted Set | 1 Minute | **No Eviction** |
 | **Redis Cache** | **Cache-Aside Metadata** | `cache:user:<id>` <br> `cache:permissions:<file_id>` | Hash / String | 1 Hour | `allkeys-lru` |
+| **Redis Cache** | **Eviction Bypass Marker** | `cache:permissions:bypass:<file_id>` | String | 10 Minutes | `allkeys-lru` |
 
 ---
 
@@ -34,9 +35,10 @@ flowchart TD
     WriteCache --> Return
 ```
 
-### Cache Invalidation Rules:
+### Cache Invalidation Rules & Fail-Loud Self-Healing:
 To prevent dirty reads (returning outdated permissions or details), we implement active invalidation:
-*   **Write-Through Eviction:** Whenever file access permissions are modified (`POST /api/v1/shares/internal`) or a file is renamed/deleted, the application immediately deletes the corresponding Redis key (`cache:permissions:<file_id>`) in the same database transaction.
+*   **Write-Through Eviction:** Whenever file access permissions are modified (`POST /api/v1/shares/internal`), updated, or a file is soft-deleted, the application immediately deletes the corresponding Redis key (`cache:permissions:<file_id>`) in the same transaction.
+*   **Eviction Failure Bypass Marker (Fail-Loud Self-Healing):** If eviction fails (e.g. transient Redis network issue), the application sets a 10-minute bypass marker (`cache:permissions:bypass:<file_id>`). When present, `FileService.verifyFileAccess` bypasses the stale cache, queries PostgreSQL directly, and attempts a self-healing eviction of both the stale cache and bypass marker, guaranteeing authorization safety.
 *   **No Cache for Files:** The binary streams of files are *never* stored in Redis. Redis is strictly reserved for metadata, session IDs, and rate limit counters.
 
 ---
@@ -78,10 +80,13 @@ end
 ```
 
 ### 3.1 Rate Limit Thresholds:
-*   **Authentication Routes (`POST /api/v1/auth/*`):** Max 5 attempts per minute per IP.
-*   **File Upload Routes (`POST /api/v1/files/upload`):** Max 10 uploads per minute per User ID.
-*   **Public Link Access (`GET /api/v1/shares/link/*`):** Max 30 requests per minute per IP.
-*   **General REST APIs:** Max 100 requests per minute per User ID.
+*   **Authentication Routes (`POST /api/v1/auth/login`, `/register`, `/refresh`):** Max 5 attempts per minute per IP.
+*   **MFA Verification & Step-Up (`POST /api/v1/auth/mfa/verify`, `/step-up`):** Max 5 attempts per minute per User ID (or IP).
+*   **File Upload Routes (`POST /api/v1/files/upload`):** Max 10 uploads per minute per User ID (or IP).
+*   **Public Link Access (`GET /api/v1/shares/link/*`):** Two-tier rate limiting:
+    1.  *Per-Link Limit (`limit:link:<shareCode>:<ip>`):* Max 30 requests per minute.
+    2.  *Global Link Limit (`limit:linkglobal:<ip>`):* Max 100 requests per minute across all public link endpoints.
+*   **General REST APIs:** Max 100 requests per minute per User ID (or IP).
 
 ### 3.2 Client IP Resolution & Spoofing Protection (H2 / C2)
 For unauthenticated rate limiting (e.g., login attempts, public share link accesses), the application maps rate-limiting buckets using client IP addresses.
