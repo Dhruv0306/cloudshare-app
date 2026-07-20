@@ -144,13 +144,11 @@ services:
   # MinIO S3-Compatible Object Storage (Free local S3)
   storage:
     image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000" # MinIO API
-      - "9001:9001" # MinIO Console Web UI
+    command: server /data
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_BROWSER=off
     volumes:
       - miniadata:/data
 
@@ -160,6 +158,16 @@ volumes:
   redisdata-security:
   miniadata:
 ```
+
+> [!NOTE]
+> **MinIO Console Lockdown & Operational Administration**:
+> The MinIO Web Console UI (`:9001`) is disabled by default (`MINIO_BROWSER=off`, `--console-address` omitted) to minimize container attack surface. The S3 API port (9000) remains active internally.
+> For ad-hoc object/bucket administration in staging/production, administrators should run the MinIO Client CLI (`mc`) directly inside the internal network:
+> ```bash
+> docker run --rm --net cloudshare_default minio/mc alias set local http://storage:9000 minioadmin minioadmin
+> docker run --rm --net cloudshare_default minio/mc ls local/cloudshare-bucket
+> ```
+> Alternatively, temporary port-forwarding or SSH tunneling to port 9000 can be established for S3 API client tools.
 
 ---
 
