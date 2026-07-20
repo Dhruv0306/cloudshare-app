@@ -555,7 +555,15 @@ def test_gateway_ip_spoofing_mitigation(url_prefix):
         # Expected: connection failed because port is not exposed on host
         pass
 
-    # 2. Confirm that a forged X-Real-IP header sent through the gateway (https://localhost)
+    # 2. Confirm direct access to MinIO console on port 9001 from host is blocked (LM2 console lockdown).
+    try:
+        requests.get("http://localhost:9001", timeout=2)
+        assert False, "Direct access to MinIO console port 9001 succeeded, but it should be locked down!"
+    except requests.exceptions.RequestException:
+        # Expected: connection failed because port 9001 is not exposed and console is disabled
+        pass
+
+    # 3. Confirm that a forged X-Real-IP header sent through the gateway (https://localhost)
     # does not bypass Nginx's rewriting of the X-Real-IP header. Nginx is configured to
     # unconditionally overwrite it with $remote_addr, preventing spoofing.
     headers = {"X-Real-IP": "1.2.3.4"}
