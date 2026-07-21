@@ -214,7 +214,7 @@ public class ShareService {
             throw new AccessDeniedException("Link has expired");
         }
 
-        // 3. Check download limits
+        // 3. Pre-check download limits (fast-path rejection)
         if (shareLink.getDownloadLimit() != null && shareLink.getDownloadCount() >= shareLink.getDownloadLimit()) {
             throw new AccessDeniedException("Download limit reached");
         }
@@ -226,9 +226,12 @@ public class ShareService {
             }
         }
 
-        // 5. Increment download count
-        shareLink.setDownloadCount(shareLink.getDownloadCount() + 1);
-        shareLinkRepository.save(shareLink);
+        // 5. Atomic conditional increment of download count (race-free single update gate)
+        int rowsUpdated = shareLinkRepository.incrementDownloadCountConditional(shareLink.getId());
+        if (rowsUpdated == 0) {
+            log.warn("Public download limit reached concurrently for shareCode={}", shareCode);
+            throw new AccessDeniedException("Download limit reached");
+        }
 
         // 6. Decrypt and stream file
         Path decryptedTempFile = null;
