@@ -1,5 +1,6 @@
 package com.cloudshare.security;
 
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,24 +14,25 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Date;
 
 /**
  * Filter enforcing Multi-Factor Step-Up Authentication for administrative API
  * paths ({@code /api/v1/admin/*}).
  * <p>
  * <b>Why single-use Redis blacklisting is strictly enforced:</b> Administrative
- * actions require heightened
- * security boundaries beyond standard bearer JWTs. Step-up tokens issued via
- * MFA verification carry a 5-minute
- * TTL and must be strictly <b>single-use</b>. Upon successful step-up
- * validation, this filter immediately writes
- * {@code blacklist:token:<jti>} to the dedicated <b>Redis Security</b> instance
- * for the remaining token lifetime.
- * Any re-use attempt of the same step-up JTI (even within the 5-minute window)
- * is blocked with HTTP 401 Unauthorized.
- * The Redis blacklist is the single source of truth across all application
- * nodes; no in-memory grace periods exist.
+ * actions require heightened security boundaries beyond standard bearer JWTs.
+ * Step-up tokens issued via MFA verification carry a 5-minute TTL and must be
+ * strictly <b>single-use</b>. Upon verifying signature and claims, this filter
+ * atomically claims {@code blacklist:token:<jti>} on the dedicated <b>Redis
+ * Security</b>
+ * instance via {@code setIfAbsent} (SET NX) before allowing execution.
+ * Any re-use attempt or concurrent replay of the same step-up JTI is blocked
+ * with HTTP 401.
+ * If Redis Security is unavailable, the filter fails closed with HTTP 503
+ * Service Unavailable.
  * </p>
  */
 @Component
@@ -76,35 +78,72 @@ public class StepUpAuthenticationFilter extends OncePerRequestFilter {
             UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
             String stepUpToken = request.getHeader("X-StepUp-Token");
 
-            String jti = null;
+            if (stepUpToken == null || stepUpToken.isBlank()) {
+                log.warn("Missing X-StepUp-Token header for user {} accessing admin path {}", principal.getUsername(),
+                        path);
+                sendStepUpRequiredResponse(response);
+                return;
+            }
+
+            // 1. Cryptographically verify signature and claims first (prevents
+            // unauthenticated JTI pollution)
+            Claims claims = tokenProvider.parseAndValidateStepUpToken(stepUpToken, principal.getId().toString());
+            if (claims == null) {
+                log.warn("Invalid step-up token for user {} attempting to access {}", principal.getUsername(), path);
+                sendStepUpRequiredResponse(response);
+                return;
+            }
+
+            String jti = claims.getId();
+            Date expiration = claims.getExpiration();
+            if (jti == null || expiration == null) {
+                log.warn("Step-up token missing JTI or expiration claim for user {}", principal.getUsername());
+                sendStepUpRequiredResponse(response);
+                return;
+            }
+
+            // 2. TTL Guard: Reject expired token before attempting Redis call
+            long remainingTimeMs = expiration.getTime() - System.currentTimeMillis();
+            if (remainingTimeMs <= 0) {
+                log.warn("Step-up token expired for user {}", principal.getUsername());
+                sendStepUpRequiredResponse(response);
+                return;
+            }
+
+            // 3. Atomic Single-Use Claim (SET NX EX)
+            String blacklistKey = "blacklist:token:" + jti;
             try {
-                if (stepUpToken != null) {
-                    jti = tokenProvider.getJtiFromToken(stepUpToken);
+                Boolean firstUse = securityRedisTemplate.opsForValue()
+                        .setIfAbsent(blacklistKey, "blacklisted", Duration.ofMillis(remainingTimeMs));
+                if (!Boolean.TRUE.equals(firstUse)) {
+                    log.warn("Step-up token JTI {} already claimed for user {}", jti, principal.getUsername());
+                    sendStepUpRequiredResponse(response);
+                    return;
                 }
             } catch (Exception e) {
-                log.debug("Failed to extract JTI from step-up token: {}", e.getMessage());
-            }
-
-            boolean isBlacklisted = false;
-            if (jti != null) {
-                String blacklistKey = "blacklist:token:" + jti;
-                isBlacklisted = Boolean.TRUE.equals(securityRedisTemplate.hasKey(blacklistKey));
-            }
-
-            if (isBlacklisted || stepUpToken == null
-                    || !tokenProvider.validateStepUpToken(stepUpToken, principal.getId().toString())) {
-                log.warn("Step-up validation failed for user {} attempting to access {}", principal.getUsername(),
-                        path);
-
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.setContentType("application/json");
-                response.getWriter().write(
-                        "{\"success\":false,\"error\":{\"code\":\"STEP_UP_REQUIRED\",\"message\":\"Missing or invalid bearer/step-up token.\"},\"timestamp\":\""
-                                + Instant.now() + "\"}");
+                log.error("Step-up enforcement unavailable — failing closed for user {} accessing {}",
+                        principal.getUsername(), path, e);
+                sendServiceUnavailableResponse(response);
                 return;
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void sendStepUpRequiredResponse(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        response.getWriter().write(
+                "{\"success\":false,\"error\":{\"code\":\"STEP_UP_REQUIRED\",\"message\":\"Missing or invalid bearer/step-up token.\"},\"timestamp\":\""
+                        + Instant.now() + "\"}");
+    }
+
+    private void sendServiceUnavailableResponse(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+        response.setContentType("application/json");
+        response.getWriter().write(
+                "{\"success\":false,\"error\":{\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"Security state store unavailable.\"},\"timestamp\":\""
+                        + Instant.now() + "\"}");
     }
 }

@@ -63,6 +63,7 @@ public class MfaService {
             return false;
         }
         try {
+            // TODO (v1.2.0): Implement Redis-backed TOTP time-step anti-replay tracking (§1.4, §3.5)
             return codeVerifier.isValidCode(secret, code.trim());
         } catch (Exception e) {
             log.warn("Error verifying MFA code", e);
