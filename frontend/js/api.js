@@ -106,6 +106,12 @@ class ApiClient {
         try {
             const response = await fetch(url, options);
 
+            // Rotate Step-up Token if provided in response header
+            const nextStepUpToken = response.headers.get('X-StepUp-Token');
+            if (nextStepUpToken) {
+                this.setStepUpToken(nextStepUpToken);
+            }
+
             // Handle success
             if (response.ok) {
                 return response;
