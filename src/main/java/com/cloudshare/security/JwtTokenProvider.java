@@ -16,12 +16,17 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Service component responsible for generating, parsing, and validating JSON Web Tokens (JWTs).
+ * Service component responsible for generating, parsing, and validating JSON
+ * Web Tokens (JWTs).
  * <p>
- * <b>Why explicit token types exist:</b> To protect against JWT type-confusion attacks where a valid token
- * issued for one context (e.g., administrative step-up authentication or refresh tokens) is presented to an
- * endpoint expecting standard bearer access authorization. Every JWT issued includes an explicit {@code type}
- * claim ({@code "access"} vs {@code "step_up"}) and a unique cryptographic JTI (JWT ID) to enable precise
+ * <b>Why explicit token types exist:</b> To protect against JWT type-confusion
+ * attacks where a valid token
+ * issued for one context (e.g., administrative step-up authentication or
+ * refresh tokens) is presented to an
+ * endpoint expecting standard bearer access authorization. Every JWT issued
+ * includes an explicit {@code type}
+ * claim ({@code "access"} vs {@code "step_up"}) and a unique cryptographic JTI
+ * (JWT ID) to enable precise
  * blacklisting and single-use enforcement.
  * </p>
  */
@@ -45,7 +50,8 @@ public class JwtTokenProvider {
     /**
      * Generates a standard bearer access token for authenticated API requests.
      * <p>
-     * <b>Why {@code type: "access"} is set:</b> Enforces that standard bearer tokens cannot be misused in
+     * <b>Why {@code type: "access"} is set:</b> Enforces that standard bearer
+     * tokens cannot be misused in
      * step-up authorization filters or refresh token endpoints.
      * </p>
      *
@@ -74,11 +80,15 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Generates a short-lived MFA step-up authorization token required for sensitive administrative paths.
+     * Generates a short-lived MFA step-up authorization token required for
+     * sensitive administrative paths.
      * <p>
-     * <b>Why 5-minute TTL & separate claims exist:</b> Client-side countdown timers are UX visual aids only.
-     * The 5-minute server-side JWT expiration claim combined with single-use JTI Redis blacklisting forms the
-     * true security boundary. The {@code step_up: true} and {@code type: "step_up"} claims ensure the token
+     * <b>Why 5-minute TTL & separate claims exist:</b> Client-side countdown timers
+     * are UX visual aids only.
+     * The 5-minute server-side JWT expiration claim combined with single-use JTI
+     * Redis blacklisting forms the
+     * true security boundary. The {@code step_up: true} and {@code type: "step_up"}
+     * claims ensure the token
      * is distinct from regular access tokens and cannot be substituted.
      * </p>
      *
@@ -106,28 +116,55 @@ public class JwtTokenProvider {
     }
 
     /**
-     * Validates a step-up token against signature integrity, type claims, and expected user identity.
+     * Validates a step-up token against signature integrity, type claims, and
+     * expected user identity.
      * <p>
-     * <b>Why user binding is checked:</b> Ensures step-up tokens issued to one administrator cannot be stolen
+     * <b>Why user binding is checked:</b> Ensures step-up tokens issued to one
+     * administrator cannot be stolen
      * or replayed by another authenticated account to bypass MFA requirements.
      * </p>
      *
-     * @param token          the step-up token string passed in {@code X-StepUp-Token} header
-     * @param expectedUserId the UUID string of the current SecurityContext principal
-     * @return {@code true} if valid, unexpired, bound to expectedUserId, and typed as "step_up"
+     * @param token          the step-up token string passed in
+     *                       {@code X-StepUp-Token} header
+     * @param expectedUserId the UUID string of the current SecurityContext
+     *                       principal
+     * @return {@code true} if valid, unexpired, bound to expectedUserId, and typed
+     *         as "step_up"
      */
     public boolean validateStepUpToken(String token, String expectedUserId) {
+        return parseAndValidateStepUpToken(token, expectedUserId) != null;
+    }
+
+    /**
+     * Parses and cryptographically validates a step-up token against signature
+     * integrity, type claims, and expected user identity.
+     * <p>
+     * <b>Why signature-verified parsing precedes claim extraction:</b> Ensures
+     * unverified or tampered JTI claims cannot be used
+     * to poll or pollute the single-use Redis blacklist store.
+     * </p>
+     *
+     * @param token          the step-up token string passed in
+     *                       {@code X-StepUp-Token} header
+     * @param expectedUserId the UUID string of the current SecurityContext
+     *                       principal
+     * @return verified {@link Claims} if valid, unexpired, bound to expectedUserId,
+     *         and typed as "step_up"; {@code null} otherwise
+     */
+    public Claims parseAndValidateStepUpToken(String token, String expectedUserId) {
         try {
             Claims claims = getAllClaimsFromToken(token);
             Boolean stepUp = claims.get("step_up", Boolean.class);
             String type = claims.get("type", String.class);
             String userId = claims.getSubject();
-            return stepUp != null && stepUp && "step_up".equals(type) && userId != null
-                    && userId.equals(expectedUserId);
+            if (stepUp != null && stepUp && "step_up".equals(type) && userId != null
+                    && userId.equals(expectedUserId)) {
+                return claims;
+            }
         } catch (JwtException | IllegalArgumentException ex) {
             log.debug("Invalid step-up token: {}", ex.getMessage());
         }
-        return false;
+        return null;
     }
 
     /**
@@ -190,9 +227,12 @@ public class JwtTokenProvider {
     /**
      * Resolves a JWT into an immutable {@link ResolvedJwt} summary record.
      * <p>
-     * <b>Why this method exists:</b> Allows filters early in the filter chain (such as {@link RateLimitingFilter})
-     * to parse and validate a token once, storing the resulting {@link ResolvedJwt} in request attributes so
-     * downstream filters (such as {@link JwtAuthenticationFilter}) do not incur duplicate cryptographic overhead.
+     * <b>Why this method exists:</b> Allows filters early in the filter chain (such
+     * as {@link RateLimitingFilter})
+     * to parse and validate a token once, storing the resulting {@link ResolvedJwt}
+     * in request attributes so
+     * downstream filters (such as {@link JwtAuthenticationFilter}) do not incur
+     * duplicate cryptographic overhead.
      * </p>
      *
      * @param token JWT string from request header
