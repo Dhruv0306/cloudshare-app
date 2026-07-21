@@ -19,6 +19,7 @@ public class RateLimiterService {
     private final RedisScript<Long> rateLimitScript;
 
     public RateLimiterService(@Qualifier("securityRedisTemplate") StringRedisTemplate securityRedisTemplate) {
+        // TODO (v1.2.0): Implement Redis capacity isolation & dedicated connection pool (§3.4)
         this.securityRedisTemplate = securityRedisTemplate;
         
         DefaultRedisScript<Long> script = new DefaultRedisScript<>();

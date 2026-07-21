@@ -492,7 +492,7 @@ def test_security_hardening(url_prefix):
     with_stepup_res = requests.get(f"{url_prefix}/api/v1/admin/users", headers=stepup_headers)
     assert with_stepup_res.status_code == 403, f"Expected 403 for non-admin on admin endpoint with valid step-up token, got {with_stepup_res.status_code}. Response: {with_stepup_res.text}"
 
-    # Case D: Promoted admin user: single-use claim & step-up token rotation (v1.1.1 Security Patch)
+    # Case D: Promoted admin user: atomic single-use claim gate (§1.1, §1.2 Security Patch)
     admin_user = generate_random_user()
     requests.post(f"{url_prefix}/api/v1/auth/register", json=admin_user)
     
@@ -518,23 +518,14 @@ def test_security_hardening(url_prefix):
         su_token_1 = adm_stepup_res["data"]["stepUpToken"]
         assert su_token_1 is not None
         
-        # 1st Admin request using su_token_1
+        # 1st Admin request using su_token_1 -> SUCCEEDS
         adm_req1_headers = {"Authorization": f"Bearer {adm_access_token}", "X-StepUp-Token": su_token_1}
         adm_res_1 = requests.get(f"{url_prefix}/api/v1/admin/users", headers=adm_req1_headers)
         assert adm_res_1.status_code == 200, f"Expected 200 for admin with step-up token, got {adm_res_1.status_code}. Response: {adm_res_1.text}"
         
-        # Verify rotated token is returned in X-StepUp-Token response header
-        su_token_2 = adm_res_1.headers.get("X-StepUp-Token")
-        assert su_token_2 is not None and su_token_2 != su_token_1, f"Expected rotated step-up token in response header, got: {su_token_2}"
-        
-        # Replay/Reuse of original su_token_1 must be REJECTED (401 Unauthorized - single use claimed in Redis)
+        # Replay/Reuse of the same su_token_1 must be REJECTED (401 Unauthorized - single use claimed in Redis)
         replay_res = requests.get(f"{url_prefix}/api/v1/admin/users", headers=adm_req1_headers)
         assert replay_res.status_code == 401, f"Expected 401 for reused single-use step-up token, got {replay_res.status_code}. Response: {replay_res.text}"
-        
-        # 2nd Admin request using rotated su_token_2 should SUCCEED
-        adm_req2_headers = {"Authorization": f"Bearer {adm_access_token}", "X-StepUp-Token": su_token_2}
-        adm_res_2 = requests.get(f"{url_prefix}/api/v1/admin/audit-logs", headers=adm_req2_headers)
-        assert adm_res_2.status_code == 200, f"Expected 200 for rotated step-up token, got {adm_res_2.status_code}. Response: {adm_res_2.text}"
 
     # 5.7 Polyglot and Extension Mismatch Upload Rejections (LM4)
     # A: Dangerous extension (.php)

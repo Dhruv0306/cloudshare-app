@@ -70,6 +70,7 @@ public class EncryptionService {
             }
 
             // If the key is not exactly 256 bits (32 bytes), digest it to enforce correctness
+            // TODO (v1.2.0): Implement runtime parity for raw passphrase fallback / KEK shape (§1.3)
             if (keyBytes.length != 32) {
                 if (loggedDigestWarnings.add(v)) {
                     log.warn("KEK for version {} is not exactly 32 bytes after Base64 decoding. Digesting using SHA-256 fallback.", v);

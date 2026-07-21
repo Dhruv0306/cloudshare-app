@@ -126,11 +126,6 @@ public class StepUpAuthenticationFilter extends OncePerRequestFilter {
                 sendServiceUnavailableResponse(response);
                 return;
             }
-
-            // 4. Token Rotation: Issue a fresh single-use step-up token in response header for seamless sequential admin operations
-            String nextStepUpToken = tokenProvider.generateStepUpToken(principal.getId().toString(), principal.getUsername());
-            response.setHeader("X-StepUp-Token", nextStepUpToken);
-            response.setHeader("Access-Control-Expose-Headers", "X-StepUp-Token");
         }
 
         filterChain.doFilter(request, response);

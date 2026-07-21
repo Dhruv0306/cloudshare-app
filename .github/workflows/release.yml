@@ -13,8 +13,6 @@ jobs:
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    # Ensure this runs on new tag pushes
-    if: github.event.created == true
 
     steps:
       - name: Checkout repository
