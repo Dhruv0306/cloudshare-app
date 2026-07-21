@@ -1024,12 +1024,12 @@ async function handleAdminStepUpSubmit(e) {
     }
 }
 
-function loadAdminPanel() {
+async function loadAdminPanel() {
     state.admin.users.page = 0;
     state.admin.logs.page = 0;
 
-    loadAdminUsers();
-    loadAdminLogs();
+    await loadAdminUsers();
+    await loadAdminLogs();
 }
 
 async function loadAdminUsers() {

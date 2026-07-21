@@ -111,8 +111,25 @@ class ApiClient {
                 return response;
             }
 
-            // Handle 401 Unauthorized - access token expired, trigger silent refresh
+            // Handle 401 Unauthorized
             if (response.status === 401) {
+                // Parse error response if available
+                const body = await response.clone().json().catch(() => null);
+                if (body?.error?.code === 'STEP_UP_REQUIRED') {
+                    this.setStepUpToken(null);
+                    const err = new Error(body.error.message || 'Step-up authorization required');
+                    err.status = 401;
+                    err.stepUpRequired = true;
+                    throw err;
+                }
+
+                // If this request was already retried once after refresh, do not loop
+                if (options._retriedAfterRefresh) {
+                    const err = new Error('Session expired');
+                    err.status = 401;
+                    throw err;
+                }
+
                 // If it is the refresh endpoint itself failing, clean state and bubble up
                 if (url.includes('/api/v1/auth/refresh')) {
                     this.clearTokens();
@@ -125,20 +142,16 @@ class ApiClient {
                 }
 
                 if (!this.accessToken) {
-                    let errorData = null;
-                    try {
-                        errorData = await response.json();
-                    } catch (e) {
-                        // Not JSON
-                    }
-                    const errorMsg = (errorData && errorData.error && errorData.error.message)
-                        ? errorData.error.message
+                    const errorMsg = (body && body.error && body.error.message)
+                        ? body.error.message
                         : `Request failed with status ${response.status}`;
                     const err = new Error(errorMsg);
                     err.status = 401;
-                    err.data = errorData;
+                    err.data = body;
                     throw err;
                 }
+
+                options._retriedAfterRefresh = true;
 
                 // Attempt to refresh the token
                 return new Promise((resolve, reject) => {

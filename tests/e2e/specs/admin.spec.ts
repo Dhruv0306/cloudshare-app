@@ -63,14 +63,15 @@ test.describe('Admin Console: role gating & step-up authentication (Scenarios 6 
         await expect(page.locator('#admin-logs-tbody tr')).not.toHaveCount(0);
 
         await page.locator('#admin-logs-action-filter').selectOption('LOGIN_SUCCESS');
-        await expect(page.locator('#admin-logs-tbody')).toContainText('LOGIN_SUCCESS', { timeout: 7_000 });
 
-        const actionBadges = page.locator('#admin-logs-tbody .badge-action');
-        const actionTexts = await actionBadges.allTextContents();
-        expect(actionTexts.length, 'filtering by LOGIN_SUCCESS should return at least one row').toBeGreaterThan(0);
-        for (const text of actionTexts) {
-            expect(text).toBe('LOGIN_SUCCESS');
-        }
+        await expect(async () => {
+            const actionBadges = page.locator('#admin-logs-tbody .badge-action');
+            const actionTexts = await actionBadges.allTextContents();
+            expect(actionTexts.length, 'filtering by LOGIN_SUCCESS should return at least one row').toBeGreaterThan(0);
+            for (const text of actionTexts) {
+                expect(text).toBe('LOGIN_SUCCESS');
+            }
+        }).toPass({ timeout: 7_000 });
 
         // User ID filter narrows to the admin's own logs (debounced input).
         const adminUserId = await page

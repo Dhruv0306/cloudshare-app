@@ -60,7 +60,7 @@ class StepUpAuthenticationFilterTest {
     @Test
     void testNonAdminPathAllowed() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/files");
-        
+
         stepUpAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
         verify(filterChain).doFilter(request, response);
@@ -70,7 +70,7 @@ class StepUpAuthenticationFilterTest {
     @Test
     void testAdminPathUnauthenticatedAllowedToProceed() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/admin/users");
-        
+
         stepUpAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
         verify(filterChain).doFilter(request, response);
@@ -80,7 +80,7 @@ class StepUpAuthenticationFilterTest {
     @Test
     void testAdminPathAuthenticatedInvalidTokenBlocked() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/admin/users");
-        
+
         User user = User.builder()
                 .id(UUID.randomUUID())
                 .username("admin")
@@ -89,8 +89,7 @@ class StepUpAuthenticationFilterTest {
                 .build();
         UserPrincipal principal = new UserPrincipal(user);
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                principal, null, principal.getAuthorities()
-        );
+                principal, null, principal.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         when(request.getHeader("X-StepUp-Token")).thenReturn("invalid-stepup-token");
@@ -110,7 +109,7 @@ class StepUpAuthenticationFilterTest {
     @Test
     void testAdminPathAuthenticatedValidTokenAllowed() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/admin/users");
-        
+
         User user = User.builder()
                 .id(UUID.randomUUID())
                 .username("admin")
@@ -119,16 +118,13 @@ class StepUpAuthenticationFilterTest {
                 .build();
         UserPrincipal principal = new UserPrincipal(user);
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                principal, null, principal.getAuthorities()
-        );
+                principal, null, principal.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         when(request.getHeader("X-StepUp-Token")).thenReturn("valid-stepup-token");
         when(tokenProvider.getJtiFromToken("valid-stepup-token")).thenReturn("jti-123");
         when(securityRedisTemplate.hasKey("blacklist:token:jti-123")).thenReturn(false);
         when(tokenProvider.validateStepUpToken("valid-stepup-token", principal.getId().toString())).thenReturn(true);
-        when(tokenProvider.getExpirationDateFromToken("valid-stepup-token")).thenReturn(new java.util.Date(System.currentTimeMillis() + 300000));
-        when(securityRedisTemplate.opsForValue()).thenReturn(valueOperations);
 
         stepUpAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
@@ -137,9 +133,9 @@ class StepUpAuthenticationFilterTest {
     }
 
     @Test
-    void testAdminPathAuthenticatedValidTokenBlacklistedAfterUse() throws Exception {
+    void testAdminPathAuthenticatedValidTokenReusableUntilExpired() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/v1/admin/users");
-        
+
         User user = User.builder()
                 .id(UUID.randomUUID())
                 .username("admin")
@@ -148,37 +144,25 @@ class StepUpAuthenticationFilterTest {
                 .build();
         UserPrincipal principal = new UserPrincipal(user);
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                principal, null, principal.getAuthorities()
-        );
+                principal, null, principal.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         when(request.getHeader("X-StepUp-Token")).thenReturn("valid-stepup-token");
         when(tokenProvider.getJtiFromToken("valid-stepup-token")).thenReturn("jti-123");
         when(securityRedisTemplate.hasKey("blacklist:token:jti-123")).thenReturn(false);
         when(tokenProvider.validateStepUpToken("valid-stepup-token", principal.getId().toString())).thenReturn(true);
-        when(tokenProvider.getExpirationDateFromToken("valid-stepup-token")).thenReturn(new java.util.Date(System.currentTimeMillis() + 300000));
-        when(securityRedisTemplate.opsForValue()).thenReturn(valueOperations);
 
-        // First call - succeeds and blacklists the token
+        // First call - succeeds
         stepUpAuthenticationFilter.doFilterInternal(request, response, filterChain);
-
         verify(filterChain).doFilter(request, response);
-        verify(valueOperations).set(eq("blacklist:token:jti-123"), eq("blacklisted"), any(java.time.Duration.class));
 
         // Reset verification mocks for second call
         reset(filterChain, response);
 
-        // Second call with same token, now blacklisted
-        when(securityRedisTemplate.hasKey("blacklist:token:jti-123")).thenReturn(true);
-        
-        StringWriter stringWriter = new StringWriter();
-        PrintWriter printWriter = new PrintWriter(stringWriter);
-        when(response.getWriter()).thenReturn(printWriter);
-
+        // Second call with same token - still valid and allowed
         stepUpAuthenticationFilter.doFilterInternal(request, response, filterChain);
-
-        verify(filterChain, never()).doFilter(request, response);
-        verify(response).setStatus(401);
+        verify(filterChain).doFilter(request, response);
+        verify(response, never()).setStatus(401);
     }
 
     @Test
@@ -196,8 +180,7 @@ class StepUpAuthenticationFilterTest {
                 .build();
         UserPrincipal principal = new UserPrincipal(user);
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                principal, null, principal.getAuthorities()
-        );
+                principal, null, principal.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         when(request.getHeader("X-StepUp-Token")).thenReturn("blacklisted-stepup-token");
