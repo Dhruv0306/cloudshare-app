@@ -167,7 +167,9 @@ class ShareServiceTest {
                 .deleted(false)
                 .build();
 
+        UUID linkId = UUID.randomUUID();
         ShareLink shareLink = ShareLink.builder()
+                .id(linkId)
                 .file(file)
                 .shareCode(shareCode)
                 .expiresAt(Instant.now().plus(1, ChronoUnit.HOURS))
@@ -178,6 +180,7 @@ class ShareServiceTest {
 
         when(shareLinkRepository.findByShareCode(shareCode)).thenReturn(Optional.of(shareLink));
         when(passwordEncoder.matches("my_pass", "hashed_pass")).thenReturn(true);
+        when(shareLinkRepository.incrementDownloadCountConditional(linkId)).thenReturn(1);
 
         SecretKey mockFek = new SecretKeySpec(new byte[32], "AES");
         when(encryptionService.unwrapFek("fek_wrapped", 1)).thenReturn(mockFek);
@@ -188,9 +191,8 @@ class ShareServiceTest {
         assertNotNull(stream);
         assertEquals("pic.png", stream.getFilename());
         assertEquals("image/png", stream.getMimeType());
-        assertEquals(2, shareLink.getDownloadCount());
 
-        verify(shareLinkRepository).save(shareLink);
+        verify(shareLinkRepository).incrementDownloadCountConditional(linkId);
         verify(auditLogService).log(isNull(), eq("GUEST_DOWNLOAD"), eq(fileId), eq(ipAddress), any(String.class));
     }
 
@@ -220,6 +222,27 @@ class ShareServiceTest {
         when(shareLinkRepository.findByShareCode(shareCode)).thenReturn(Optional.of(shareLink));
 
         assertThrows(AccessDeniedException.class, () -> shareService.downloadPublicLink(shareCode, null, "127.0.0.1"));
+    }
+
+    @Test
+    void downloadPublicLink_concurrentAtomicIncrementReturnsZero_throwsException() {
+        UUID linkId = UUID.randomUUID();
+        String shareCode = "ABCDEFGH";
+        FileMetadata file = FileMetadata.builder().deleted(false).build();
+        ShareLink shareLink = ShareLink.builder()
+                .id(linkId)
+                .file(file)
+                .expiresAt(Instant.now().plus(1, ChronoUnit.HOURS))
+                .downloadLimit(2)
+                .downloadCount(1)
+                .build();
+        when(shareLinkRepository.findByShareCode(shareCode)).thenReturn(Optional.of(shareLink));
+        when(shareLinkRepository.incrementDownloadCountConditional(linkId)).thenReturn(0);
+
+        assertThrows(AccessDeniedException.class, () -> shareService.downloadPublicLink(shareCode, null, "127.0.0.1"));
+        verify(shareLinkRepository).incrementDownloadCountConditional(linkId);
+        verifyNoInteractions(storageService);
+        verifyNoInteractions(auditLogService);
     }
 
     @Test
