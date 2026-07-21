@@ -22,4 +22,10 @@ public interface ShareLinkRepository extends JpaRepository<ShareLink, UUID> {
     @Transactional
     @Query("DELETE FROM ShareLink s WHERE s.expiresAt < :now")
     int deleteByExpiresAtBefore(@Param("now") Instant now);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query("UPDATE ShareLink s SET s.downloadCount = s.downloadCount + 1 " +
+           "WHERE s.id = :id AND (s.downloadLimit IS NULL OR s.downloadCount < s.downloadLimit)")
+    int incrementDownloadCountConditional(@Param("id") UUID id);
 }

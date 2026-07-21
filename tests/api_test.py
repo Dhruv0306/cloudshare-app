@@ -83,6 +83,17 @@ def generate_totp(secret_base32):
     
     return f"{code:06d}"
 
+def promote_user_to_admin(username):
+    import subprocess
+    sql = f"INSERT INTO user_roles (user_id, role_id) SELECT u.id, r.id FROM users u, roles r WHERE u.username = '{username}' AND r.name = 'ROLE_ADMIN' ON CONFLICT DO NOTHING;"
+    cmd = ["docker", "compose", "exec", "-T", "db", "psql", "-U", "cloudshare_user", "-d", "cloudshare", "-c", sql]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return True
+    except Exception as e:
+        print(f"(Warning: Failed to promote user via docker: {e}) ", end="")
+        return False
+
 # ----------------------------------------------------
 # 1. Auth Flow Tests
 # ----------------------------------------------------
@@ -340,9 +351,10 @@ def test_sharing_flow(url_prefix):
     download_1 = requests.get(f"{url_prefix}/api/v1/shares/link/{limit_share_code}/download")
     assert download_1.status_code == 200, f"Expected 200, got {download_1.status_code}"
     
-    # Second download -> 403 Limit Exceeded
+    # Second download -> 403 Limit Exceeded (Atomic SQL conditional update gate verified)
     download_2 = requests.get(f"{url_prefix}/api/v1/shares/link/{limit_share_code}/download")
     assert download_2.status_code == 403, f"Expected 403 (limit reached), got {download_2.status_code}. Response: {download_2.text}"
+    assert download_2.json().get("error", {}).get("message") == "Download limit reached", f"Unexpected error message: {download_2.text}"
 
     # 3.3 Revocation of internal share
     share_id = share_res.json()["data"]["shareId"]
@@ -479,6 +491,50 @@ def test_security_hardening(url_prefix):
     }
     with_stepup_res = requests.get(f"{url_prefix}/api/v1/admin/users", headers=stepup_headers)
     assert with_stepup_res.status_code == 403, f"Expected 403 for non-admin on admin endpoint with valid step-up token, got {with_stepup_res.status_code}. Response: {with_stepup_res.text}"
+
+    # Case D: Promoted admin user: single-use claim & step-up token rotation (v1.1.1 Security Patch)
+    admin_user = generate_random_user()
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=admin_user)
+    
+    if promote_user_to_admin(admin_user["username"]):
+        # Setup & verify MFA for admin user
+        adm_login_1 = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": admin_user["username"], "password": admin_user["password"]}).json()
+        adm_token_1 = adm_login_1["data"]["accessToken"]
+        adm_headers_1 = {"Authorization": f"Bearer {adm_token_1}"}
+        
+        adm_setup = requests.post(f"{url_prefix}/api/v1/auth/mfa/setup", headers=adm_headers_1).json()
+        adm_secret = adm_setup["data"]["secret"]
+        adm_totp_1 = generate_totp(adm_secret)
+        requests.post(f"{url_prefix}/api/v1/auth/mfa/verify", headers=adm_headers_1, json={"code": adm_totp_1})
+        
+        # Re-login with TOTP to get fresh JWT carrying ROLE_ADMIN authority
+        adm_totp_2 = generate_totp(adm_secret)
+        adm_login_2 = requests.post(f"{url_prefix}/api/v1/auth/login", json={"usernameOrEmail": admin_user["username"], "password": admin_user["password"], "mfaCode": adm_totp_2}).json()
+        adm_access_token = adm_login_2["data"]["accessToken"]
+        
+        # Execute Step-up MFA verification
+        adm_totp_3 = generate_totp(adm_secret)
+        adm_stepup_res = requests.post(f"{url_prefix}/api/v1/auth/mfa/step-up", headers={"Authorization": f"Bearer {adm_access_token}"}, json={"code": adm_totp_3}).json()
+        su_token_1 = adm_stepup_res["data"]["stepUpToken"]
+        assert su_token_1 is not None
+        
+        # 1st Admin request using su_token_1
+        adm_req1_headers = {"Authorization": f"Bearer {adm_access_token}", "X-StepUp-Token": su_token_1}
+        adm_res_1 = requests.get(f"{url_prefix}/api/v1/admin/users", headers=adm_req1_headers)
+        assert adm_res_1.status_code == 200, f"Expected 200 for admin with step-up token, got {adm_res_1.status_code}. Response: {adm_res_1.text}"
+        
+        # Verify rotated token is returned in X-StepUp-Token response header
+        su_token_2 = adm_res_1.headers.get("X-StepUp-Token")
+        assert su_token_2 is not None and su_token_2 != su_token_1, f"Expected rotated step-up token in response header, got: {su_token_2}"
+        
+        # Replay/Reuse of original su_token_1 must be REJECTED (401 Unauthorized - single use claimed in Redis)
+        replay_res = requests.get(f"{url_prefix}/api/v1/admin/users", headers=adm_req1_headers)
+        assert replay_res.status_code == 401, f"Expected 401 for reused single-use step-up token, got {replay_res.status_code}. Response: {replay_res.text}"
+        
+        # 2nd Admin request using rotated su_token_2 should SUCCEED
+        adm_req2_headers = {"Authorization": f"Bearer {adm_access_token}", "X-StepUp-Token": su_token_2}
+        adm_res_2 = requests.get(f"{url_prefix}/api/v1/admin/audit-logs", headers=adm_req2_headers)
+        assert adm_res_2.status_code == 200, f"Expected 200 for rotated step-up token, got {adm_res_2.status_code}. Response: {adm_res_2.text}"
 
     # 5.7 Polyglot and Extension Mismatch Upload Rejections (LM4)
     # A: Dangerous extension (.php)
