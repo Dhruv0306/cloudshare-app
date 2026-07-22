@@ -24,15 +24,27 @@ import java.util.Date;
  * <p>
  * <b>Why single-use Redis blacklisting is strictly enforced:</b> Administrative
  * actions require heightened security boundaries beyond standard bearer JWTs.
- * Step-up tokens issued via MFA verification carry a 5-minute TTL and must be
- * strictly <b>single-use</b>. Upon verifying signature and claims, this filter
- * atomically claims {@code blacklist:token:<jti>} on the dedicated <b>Redis
- * Security</b>
- * instance via {@code setIfAbsent} (SET NX) before allowing execution.
- * Any re-use attempt or concurrent replay of the same step-up JTI is blocked
- * with HTTP 401.
- * If Redis Security is unavailable, the filter fails closed with HTTP 503
- * Service Unavailable.
+ * Every step-up token <b>instance</b> is strictly <b>single-use</b>: after
+ * cryptographically verifying signature and claims, this filter atomically
+ * claims {@code blacklist:token:<jti>} on the dedicated <b>Redis Security</b>
+ * instance via {@code setIfAbsent} (SET NX) before allowing execution. Any
+ * re-use attempt or concurrent replay of the same step-up JTI is blocked with
+ * HTTP 401. If Redis Security is unavailable, the filter fails closed with
+ * HTTP 503 Service Unavailable.
+ * </p>
+ * <p>
+ * <b>Rotation, bounded by an absolute session cap:</b> The documented UX is a
+ * single MFA prompt covering a short "admin session" during which the client
+ * may issue multiple sequential admin requests (e.g. loading the users table
+ * then the audit log table). Because each token instance is single-use, this
+ * filter issues a freshly rotated step-up token in the {@code X-StepUp-Token}
+ * response header on every successful admin request, carrying forward the
+ * session's original MFA-verification instant ({@code orig_iat}) unchanged.
+ * Rotation is refused — forcing a fresh MFA prompt — once
+ * {@code now - orig_iat} exceeds
+ * {@link JwtTokenProvider#getStepUpSessionMaxSeconds()},
+ * so an elevated session can never be kept alive indefinitely purely by
+ * chaining rotations.
  * </p>
  */
 @Component
@@ -96,8 +108,10 @@ public class StepUpAuthenticationFilter extends OncePerRequestFilter {
 
             String jti = claims.getId();
             Date expiration = claims.getExpiration();
-            if (jti == null || expiration == null) {
-                log.warn("Step-up token missing JTI or expiration claim for user {}", principal.getUsername());
+            Long origIat = claims.get("orig_iat", Long.class);
+            if (jti == null || expiration == null || origIat == null) {
+                log.warn("Step-up token missing JTI, expiration, or orig_iat claim for user {}",
+                        principal.getUsername());
                 sendStepUpRequiredResponse(response);
                 return;
             }
@@ -110,7 +124,8 @@ public class StepUpAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            // 3. Atomic Single-Use Claim (SET NX EX)
+            // 3. Atomic Single-Use Claim (SET NX EX) — this token INSTANCE may never be
+            // presented again, regardless of what happens next in this request.
             String blacklistKey = "blacklist:token:" + jti;
             try {
                 Boolean firstUse = securityRedisTemplate.opsForValue()
@@ -125,6 +140,24 @@ public class StepUpAuthenticationFilter extends OncePerRequestFilter {
                         principal.getUsername(), path, e);
                 sendServiceUnavailableResponse(response);
                 return;
+            }
+
+            // 4. Absolute Session Cap: only rotate (extend the session with a fresh
+            // single-use token) if the session's original MFA verification is still
+            // within the configured absolute lifetime. Otherwise the request is still
+            // allowed to complete (the presented token was validly claimed above), but
+            // no successor token is issued — the client's next admin request will be
+            // forced back through a fresh MFA prompt.
+            long sessionAgeMs = System.currentTimeMillis() - origIat;
+            long sessionCapMs = tokenProvider.getStepUpSessionMaxSeconds() * 1000L;
+            if (sessionAgeMs < sessionCapMs) {
+                String rotatedToken = tokenProvider.generateStepUpToken(
+                        principal.getId().toString(), principal.getUsername(), origIat);
+                response.setHeader("X-StepUp-Token", rotatedToken);
+                response.setHeader("Access-Control-Expose-Headers", "X-StepUp-Token");
+            } else {
+                log.info("Step-up session for user {} reached absolute cap ({}s); not rotating.",
+                        principal.getUsername(), tokenProvider.getStepUpSessionMaxSeconds());
             }
         }
 

@@ -40,6 +40,19 @@ public class JwtTokenProvider {
     @Value("${security.jwt.expiration-seconds}")
     private long jwtExpirationSeconds;
 
+    /**
+     * Absolute lifetime, in seconds, of a step-up admin session measured from the
+     * moment MFA was originally verified ({@code orig_iat}), regardless of how many
+     * times the step-up token is rotated in between. This bounds the "5-minute
+     * session" UX so it cannot be extended indefinitely by repeatedly rotating a
+     * token just before each hop expires.
+     */
+    @Value("${security.jwt.step-up-session-max-seconds:900}")
+    private long stepUpSessionMaxSeconds;
+
+    /** Per-hop TTL for an individual rotated step-up token instance. */
+    private static final long STEP_UP_TOKEN_TTL_SECONDS = 300; // 5 minutes
+
     private SecretKey key;
 
     @PostConstruct
@@ -97,13 +110,42 @@ public class JwtTokenProvider {
      * @return signed JWT step-up token string with 300-second expiration
      */
     public String generateStepUpToken(String userId, String username) {
+        // A brand-new step-up session: orig_iat starts now and is carried forward
+        // unchanged on every subsequent rotation of this session.
+        return generateStepUpToken(userId, username, System.currentTimeMillis());
+    }
+
+    /**
+     * Generates (or rotates) a step-up token, preserving the original MFA
+     * verification instant across rotations.
+     * <p>
+     * <b>Why {@code orig_iat} exists:</b> Each individual step-up token instance is
+     * strictly single-use (enforced via Redis {@code setIfAbsent} blacklisting in
+     * {@link StepUpAuthenticationFilter}). To support a documented multi-request
+     * "5-minute admin session" UX without ever making the elevated session reusable
+     * or effectively unbounded, the filter rotates a fresh single-use token on
+     * every
+     * successful admin request — but only ever forward-propagates the session's
+     * true origin timestamp ({@code orig_iat}), never resets it. This lets the
+     * filter enforce an absolute session cap independent of how many times the
+     * token rotates.
+     * </p>
+     *
+     * @param userId    the administrative user's UUID string
+     * @param username  the administrative user's username
+     * @param origIatMs epoch-millis of when this step-up session's MFA was
+     *                  originally verified; unchanged across rotations
+     * @return signed JWT step-up token string with a 300-second per-hop expiration
+     */
+    public String generateStepUpToken(String userId, String username, long origIatMs) {
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + (300 * 1000)); // 5 minutes
+        Date expiryDate = new Date(now.getTime() + (STEP_UP_TOKEN_TTL_SECONDS * 1000));
 
         Map<String, Object> claims = new HashMap<>();
         claims.put("username", username);
         claims.put("step_up", true);
         claims.put("type", "step_up");
+        claims.put("orig_iat", origIatMs);
 
         return Jwts.builder()
                 .id(java.util.UUID.randomUUID().toString())
@@ -113,6 +155,15 @@ public class JwtTokenProvider {
                 .expiration(expiryDate)
                 .signWith(key)
                 .compact();
+    }
+
+    /**
+     * The absolute maximum lifetime, in seconds, of a step-up admin session
+     * (from original MFA verification) regardless of rotation. See
+     * {@link #stepUpSessionMaxSeconds}.
+     */
+    public long getStepUpSessionMaxSeconds() {
+        return stepUpSessionMaxSeconds;
     }
 
     /**
