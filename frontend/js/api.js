@@ -106,6 +106,15 @@ class ApiClient {
         try {
             const response = await fetch(url, options);
 
+            // Rotate step-up token if the backend issued a fresh single-use successor
+            // for this admin session (see StepUpAuthenticationFilter's absolute
+            // session cap — rotation stops once the session's origin MFA verification
+            // ages past the configured cap, requiring a fresh MFA prompt).
+            const nextStepUpToken = response.headers.get('X-StepUp-Token');
+            if (nextStepUpToken) {
+                this.setStepUpToken(nextStepUpToken);
+            }
+
             // Handle success
             if (response.ok) {
                 return response;
