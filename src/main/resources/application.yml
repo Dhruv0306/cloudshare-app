@@ -8,7 +8,7 @@ spring:
     name: cloudshare
   config:
     import: optional:file:.env[.properties]
-  
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/cloudshare}
     username: ${SPRING_DATASOURCE_USERNAME:cloudshare_user}
@@ -50,6 +50,7 @@ security:
     secret: ${JWT_SECRET:}
     expiration-seconds: ${JWT_EXPIRATION:900}
     refresh-expiration-seconds: ${JWT_REFRESH_EXPIRATION:604800}
+    step-up-session-max-seconds: ${JWT_STEP_UP_SESSION_MAX:900}
   rate-limiting:
     enabled: ${RATE_LIMIT_ENABLED:true}
     auth-limit: ${RATE_LIMIT_AUTH:5}
@@ -62,7 +63,6 @@ security:
     breach-check:
       enabled: ${PASSWORD_BREACH_CHECK_ENABLED:true}
       timeout-ms: ${PASSWORD_BREACH_CHECK_TIMEOUT_MS:3000}
-
 
 # ClamAV Configuration
 clamav:
@@ -94,7 +94,6 @@ app:
       cron: "${SCHEDULER_FILE_PURGE_CRON:0 0 2 * * ?}" # 2:00 AM UTC daily
     link-cleanup:
       cron: "${SCHEDULER_LINK_CLEANUP_CRON:0 0 3 * * ?}" # 3:00 AM UTC daily
-
 
 logging:
   level:
