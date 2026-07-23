@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeTestUser, registerUser, loginUser, expectToast, readMfaSecret } from '../helpers';
+import { makeTestUser, registerUser, loginUser, expectToast, readMfaSecret, waitForTotpRotation } from '../helpers';
 import { generateTotp } from '../totp';
 
 test.describe('Authentication & MFA (Scenario 1)', () => {
@@ -44,6 +44,7 @@ test.describe('Authentication & MFA (Scenario 1)', () => {
         await expect(page.locator('#app-shell')).toHaveClass(/hidden/);
 
         // 4b. Password + valid dynamic TOTP code succeeds
+        await waitForTotpRotation();
         const loginCode = generateTotp(secret);
         await page.locator('#login-mfa').fill(loginCode);
         await page.locator('#login-form button[type="submit"]').click();
