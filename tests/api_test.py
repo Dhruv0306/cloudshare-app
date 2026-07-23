@@ -92,6 +92,14 @@ def generate_totp(secret_base32):
     return f"{code:06d}"
 
 
+def wait_for_totp_rotation():
+    current_step = int(time.time() // 30)
+    print(f"\nWaiting for TOTP time-step window rotation (current step: {current_step}) ... ", end="", flush=True)
+    while int(time.time() // 30) == current_step:
+        time.sleep(1)
+    print("Rotated!")
+
+
 def promote_user_to_admin(username):
     import subprocess
 
@@ -633,6 +641,7 @@ def test_security_hardening(url_prefix):
     ), f"Expected 401 login failure without MFA, got {login_fail_res.status_code}"
 
     # 5.4 Login again with correct MFA code -> SUCCESS
+    wait_for_totp_rotation()
     mfa_code_2 = generate_totp(secret)
     login_success_res = requests.post(
         f"{url_prefix}/api/v1/auth/login",
@@ -647,6 +656,7 @@ def test_security_hardening(url_prefix):
     ), f"Login with MFA failed: {login_success_res.text}"
 
     # 5.5 Step-Up Authentication Flow
+    wait_for_totp_rotation()
     step_up_code = generate_totp(secret)
     step_up_res = requests.post(
         f"{url_prefix}/api/v1/auth/mfa/step-up",
@@ -719,6 +729,7 @@ def test_security_hardening(url_prefix):
         )
 
         # Re-login with TOTP to get fresh JWT carrying ROLE_ADMIN authority
+        wait_for_totp_rotation()
         adm_totp_2 = generate_totp(adm_secret)
         adm_login_2 = requests.post(
             f"{url_prefix}/api/v1/auth/login",
@@ -731,6 +742,7 @@ def test_security_hardening(url_prefix):
         adm_access_token = adm_login_2["data"]["accessToken"]
 
         # Execute Step-up MFA verification
+        wait_for_totp_rotation()
         adm_totp_3 = generate_totp(adm_secret)
         adm_stepup_res = requests.post(
             f"{url_prefix}/api/v1/auth/mfa/step-up",
