@@ -24,17 +24,24 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Service performing cryptographic envelope encryption operations for stored files.
+ * Service performing cryptographic envelope encryption operations for stored
+ * files.
  * <p>
  * <b>Cryptographic Design Rationale:</b>
  * <ul>
- *   <li><b>Envelope Encryption:</b> Each file is encrypted with a unique, randomly generated 256-bit AES File Encryption Key (FEK).
- *   The FEK is then wrapped using an RFC 3394 AESWrap Key Encryption Key (KEK). This ensures that a single FEK compromise affects only
- *   one file, and allows KEK rotation (migrating files to a new master key version) by re-wrapping FEKs without re-encrypting raw file contents.</li>
- *   <li><b>Authenticated Streaming Encryption:</b> Stream encryption and decryption use AES-256-GCM (Galois/Counter Mode) with 12-byte IVs
- *   and 128-bit authentication tags. This guarantees both confidentiality and ciphertext tamper-detection prior to releasing plaintext to clients.</li>
- *   <li><b>KEK Key Shape Enforcement:</b> KEKs are expected to be 32 Base64-decoded bytes. If a raw non-32-byte passphrase is supplied,
- *   it is digested via SHA-256 only when permitted by configuration.</li>
+ * <li><b>Envelope Encryption:</b> Each file is encrypted with a unique,
+ * randomly generated 256-bit AES File Encryption Key (FEK).
+ * The FEK is then wrapped using an RFC 3394 AESWrap Key Encryption Key (KEK).
+ * This ensures that a single FEK compromise affects only
+ * one file, and allows KEK rotation (migrating files to a new master key
+ * version) by re-wrapping FEKs without re-encrypting raw file contents.</li>
+ * <li><b>Authenticated Streaming Encryption:</b> Stream encryption and
+ * decryption use AES-256-GCM (Galois/Counter Mode) with 12-byte IVs
+ * and 128-bit authentication tags. This guarantees both confidentiality and
+ * ciphertext tamper-detection prior to releasing plaintext to clients.</li>
+ * <li><b>KEK Key Shape Enforcement:</b> KEKs are expected to be 32
+ * Base64-decoded bytes. If a raw non-32-byte passphrase is supplied,
+ * it is digested via SHA-256 only when permitted by configuration.</li>
  * </ul>
  * </p>
  */
@@ -69,11 +76,21 @@ public class EncryptionService {
                 keyBytes = kekStr.getBytes(StandardCharsets.UTF_8);
             }
 
-            // If the key is not exactly 256 bits (32 bytes), digest it to enforce correctness
-            // TODO (v1.2.0): Implement runtime parity for raw passphrase fallback / KEK shape (§1.3)
+            // If the key is not exactly 256 bits (32 bytes), digest it to enforce
+            // correctness
             if (keyBytes.length != 32) {
+                if (!cryptoProperties.getKek().isAllowRawPassphrase()) {
+                    throw new IllegalStateException(
+                            "KEK version " + v + " is not 32 bytes after Base64 decoding and " +
+                                    "crypto.kek.allow-raw-passphrase is disabled. Refusing to derive a key via digest "
+                                    +
+                                    "fallback at runtime, to stay consistent with SecretsStartupValidator's fail-closed "
+                                    +
+                                    "startup contract.");
+                }
                 if (loggedDigestWarnings.add(v)) {
-                    log.warn("KEK for version {} is not exactly 32 bytes after Base64 decoding. Digesting using SHA-256 fallback.", v);
+                    log.warn("KEK for version {} is not exactly 32 bytes after Base64 decoding. " +
+                            "Digesting using SHA-256 fallback (crypto.kek.allow-raw-passphrase=true).", v);
                 }
                 try {
                     MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -122,7 +139,8 @@ public class EncryptionService {
         return (SecretKey) cipher.unwrap(wrappedBytes, "AES", Cipher.SECRET_KEY);
     }
 
-    public void encryptStream(InputStream plaintextIn, OutputStream encryptedOut, SecretKey fek, byte[] iv) throws Exception {
+    public void encryptStream(InputStream plaintextIn, OutputStream encryptedOut, SecretKey fek, byte[] iv)
+            throws Exception {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         GCMParameterSpec parameterSpec = new GCMParameterSpec(128, iv);
         cipher.init(Cipher.ENCRYPT_MODE, fek, parameterSpec);
@@ -137,7 +155,8 @@ public class EncryptionService {
         }
     }
 
-    public void decryptStreamFully(InputStream encryptedIn, OutputStream decryptedOut, SecretKey fek, byte[] iv) throws Exception {
+    public void decryptStreamFully(InputStream encryptedIn, OutputStream decryptedOut, SecretKey fek, byte[] iv)
+            throws Exception {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         GCMParameterSpec parameterSpec = new GCMParameterSpec(128, iv);
         cipher.init(Cipher.DECRYPT_MODE, fek, parameterSpec);
