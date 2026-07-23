@@ -26,6 +26,7 @@ class EncryptionServiceTest {
     void setUp() {
         CryptoProperties cryptoProperties = new CryptoProperties();
         cryptoProperties.setMasterKek(TEST_KEK);
+        cryptoProperties.getKek().setAllowRawPassphrase(true);
         encryptionService = new EncryptionService(cryptoProperties);
     }
 
@@ -79,7 +80,7 @@ class EncryptionServiceTest {
     void testNoWarningFor32ByteKek() throws Exception {
         CryptoProperties properties = new CryptoProperties();
         properties.setMasterKek(Base64.getEncoder().encodeToString(new byte[32]));
-        
+
         EncryptionService service = new EncryptionService(properties);
 
         Logger logger = (Logger) LoggerFactory.getLogger(EncryptionService.class);
@@ -104,7 +105,8 @@ class EncryptionServiceTest {
     void testWarningLoggedExactlyOnceForNon32ByteKek() throws Exception {
         CryptoProperties properties = new CryptoProperties();
         properties.setMasterKek("short_key");
-        
+        properties.getKek().setAllowRawPassphrase(true);
+
         EncryptionService service = new EncryptionService(properties);
 
         Logger logger = (Logger) LoggerFactory.getLogger(EncryptionService.class);
@@ -116,7 +118,7 @@ class EncryptionServiceTest {
             SecretKey fek = service.generateFek();
             String wrapped = service.wrapFek(fek, 1);
             assertNotNull(wrapped);
-            
+
             SecretKey unwrapped = service.unwrapFek(wrapped, 1);
             assertNotNull(unwrapped);
         } finally {
@@ -130,5 +132,48 @@ class EncryptionServiceTest {
                 .count();
 
         assertEquals(1, warnCount, "Should log a warning exactly once for the non-32-byte KEK");
+    }
+
+    @Test
+    void getMasterKek_nonStandardKeyLength_allowRawPassphraseFalse_throwsIllegalStateException() {
+        CryptoProperties properties = new CryptoProperties();
+        properties.setMasterKek("short_key");
+        properties.getKek().setAllowRawPassphrase(false);
+        EncryptionService service = new EncryptionService(properties);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "getMasterKek", 1));
+        assertTrue(ex.getMessage().contains(
+                "is not 32 bytes after Base64 decoding and crypto.kek.allow-raw-passphrase is disabled. Refusing to derive a key via digest fallback at runtime"));
+    }
+
+    @Test
+    void getMasterKek_nonStandardKeyLength_allowRawPassphraseTrue_digestsSuccessfully() {
+        CryptoProperties properties = new CryptoProperties();
+        properties.setMasterKek("short_key");
+        properties.getKek().setAllowRawPassphrase(true);
+        EncryptionService service = new EncryptionService(properties);
+
+        SecretKey key = org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "getMasterKek", 1);
+        assertNotNull(key);
+        assertEquals(32, key.getEncoded().length);
+    }
+
+    @Test
+    void getMasterKek_standardKeyLength_allowRawPassphraseFalse_noDigestApplied() {
+        CryptoProperties properties = new CryptoProperties();
+        byte[] rawKey = new byte[32];
+        for (int i = 0; i < 32; i++) {
+            rawKey[i] = (byte) i;
+        }
+        String validKek = Base64.getEncoder().encodeToString(rawKey);
+        properties.setMasterKek(validKek);
+        properties.getKek().setAllowRawPassphrase(false);
+        EncryptionService service = new EncryptionService(properties);
+
+        SecretKey key = org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "getMasterKek", 1);
+        assertNotNull(key);
+        assertEquals(32, key.getEncoded().length);
+        assertArrayEquals(rawKey, key.getEncoded());
     }
 }
