@@ -15,7 +15,8 @@ class EncryptionServiceVersionedTest {
     void testVersionedKeyOperations() throws Exception {
         CryptoProperties properties = new CryptoProperties();
         properties.setMasterKek("fallback_key_for_v1_32_bytes_long");
-        
+        properties.getKek().setAllowRawPassphrase(true);
+
         Map<Integer, String> keks = new HashMap<>();
         keks.put(1, "original_kek_version_1_32_bytes");
         keks.put(2, "new_kek_version_2_32_bytes_long");
@@ -45,6 +46,7 @@ class EncryptionServiceVersionedTest {
     void testFallbackToMasterKekForVersion1() throws Exception {
         CryptoProperties properties = new CryptoProperties();
         properties.setMasterKek("master_kek_fallback_32_bytes_xx");
+        properties.getKek().setAllowRawPassphrase(true);
         // No keks map defined
 
         EncryptionService service = new EncryptionService(properties);
@@ -59,6 +61,7 @@ class EncryptionServiceVersionedTest {
     void testUnconfiguredVersionThrowsException() {
         CryptoProperties properties = new CryptoProperties();
         properties.setMasterKek("master_kek_fallback_32_bytes_xx");
+        properties.getKek().setAllowRawPassphrase(true);
 
         EncryptionService service = new EncryptionService(properties);
         SecretKey fek = service.generateFek();
