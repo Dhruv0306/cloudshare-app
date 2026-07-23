@@ -13,6 +13,8 @@ import dev.samstevens.totp.secret.SecretGenerator;
 import dev.samstevens.totp.time.SystemTimeProvider;
 import dev.samstevens.totp.time.TimeProvider;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Base64;
@@ -26,8 +28,11 @@ public class MfaService {
     private final CodeGenerator codeGenerator;
     private final CodeVerifier codeVerifier;
     private final QrGenerator qrGenerator;
+    private final StringRedisTemplate securityRedisTemplate;
 
-    public MfaService() {
+    public MfaService(
+            @Qualifier("securityRedisTemplate") StringRedisTemplate securityRedisTemplate) {
+        this.securityRedisTemplate = securityRedisTemplate;
         this.secretGenerator = new DefaultSecretGenerator();
         this.timeProvider = new SystemTimeProvider();
         this.codeGenerator = new DefaultCodeGenerator();
@@ -58,13 +63,32 @@ public class MfaService {
         }
     }
 
-    public boolean verifyCode(String secret, String code) {
-        if (secret == null || code == null) {
+    public boolean verifyCode(String userId, String secret, String code) {
+        if (secret == null || code == null || userId == null) {
             return false;
         }
         try {
-            // TODO (v1.2.0): Implement Redis-backed TOTP time-step anti-replay tracking (§1.4, §3.5)
-            return codeVerifier.isValidCode(secret, code.trim());
+            String trimmedCode = code.trim();
+            if (!codeVerifier.isValidCode(secret, trimmedCode)) {
+                return false;
+            }
+            long timeStep = timeProvider.getTime() / 30;
+            String usedKey = "mfa:used:" + userId + ":" + timeStep;
+
+            Boolean firstUse;
+            try {
+                firstUse = securityRedisTemplate.opsForValue()
+                        .setIfAbsent(usedKey, "1", java.time.Duration.ofSeconds(90));
+            } catch (Exception e) {
+                log.error("MFA anti-replay check unavailable — failing closed for user {}", userId, e);
+                return false;
+            }
+
+            if (!Boolean.TRUE.equals(firstUse)) {
+                log.warn("Rejected replayed TOTP code for user {} at time-step {}", userId, timeStep);
+                return false;
+            }
+            return true;
         } catch (Exception e) {
             log.warn("Error verifying MFA code", e);
             return false;

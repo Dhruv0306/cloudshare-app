@@ -48,9 +48,12 @@ public class AuthService {
     /**
      * Registers a new user in the system.
      * Note: If the email address is already registered, the method returns normally
-     * without throwing an exception to prevent account-existence enumeration attacks.
-     * A REGISTRATION_DUPLICATE_EMAIL_ATTEMPT event is logged to the audit log instead.
-     * Username collisions are still explicitly rejected as usernames are public identifiers.
+     * without throwing an exception to prevent account-existence enumeration
+     * attacks.
+     * A REGISTRATION_DUPLICATE_EMAIL_ATTEMPT event is logged to the audit log
+     * instead.
+     * Username collisions are still explicitly rejected as usernames are public
+     * identifiers.
      */
     @Transactional
     public void registerUser(RegisterRequest request, String ipAddress) {
@@ -69,7 +72,8 @@ public class AuthService {
         }
 
         if (breachedPasswordService.isBreached(request.getPassword())) {
-            throw new IllegalArgumentException("Password has been found in a data breach. Please choose a different password.");
+            throw new IllegalArgumentException(
+                    "Password has been found in a data breach. Please choose a different password.");
         }
 
         // Fetch ROLE_USER
@@ -119,8 +123,10 @@ public class AuthService {
                     .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
             if (userEntity.isMfaEnabled()) {
-                if (request.getMfaCode() == null || !mfaService.verifyCode(userEntity.getMfaSecret(), request.getMfaCode())) {
-                    throw new org.springframework.security.authentication.BadCredentialsException("Invalid credentials or invalid MFA code.");
+                if (request.getMfaCode() == null || !mfaService.verifyCode(userEntity.getId().toString(),
+                        userEntity.getMfaSecret(), request.getMfaCode())) {
+                    throw new org.springframework.security.authentication.BadCredentialsException(
+                            "Invalid credentials or invalid MFA code.");
                 }
             }
 
@@ -266,7 +272,7 @@ public class AuthService {
             throw new IllegalArgumentException("MFA setup has not been initialized");
         }
 
-        if (!mfaService.verifyCode(user.getMfaSecret(), code)) {
+        if (!mfaService.verifyCode(userId.toString(), user.getMfaSecret(), code)) {
             throw new IllegalArgumentException("Invalid MFA verification code");
         }
 
@@ -284,7 +290,7 @@ public class AuthService {
             throw new IllegalArgumentException("MFA is not enabled for this user");
         }
 
-        if (!mfaService.verifyCode(user.getMfaSecret(), code)) {
+        if (!mfaService.verifyCode(userId.toString(), user.getMfaSecret(), code)) {
             throw new org.springframework.security.authentication.BadCredentialsException("Invalid MFA code");
         }
 
