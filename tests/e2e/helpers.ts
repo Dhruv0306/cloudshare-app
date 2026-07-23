@@ -231,3 +231,13 @@ export async function apiLogin(
     const body = await res.json();
     return body.data.accessToken as string;
 }
+
+/**
+ * Waits until the current 30-second TOTP time-step rotates to avoid anti-replay rejection.
+ */
+export async function waitForTotpRotation(): Promise<void> {
+    const currentStep = Math.floor(Date.now() / 1000 / 30);
+    while (Math.floor(Date.now() / 1000 / 30) === currentStep) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+}

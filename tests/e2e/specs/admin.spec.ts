@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeTestUser, registerAndLogin, loginUser, expectToast, readMfaSecret } from '../helpers';
+import { makeTestUser, registerAndLogin, loginUser, expectToast, readMfaSecret, waitForTotpRotation } from '../helpers';
 import { generateTotp } from '../totp';
 import { promoteUserToAdmin } from '../db';
 
@@ -39,6 +39,7 @@ test.describe('Admin Console: role gating & step-up authentication (Scenarios 6 
 
         // Must re-login: the JWT's roles claim is fixed at login time, so the
         // token issued before promotion still only carries ROLE_USER.
+        await waitForTotpRotation();
         await loginUser(page, admin, generateTotp(secret));
 
         await expect(page.locator('#nav-admin-btn')).not.toHaveClass(/hidden/);
@@ -48,6 +49,7 @@ test.describe('Admin Console: role gating & step-up authentication (Scenarios 6 
         await expect(page.locator('#admin-stepup-modal')).not.toHaveClass(/hidden/);
         await expect(page.locator('#view-admin')).toHaveClass(/hidden/);
 
+        await waitForTotpRotation();
         await page.locator('#admin-stepup-code').fill(generateTotp(secret));
         await page.locator('#admin-stepup-form button[type="submit"]').click();
 
