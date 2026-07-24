@@ -2,7 +2,6 @@ package com.cloudshare.service;
 
 import com.cloudshare.dto.*;
 import com.cloudshare.exception.AccessDeniedException;
-import com.cloudshare.exception.InvalidSharePasswordException;
 import com.cloudshare.exception.ResourceNotFoundException;
 import com.cloudshare.model.*;
 import com.cloudshare.repository.FileRepository;
@@ -30,17 +29,25 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Service managing internal file sharing, public access link creation, downloads, and share revocations.
+ * Service managing internal file sharing, public access link creation,
+ * downloads, and share revocations.
  * <p>
  * <b>Cache Eviction & Fail-Loud Bypass Rationale:</b>
  * <ul>
- *   <li><b>Permission Cache Eviction:</b> Whenever internal shares are granted, modified, or revoked, {@link #evictPermissionsCache(UUID)}
- *   deletes the corresponding Redis key ({@code cache:permissions:<file_id>}) to maintain permission consistency.</li>
- *   <li><b>Bypass Marker (Self-Healing):</b> If Redis fails to evict the cache key (e.g. transient Redis network disconnect),
- *   a 10-minute bypass marker key ({@code cache:permissions:bypass:<file_id>}) is set. When present, {@code FileService.verifyFileAccess}
- *   bypasses Redis permission caches and queries PostgreSQL directly while attempting to self-heal the stale cache. This prevents
- *   revoked users from accessing files due to stale cache entries.</li>
- *   <li><b>Fail-Secure Compliance:</b> Audit logging is executed inside database transactions. Any audit failure aborts the operation and triggers a transaction rollback.</li>
+ * <li><b>Permission Cache Eviction:</b> Whenever internal shares are granted,
+ * modified, or revoked, {@link #evictPermissionsCache(UUID)}
+ * deletes the corresponding Redis key ({@code cache:permissions:<file_id>}) to
+ * maintain permission consistency.</li>
+ * <li><b>Bypass Marker (Self-Healing):</b> If Redis fails to evict the cache
+ * key (e.g. transient Redis network disconnect),
+ * a 10-minute bypass marker key ({@code cache:permissions:bypass:<file_id>}) is
+ * set. When present, {@code FileService.verifyFileAccess}
+ * bypasses Redis permission caches and queries PostgreSQL directly while
+ * attempting to self-heal the stale cache. This prevents
+ * revoked users from accessing files due to stale cache entries.</li>
+ * <li><b>Fail-Secure Compliance:</b> Audit logging is executed inside database
+ * transactions. Any audit failure aborts the operation and triggers a
+ * transaction rollback.</li>
  * </ul>
  * </p>
  */
@@ -87,14 +94,16 @@ public class ShareService {
 
     @Transactional
     public InternalShareResponse shareFileInternally(InternalShareRequest request, UUID ownerId, String ipAddress) {
-        log.info("Processing internal share: file={}, owner={}, target={}", request.getFileId(), ownerId, request.getTargetUsernameOrEmail());
+        log.info("Processing internal share: file={}, owner={}, target={}", request.getFileId(), ownerId,
+                request.getTargetUsernameOrEmail());
 
         // 1. Fetch and validate file
         FileMetadata file = fileRepository.findByIdAndOwnerIdAndDeletedFalse(request.getFileId(), ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("File not found or access denied"));
 
         // 2. Fetch and validate target user
-        User targetUser = userRepository.findByUsernameOrEmail(request.getTargetUsernameOrEmail(), request.getTargetUsernameOrEmail())
+        User targetUser = userRepository
+                .findByUsernameOrEmail(request.getTargetUsernameOrEmail(), request.getTargetUsernameOrEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("Target user not found"));
 
         if (targetUser.getId().equals(ownerId)) {
@@ -110,7 +119,8 @@ public class ShareService {
         }
 
         // 4. Check for existing share
-        Optional<FileShare> existingShareOpt = fileShareRepository.findByFileIdAndSharedWithId(file.getId(), targetUser.getId());
+        Optional<FileShare> existingShareOpt = fileShareRepository.findByFileIdAndSharedWithId(file.getId(),
+                targetUser.getId());
         FileShare share;
         if (existingShareOpt.isPresent()) {
             share = existingShareOpt.get();
@@ -196,37 +206,61 @@ public class ShareService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public PublicLinkInfoResponse getPublicLinkInfo(String shareCode) {
+        log.info("Retrieving public link info: shareCode={}", shareCode);
+
+        ShareLink shareLink = shareLinkRepository.findByShareCode(shareCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Link not found or no longer available"));
+
+        FileMetadata file = shareLink.getFile();
+        if (file.isDeleted()) {
+            throw new ResourceNotFoundException("Link not found or no longer available");
+        }
+
+        if (shareLink.getExpiresAt().isBefore(Instant.now())) {
+            throw new ResourceNotFoundException("Link not found or no longer available");
+        }
+
+        return PublicLinkInfoResponse.builder()
+                .passwordProtected(shareLink.getPasswordHash() != null)
+                .build();
+    }
+
     @Transactional
     public FileService.DecryptedFileStream downloadPublicLink(String shareCode, String password, String ipAddress) {
         log.info("Processing public download request: shareCode={}", shareCode);
 
         // 1. Retrieve ShareLink and validate non-deleted file
         ShareLink shareLink = shareLinkRepository.findByShareCode(shareCode)
-                .orElseThrow(() -> new ResourceNotFoundException("Link code does not exist"));
+                .orElseThrow(() -> new ResourceNotFoundException("Link not found or no longer available"));
 
         FileMetadata file = shareLink.getFile();
         if (file.isDeleted()) {
-            throw new ResourceNotFoundException("Link code does not exist");
+            throw new ResourceNotFoundException("Link not found or no longer available");
         }
 
-        // 2. Check expiration
+        // 2. Check expiration (expired links now map to 404 to avoid leaking existence
+        // information)
         if (shareLink.getExpiresAt().isBefore(Instant.now())) {
-            throw new AccessDeniedException("Link has expired");
+            throw new ResourceNotFoundException("Link not found or no longer available");
         }
 
-        // 3. Pre-check download limits (fast-path rejection)
+        // 3. Validate password if link is protected (MUST happen before download limit
+        // check to avoid leaking existence/limits)
+        if (shareLink.getPasswordHash() != null) {
+            if (password == null || !passwordEncoder.matches(password, shareLink.getPasswordHash())) {
+                throw new ResourceNotFoundException("Link not found or no longer available");
+            }
+        }
+
+        // 4. Pre-check download limits (fast-path rejection)
         if (shareLink.getDownloadLimit() != null && shareLink.getDownloadCount() >= shareLink.getDownloadLimit()) {
             throw new AccessDeniedException("Download limit reached");
         }
 
-        // 4. Validate password if link is protected
-        if (shareLink.getPasswordHash() != null) {
-            if (password == null || !passwordEncoder.matches(password, shareLink.getPasswordHash())) {
-                throw new InvalidSharePasswordException("Password required but missing/invalid");
-            }
-        }
-
-        // 5. Atomic conditional increment of download count (race-free single update gate)
+        // 5. Atomic conditional increment of download count (race-free single update
+        // gate)
         int rowsUpdated = shareLinkRepository.incrementDownloadCountConditional(shareLink.getId());
         if (rowsUpdated == 0) {
             log.warn("Public download limit reached concurrently for shareCode={}", shareCode);
@@ -241,14 +275,13 @@ public class ShareService {
 
             decryptedTempFile = Files.createTempFile("pub-download-", ".tmp");
             try (InputStream encryptedStream = storageService.retrieve(file.getStoragePath());
-                 OutputStream decryptedOut = Files.newOutputStream(decryptedTempFile)) {
+                    OutputStream decryptedOut = Files.newOutputStream(decryptedTempFile)) {
                 encryptionService.decryptStreamFully(encryptedStream, decryptedOut, fek, iv);
             }
 
             InputStream decryptedStream = new DeleteOnCloseInputStream(
                     Files.newInputStream(decryptedTempFile),
-                    decryptedTempFile
-            );
+                    decryptedTempFile);
 
             // Log download audit event (Fail-secure: abort download if audit log fails)
             try {
@@ -263,8 +296,7 @@ public class ShareService {
                     decryptedStream,
                     file.getOriginalFilename(),
                     file.getMimeType(),
-                    file.getFileSizeBytes()
-            );
+                    file.getFileSizeBytes());
 
         } catch (Exception e) {
             if (decryptedTempFile != null) {
@@ -299,7 +331,8 @@ public class ShareService {
         // Audit logging (fail-secure)
         try {
             auditLogService.log(callerId, "SHARE_REVOKED", file.getId(), ipAddress,
-                    "Revoked internal share for file " + file.getOriginalFilename() + " with user " + fileShare.getSharedWith().getUsername());
+                    "Revoked internal share for file " + file.getOriginalFilename() + " with user "
+                            + fileShare.getSharedWith().getUsername());
         } catch (Exception e) {
             log.error("Audit log failed for internal share revocation. Failing transaction.", e);
             throw new RuntimeException("Audit logging failed, transaction rolled back for security compliance", e);
@@ -350,7 +383,9 @@ public class ShareService {
             cacheRedisTemplate.delete(cacheKey);
             log.debug("Evicted permissions cache for file: {}", fileId);
         } catch (Exception e) {
-            log.error("[PERMISSION_CACHE_EVICTION_FAILED] Failed to evict permissions cache for file: {}. Setting bypass marker.", fileId, e);
+            log.error(
+                    "[PERMISSION_CACHE_EVICTION_FAILED] Failed to evict permissions cache for file: {}. Setting bypass marker.",
+                    fileId, e);
             try {
                 String bypassKey = "cache:permissions:bypass:" + fileId;
                 cacheRedisTemplate.opsForValue().set(bypassKey, "true", java.time.Duration.ofMinutes(10));
