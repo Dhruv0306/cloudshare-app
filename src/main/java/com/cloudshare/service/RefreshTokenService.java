@@ -39,9 +39,15 @@ public class RefreshTokenService {
         securityRedisTemplate.opsForValue().set(activeKey, userId.toString(), ttl);
         // Store metadata mapping to user ID (persists after rotation to detect reuse)
         securityRedisTemplate.opsForValue().set(metadataKey, userId.toString(), ttl);
-        // Add to the user's token family set
-        securityRedisTemplate.opsForSet().add(familyKey, tokenId);
+
+        // Add to the user's token family sorted set (score = timestamp)
+        double score = (double) System.currentTimeMillis();
+        securityRedisTemplate.opsForZSet().add(familyKey, tokenId, score);
         securityRedisTemplate.expire(familyKey, ttl);
+
+        // Trim old elements from the family sorted set (older than designed lifetime)
+        double cutoff = (double) (System.currentTimeMillis() - (refreshExpirationSeconds * 1000L));
+        securityRedisTemplate.opsForZSet().removeRangeByScore(familyKey, Double.NEGATIVE_INFINITY, cutoff);
 
         log.debug("Created refresh token {} for user {}", tokenId, userId);
         return tokenId;
@@ -55,8 +61,10 @@ public class RefreshTokenService {
     }
 
     /**
-     * Rotates an active refresh token, returning the new token and associated user ID.
-     * Detects reuse and triggers family-wide revocation if a previously used token is presented.
+     * Rotates an active refresh token, returning the new token and associated user
+     * ID.
+     * Detects reuse and triggers family-wide revocation if a previously used token
+     * is presented.
      */
     public TokenRotationResult rotateRefreshToken(String oldTokenId) {
         String activeKey = "refresh:active:" + oldTokenId;
@@ -80,11 +88,13 @@ public class RefreshTokenService {
         if (historicUserIdStr != null) {
             UUID userId = UUID.fromString(historicUserIdStr);
             String familyKey = "refresh:family:" + userId;
-            
+
             // Check if this token was part of the user's family
-            Boolean isMember = securityRedisTemplate.opsForSet().isMember(familyKey, oldTokenId);
-            if (Boolean.TRUE.equals(isMember)) {
-                log.warn("DETECTED REUSE OF ROTATED REFRESH TOKEN {}! Revoking entire family for user {}", oldTokenId, userId);
+            Double score = securityRedisTemplate.opsForZSet().score(familyKey, oldTokenId);
+            boolean isMember = score != null;
+            if (isMember) {
+                log.warn("DETECTED REUSE OF ROTATED REFRESH TOKEN {}! Revoking entire family for user {}", oldTokenId,
+                        userId);
                 revokeAllUserTokens(userId);
                 throw new SecurityException("MFA/Session breach detected. Force re-authentication.");
             }
@@ -98,7 +108,7 @@ public class RefreshTokenService {
      */
     public void revokeAllUserTokens(UUID userId) {
         String familyKey = "refresh:family:" + userId;
-        Set<String> tokenIds = securityRedisTemplate.opsForSet().members(familyKey);
+        Set<String> tokenIds = securityRedisTemplate.opsForZSet().range(familyKey, 0, -1);
 
         if (tokenIds != null && !tokenIds.isEmpty()) {
             for (String tokenId : tokenIds) {
@@ -116,12 +126,12 @@ public class RefreshTokenService {
     public void revokeToken(String tokenId) {
         String activeKey = "refresh:active:" + tokenId;
         String userIdStr = securityRedisTemplate.opsForValue().get(activeKey);
-        
+
         if (userIdStr != null) {
             UUID userId = UUID.fromString(userIdStr);
             securityRedisTemplate.delete(activeKey);
             securityRedisTemplate.delete("refresh:metadata:" + tokenId);
-            securityRedisTemplate.opsForSet().remove("refresh:family:" + userId, tokenId);
+            securityRedisTemplate.opsForZSet().remove("refresh:family:" + userId, tokenId);
             log.debug("Revoked refresh token {}", tokenId);
         }
     }

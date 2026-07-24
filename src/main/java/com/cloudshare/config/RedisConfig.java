@@ -24,6 +24,12 @@ public class RedisConfig {
     @Value("${security.redis.port:6380}")
     private int securityPort;
 
+    @Value("${security.rate-limiting.redis.host:localhost}")
+    private String rateLimitHost;
+
+    @Value("${security.rate-limiting.redis.port:6381}")
+    private int rateLimitPort;
+
     @Primary
     @Bean(name = "cacheConnectionFactory")
     public LettuceConnectionFactory cacheConnectionFactory() {
@@ -37,6 +43,12 @@ public class RedisConfig {
         return new LettuceConnectionFactory(config);
     }
 
+    @Bean(name = "rateLimitConnectionFactory")
+    public LettuceConnectionFactory rateLimitConnectionFactory() {
+        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(rateLimitHost, rateLimitPort);
+        return new LettuceConnectionFactory(config);
+    }
+
     @Primary
     @Bean(name = "redisTemplate")
     public StringRedisTemplate cacheRedisTemplate(
@@ -47,6 +59,12 @@ public class RedisConfig {
     @Bean(name = "securityRedisTemplate")
     public StringRedisTemplate securityRedisTemplate(
             @Qualifier("securityConnectionFactory") LettuceConnectionFactory connectionFactory) {
+        return new StringRedisTemplate(connectionFactory);
+    }
+
+    @Bean(name = "rateLimitRedisTemplate")
+    public StringRedisTemplate rateLimitRedisTemplate(
+            @Qualifier("rateLimitConnectionFactory") LettuceConnectionFactory connectionFactory) {
         return new StringRedisTemplate(connectionFactory);
     }
 }
