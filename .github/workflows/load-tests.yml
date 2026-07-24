@@ -51,6 +51,8 @@ jobs:
           echo "RATE_LIMIT_ENABLED=false" >> tests/.env.ci
           echo "PASSWORD_BREACH_CHECK_ENABLED=false" >> tests/.env.ci
           echo "CRYPTO_KEK_ALLOW_RAW_PASSPHRASE=true" >> tests/.env.ci
+          echo "RATE_LIMIT_REDIS_HOST=cache-ratelimit" >> tests/.env.ci
+          echo "RATE_LIMIT_REDIS_PORT=6379" >> tests/.env.ci
 
       - name: Generate SSL certificates
         if: contains(github.event.inputs.target_url, 'localhost')
