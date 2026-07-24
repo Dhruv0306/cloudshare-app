@@ -438,23 +438,32 @@ def test_sharing_flow(url_prefix):
     ), f"Expected 200, got {guest_download.status_code}"
     assert guest_download.content == file_content
 
-    # Guest downloads public link with wrong password
+    # Validate /info endpoint on password protected link
+    info_res = requests.get(f"{url_prefix}/api/v1/shares/link/{share_code}/info")
+    assert info_res.status_code == 200, f"Expected 200, got {info_res.status_code}"
+    assert info_res.json()["data"]["passwordProtected"] is True
+
+    # Validate /info endpoint on nonexistent code
+    bad_info_res = requests.get(f"{url_prefix}/api/v1/shares/link/nonexistent/info")
+    assert bad_info_res.status_code == 404, f"Expected 404, got {bad_info_res.status_code}"
+
+    # Guest downloads public link with wrong password -> 404 to harden against enumeration
     bad_guest_headers = {"X-Share-Password": "WrongPassword"}
     bad_guest_download = requests.get(
         f"{url_prefix}/api/v1/shares/link/{share_code}/download",
         headers=bad_guest_headers,
     )
     assert (
-        bad_guest_download.status_code == 401
-    ), f"Expected 401, got {bad_guest_download.status_code}. Response: {bad_guest_download.text}"
+        bad_guest_download.status_code == 404
+    ), f"Expected 404, got {bad_guest_download.status_code}. Response: {bad_guest_download.text}"
 
-    # Guest downloads public link with missing password
+    # Guest downloads public link with missing password -> 404 to harden against enumeration
     missing_guest_download = requests.get(
         f"{url_prefix}/api/v1/shares/link/{share_code}/download"
     )
     assert (
-        missing_guest_download.status_code == 401
-    ), f"Expected 401, got {missing_guest_download.status_code}. Response: {missing_guest_download.text}"
+        missing_guest_download.status_code == 404
+    ), f"Expected 404, got {missing_guest_download.status_code}. Response: {missing_guest_download.text}"
 
     # Test expiration: create public link with 2s expiry
     exp_payload = {"fileId": file_id, "expiresInSeconds": 2, "downloadLimit": 5}
@@ -469,8 +478,12 @@ def test_sharing_flow(url_prefix):
         f"{url_prefix}/api/v1/shares/link/{exp_share_code}/download"
     )
     assert (
-        expired_download.status_code == 403
-    ), f"Expected 403 (expired), got {expired_download.status_code}. Response: {expired_download.text}"
+        expired_download.status_code == 404
+    ), f"Expected 404 (expired), got {expired_download.status_code}. Response: {expired_download.text}"
+
+    # Expired link info should also return 404
+    expired_info_res = requests.get(f"{url_prefix}/api/v1/shares/link/{exp_share_code}/info")
+    assert expired_info_res.status_code == 404, f"Expected 404, got {expired_info_res.status_code}"
 
     # Test download limit: create public link with limit of 1
     limit_payload = {"fileId": file_id, "expiresInSeconds": 3600, "downloadLimit": 1}

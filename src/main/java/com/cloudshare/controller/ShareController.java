@@ -32,8 +32,9 @@ public class ShareController {
             @Valid @RequestBody InternalShareRequest request,
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest servletRequest) {
-        
-        InternalShareResponse response = shareService.shareFileInternally(request, principal.getId(), clientIpResolver.resolveIp(servletRequest));
+
+        InternalShareResponse response = shareService.shareFileInternally(request, principal.getId(),
+                clientIpResolver.resolveIp(servletRequest));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
@@ -42,8 +43,16 @@ public class ShareController {
             @Valid @RequestBody CreatePublicLinkRequest request,
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest servletRequest) {
-        
-        PublicLinkResponse response = shareService.createPublicLink(request, principal.getId(), clientIpResolver.resolveIp(servletRequest));
+
+        PublicLinkResponse response = shareService.createPublicLink(request, principal.getId(),
+                clientIpResolver.resolveIp(servletRequest));
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/link/{shareCode}/info")
+    public ResponseEntity<ApiResponse<PublicLinkInfoResponse>> getPublicLinkInfo(
+            @PathVariable("shareCode") String shareCode) {
+        PublicLinkInfoResponse response = shareService.getPublicLinkInfo(shareCode);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -52,19 +61,20 @@ public class ShareController {
             @PathVariable("shareCode") String shareCode,
             @RequestHeader(value = "X-Share-Password", required = false) String password,
             HttpServletRequest servletRequest) {
-        
-        FileService.DecryptedFileStream fileStream = shareService.downloadPublicLink(shareCode, password, clientIpResolver.resolveIp(servletRequest));
-        
+
+        FileService.DecryptedFileStream fileStream = shareService.downloadPublicLink(shareCode, password,
+                clientIpResolver.resolveIp(servletRequest));
+
         HttpHeaders headers = new HttpHeaders();
         // Force browser download as attachment
         headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileStream.getFilename() + "\"");
-        
+
         // Prevent inline scripts or html injection
         String contentType = fileStream.getMimeType();
         if (contentType == null || contentType.toLowerCase().contains("text/html")) {
             contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
         }
-        
+
         return ResponseEntity.ok()
                 .headers(headers)
                 .contentType(MediaType.parseMediaType(contentType))
@@ -77,7 +87,7 @@ public class ShareController {
             @PathVariable("shareId") UUID shareId,
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest servletRequest) {
-        
+
         shareService.revokeInternalShare(shareId, principal.getId(), clientIpResolver.resolveIp(servletRequest));
         return ResponseEntity.ok(ApiResponse.success(null));
     }
@@ -87,7 +97,8 @@ public class ShareController {
             @PathVariable("shareCode") String shareCode,
             @AuthenticationPrincipal UserPrincipal principal,
             HttpServletRequest servletRequest) {
-        
+
         shareService.revokePublicLink(shareCode, principal.getId(), clientIpResolver.resolveIp(servletRequest));
         return ResponseEntity.ok(ApiResponse.success(null));
-    }}
+    }
+}

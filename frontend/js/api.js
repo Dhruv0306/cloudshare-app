@@ -466,6 +466,13 @@ class ApiClient {
         return await res.json();
     }
 
+    async getPublicLinkInfo(shareCode) {
+        const res = await this.request(`/api/v1/shares/link/${shareCode}/info`, {
+            method: 'GET'
+        });
+        return await res.json();
+    }
+
     /**
      * Public link file download - does not require Bearer token authorization
      */

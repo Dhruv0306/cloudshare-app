@@ -34,11 +34,11 @@ test.describe('Public Share Links (Scenario 4 & Public Link Revocation)', () => 
         // Guest context: unauthenticated, separate browser context entirely.
         const guestContext = await browser.newContext({ ignoreHTTPSErrors: true });
         try {
-            // First download: wrong password is rejected
+            // First download: wrong password is rejected (download fails with generic 404)
             const guestPage1 = await openPublicShareLink(guestContext, shareCode);
             await guestPage1.locator('#public-password').fill('wrong-password');
             await guestPage1.locator('#public-download-btn').click();
-            await expectToast(guestPage1, 'Invalid or missing link passcode', 'danger');
+            await expectToast(guestPage1, /Shared link does not exist or invalid passcode/i, 'danger');
             await guestPage1.close();
 
             // Second attempt: correct password succeeds and consumes the one allowed download
@@ -90,11 +90,10 @@ test.describe('Public Share Links (Scenario 4 & Public Link Revocation)', () => 
         });
         expect(revokeRes.ok(), `link revoke failed: ${revokeRes.status()} ${await revokeRes.text()}`).toBeTruthy();
 
-        // Guest tries again after revocation - link no longer exists.
+        // Guest tries again after revocation - /info fails on load, showing toast and hiding gateway
         await guestPage.reload();
-        await expect(guestPage.locator('#public-share-gateway')).not.toHaveClass(/hidden/);
-        await guestPage.locator('#public-download-btn').click();
-        await expectToast(guestPage, 'Access Denied: Shared link does not exist', 'danger');
+        await expectToast(guestPage, /Shared link does not exist/i, 'danger');
+        await expect(guestPage.locator('#public-share-gateway')).toHaveClass(/hidden/);
 
         await guestContext.close();
     });

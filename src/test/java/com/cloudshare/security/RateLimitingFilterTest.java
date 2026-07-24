@@ -208,6 +208,28 @@ class RateLimitingFilterTest {
     }
 
     @Test
+    void testPublicLinkInfoRateLimiting_SharesBucketWithDownload() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "linkLimit", 30);
+        ReflectionTestUtils.setField(rateLimitingFilter, "linkGlobalLimit", 100);
+
+        // Setup request for link info (GET /api/v1/shares/link/linkA/info)
+        when(request.getRequestURI()).thenReturn("/api/v1/shares/link/linkA/info");
+        when(request.getMethod()).thenReturn("GET");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+
+        // Verify that the rate-limiter evaluates the SAME key
+        // ("limit:link:linkA:127.0.0.1")
+        // and global key as the standard download route.
+        when(rateLimiterService.isAllowed(eq("limit:link:linkA:127.0.0.1"), eq(60), eq(30))).thenReturn(true);
+        when(rateLimiterService.isAllowed(eq("limit:linkglobal:127.0.0.1"), eq(60), eq(100))).thenReturn(true);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        verify(response, never()).setStatus(429);
+    }
+
+    @Test
     void testPopulatesResolvedJwtAttribute() throws Exception {
         ReflectionTestUtils.setField(rateLimitingFilter, "uploadLimit", 10);
         when(request.getRequestURI()).thenReturn("/api/v1/files/upload");
