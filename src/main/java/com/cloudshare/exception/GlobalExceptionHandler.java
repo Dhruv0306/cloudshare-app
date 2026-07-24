@@ -30,8 +30,7 @@ public class GlobalExceptionHandler {
         ApiResponse<Void> response = ApiResponse.error(
                 "VALIDATION_FAILED",
                 "The request body failed to validate.",
-                errors
-        );
+                errors);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
@@ -48,7 +47,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
-    @ExceptionHandler({AuthenticationException.class, SecurityException.class, UsernameNotFoundException.class})
+    @ExceptionHandler({ AuthenticationException.class, SecurityException.class, UsernameNotFoundException.class })
     public ResponseEntity<ApiResponse<Void>> handleAuthenticationException(Exception ex) {
         log.warn("Authentication or Security violation: {}", ex.getMessage());
         ApiResponse<Void> response = ApiResponse.error("UNAUTHORIZED", ex.getMessage());
@@ -77,9 +76,11 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceededException(org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceededException(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
         log.warn("Max upload size exceeded: {}", ex.getMessage());
-        ApiResponse<Void> response = ApiResponse.error("PAYLOAD_TOO_LARGE", "The uploaded file exceeds the maximum allowed size of 100MB.");
+        ApiResponse<Void> response = ApiResponse.error("PAYLOAD_TOO_LARGE",
+                "The uploaded file exceeds the maximum allowed size of 100MB.");
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
     }
 
@@ -90,17 +91,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
-    @ExceptionHandler(InvalidSharePasswordException.class)
-    public ResponseEntity<ApiResponse<Void>> handleInvalidSharePasswordException(InvalidSharePasswordException ex) {
-        log.warn("Invalid share password: {}", ex.getMessage());
-        ApiResponse<Void> response = ApiResponse.error("UNAUTHORIZED", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-    }
-
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleAllExceptions(Exception ex) {
         log.error("Unhandled system exception", ex);
-        ApiResponse<Void> response = ApiResponse.error("INTERNAL_SERVER_ERROR", "An unexpected error occurred on the server.");
+        ApiResponse<Void> response = ApiResponse.error("INTERNAL_SERVER_ERROR",
+                "An unexpected error occurred on the server.");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 }
