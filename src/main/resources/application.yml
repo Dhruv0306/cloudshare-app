@@ -52,6 +52,9 @@ security:
     refresh-expiration-seconds: ${JWT_REFRESH_EXPIRATION:604800}
     step-up-session-max-seconds: ${JWT_STEP_UP_SESSION_MAX:900}
   rate-limiting:
+    redis:
+      host: ${RATE_LIMIT_REDIS_HOST:localhost}
+      port: ${RATE_LIMIT_REDIS_PORT:6381}
     enabled: ${RATE_LIMIT_ENABLED:true}
     auth-limit: ${RATE_LIMIT_AUTH:5}
     mfa-limit: ${RATE_LIMIT_MFA:5}

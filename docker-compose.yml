@@ -29,6 +29,8 @@ services:
       - SPRING_DATA_REDIS_PORT=6379
       - SECURITY_REDIS_HOST=cache-security
       - SECURITY_REDIS_PORT=6379
+      - RATE_LIMIT_REDIS_HOST=cache-ratelimit
+      - RATE_LIMIT_REDIS_PORT=6379
       - CLAMAV_HOST=clamav
       - CLAMAV_PORT=3310
       - STORAGE_PROVIDER=MINIO
@@ -50,6 +52,7 @@ services:
       - db
       - cache-aside
       - cache-security
+      - cache-ratelimit
       - clamav
       - storage
 
@@ -70,12 +73,17 @@ services:
     volumes:
       - redisdata-aside:/data
 
-  # Redis Security Instance (Blacklists, Rate Limiting)
+  # Redis Security Instance (Blacklists, Token Families)
   cache-security:
     image: redis:7-alpine
     command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
     volumes:
       - redisdata-security:/data
+
+  # Redis Rate Limiting Instance (Ephemeral sliding windows)
+  cache-ratelimit:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
 
   # ClamAV Virus Scanner Daemon
   clamav:

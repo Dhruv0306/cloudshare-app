@@ -5,9 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.SetOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.ZSetOperations;
 
 import java.time.Duration;
 import java.util.Set;
@@ -27,7 +27,7 @@ class RefreshTokenServiceTest {
     private ValueOperations<String, String> valueOperations;
 
     @Mock
-    private SetOperations<String, String> setOperations;
+    private ZSetOperations<String, String> zSetOperations;
 
     private RefreshTokenService refreshTokenService;
     private final long expirationSeconds = 604800; // 7 days
@@ -35,7 +35,7 @@ class RefreshTokenServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(securityRedisTemplate.opsForValue()).thenReturn(valueOperations);
-        lenient().when(securityRedisTemplate.opsForSet()).thenReturn(setOperations);
+        lenient().when(securityRedisTemplate.opsForZSet()).thenReturn(zSetOperations);
         refreshTokenService = new RefreshTokenService(securityRedisTemplate, expirationSeconds);
     }
 
@@ -48,8 +48,10 @@ class RefreshTokenServiceTest {
         assertNotNull(token);
         verify(valueOperations).set(eq("refresh:active:" + token), eq(userId.toString()), any(Duration.class));
         verify(valueOperations).set(eq("refresh:metadata:" + token), eq(userId.toString()), any(Duration.class));
-        verify(setOperations).add(eq("refresh:family:" + userId), eq(token));
+        verify(zSetOperations).add(eq("refresh:family:" + userId), eq(token), anyDouble());
         verify(securityRedisTemplate).expire(eq("refresh:family:" + userId), any(Duration.class));
+        verify(zSetOperations).removeRangeByScore(eq("refresh:family:" + userId), eq(Double.NEGATIVE_INFINITY),
+                anyDouble());
     }
 
     @Test
@@ -68,7 +70,8 @@ class RefreshTokenServiceTest {
         assertNotEquals(oldToken, result.getNewTokenId());
 
         // Verify new token is created and stored
-        verify(valueOperations).set(eq("refresh:active:" + result.getNewTokenId()), eq(userId.toString()), any(Duration.class));
+        verify(valueOperations).set(eq("refresh:active:" + result.getNewTokenId()), eq(userId.toString()),
+                any(Duration.class));
     }
 
     @Test
@@ -81,10 +84,10 @@ class RefreshTokenServiceTest {
         when(valueOperations.getAndDelete("refresh:active:" + leakedOldToken)).thenReturn(null);
         // 2. Mock historic owner is found in metadata
         when(valueOperations.get("refresh:metadata:" + leakedOldToken)).thenReturn(userId.toString());
-        // 3. Mock token is member of family
-        when(setOperations.isMember("refresh:family:" + userId, leakedOldToken)).thenReturn(true);
+        // 3. Mock token is member of family (returns score)
+        when(zSetOperations.score("refresh:family:" + userId, leakedOldToken)).thenReturn(12345.0);
         // 4. Mock set members for family revocation
-        when(setOperations.members("refresh:family:" + userId)).thenReturn(Set.of(leakedOldToken, otherToken));
+        when(zSetOperations.range("refresh:family:" + userId, 0, -1)).thenReturn(Set.of(leakedOldToken, otherToken));
 
         // When/Then
         assertThrows(SecurityException.class, () -> refreshTokenService.rotateRefreshToken(leakedOldToken));
@@ -119,6 +122,20 @@ class RefreshTokenServiceTest {
 
         verify(securityRedisTemplate).delete("refresh:active:" + token);
         verify(securityRedisTemplate).delete("refresh:metadata:" + token);
-        verify(setOperations).remove("refresh:family:" + userId, token);
+        verify(zSetOperations).remove("refresh:family:" + userId, token);
+    }
+
+    @Test
+    void testPruning_boundaryConditions() {
+        UUID userId = UUID.randomUUID();
+        long now = System.currentTimeMillis();
+
+        refreshTokenService.createRefreshToken(userId);
+
+        double expectedCutoff = (double) (now - (expirationSeconds * 1000L));
+        verify(zSetOperations).removeRangeByScore(
+                eq("refresh:family:" + userId),
+                eq(Double.NEGATIVE_INFINITY),
+                doubleThat(score -> score != null && Math.abs(score - expectedCutoff) < 5000.0));
     }
 }

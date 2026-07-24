@@ -94,10 +94,8 @@ def generate_totp(secret_base32):
 
 def wait_for_totp_rotation():
     current_step = int(time.time() // 30)
-    print(f"\nWaiting for TOTP time-step window rotation (current step: {current_step}) ... ", end="", flush=True)
     while int(time.time() // 30) == current_step:
         time.sleep(1)
-    print("Rotated!")
 
 
 def promote_user_to_admin(username):
