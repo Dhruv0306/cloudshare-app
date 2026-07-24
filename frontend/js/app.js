@@ -861,12 +861,30 @@ async function showPublicShareView(shareCode) {
     const gateway = document.getElementById('public-share-gateway');
     document.getElementById('public-file-code').textContent = `Link Code: ${shareCode}`;
 
-    // Always show password field as optional fallback, or we can prompt if 401 is received.
-    // To make it user friendly, we show it, explaining to enter it if it's secured.
-    document.getElementById('public-password-section').classList.remove('hidden');
-    document.getElementById('public-password').value = '';
-
-    gateway.classList.remove('hidden');
+    try {
+        const res = await api.getPublicLinkInfo(shareCode);
+        if (res.success && res.data) {
+            if (res.data.passwordProtected) {
+                document.getElementById('public-password-section').classList.remove('hidden');
+            } else {
+                document.getElementById('public-password-section').classList.add('hidden');
+            }
+            document.getElementById('public-password').value = '';
+            gateway.classList.remove('hidden');
+        } else {
+            showToast('Access Denied: Shared link does not exist.', 'danger');
+            gateway.classList.add('hidden');
+        }
+    } catch (err) {
+        let msg = 'Access Denied: Shared link does not exist.';
+        if (err.status === 403) {
+            msg = 'Access Denied: Link has expired or reached download limit.';
+        } else if (err.status === 404) {
+            msg = 'Access Denied: Shared link does not exist.';
+        }
+        showToast(msg, 'danger');
+        gateway.classList.add('hidden');
+    }
 }
 
 async function handlePublicDownload() {
@@ -885,12 +903,10 @@ async function handlePublicDownload() {
         showToast('File downloaded successfully.', 'success');
     } catch (err) {
         let msg = err.message;
-        if (err.status === 401) {
-            msg = 'Access Denied: Invalid or missing link passcode.';
-        } else if (err.status === 403) {
+        if (err.status === 403) {
             msg = 'Access Denied: Link has expired or reached download limit.';
         } else if (err.status === 404) {
-            msg = 'Access Denied: Shared link does not exist.';
+            msg = 'Access Denied: Shared link does not exist or invalid passcode.';
         }
         showToast(msg, 'danger');
     } finally {
