@@ -16,23 +16,34 @@ import java.io.IOException;
 import java.time.Instant;
 
 /**
- * Security filter executing distributed sliding-window rate limiting via Redis Lua scripts before authentication.
+ * Security filter executing distributed sliding-window rate limiting via Redis
+ * Lua scripts before authentication.
  * <p>
  * <b>Why multi-tier rate limiting and request attribute hand-off exist:</b>
  * <ul>
- *   <li><b>Multi-Tier Protection:</b> Enforces route-specific thresholds to protect against brute-force and DoS:
- *     <ul>
- *       <li><b>Authentication (5/min per IP):</b> {@code /api/v1/auth/login}, {@code /register}, {@code /refresh}</li>
- *       <li><b>MFA Verification (5/min per User/IP):</b> {@code /api/v1/auth/mfa/verify}, {@code /step-up}</li>
- *       <li><b>File Uploads (10/min per User/IP):</b> {@code /api/v1/files/upload}</li>
- *       <li><b>Public Link Access (Two-Tier):</b> Per-link+IP limit (30/min) AND Global IP limit (100/min) to prevent link scraping.</li>
- *       <li><b>General REST Endpoints (100/min per User/IP):</b> All other {@code /api/v1/*} routes.</li>
- *     </ul>
- *   </li>
- *   <li><b>Client IP Trust:</b> Delegates to {@link ClientIpResolver}. Secure because backend containers are internal-network-only;
- *   Nginx edge proxy unconditionally overwrites {@code X-Real-IP} with the true remote socket address.</li>
- *   <li><b>JWT Memoization:</b> Parses the Bearer token once to identify user ID, attaching {@link ResolvedJwt} to
- *   {@link HttpServletRequest#setAttribute} so downstream {@link JwtAuthenticationFilter} avoids redundant parsing.</li>
+ * <li><b>Multi-Tier Protection:</b> Enforces route-specific thresholds to
+ * protect against brute-force and DoS:
+ * <ul>
+ * <li><b>Authentication (5/min per IP):</b> {@code /api/v1/auth/login},
+ * {@code /register}, {@code /refresh}</li>
+ * <li><b>MFA Verification (5/min per User/IP):</b>
+ * {@code /api/v1/auth/mfa/verify}, {@code /step-up}</li>
+ * <li><b>File Uploads (10/min per User/IP):</b>
+ * {@code /api/v1/files/upload}</li>
+ * <li><b>Public Link Access (Two-Tier):</b> Per-link+IP limit (30/min) AND
+ * Global IP limit (100/min) to prevent link scraping.</li>
+ * <li><b>General REST Endpoints (100/min per User/IP):</b> All other
+ * {@code /api/v1/*} routes.</li>
+ * </ul>
+ * </li>
+ * <li><b>Client IP Trust:</b> Delegates to {@link ClientIpResolver}. Secure
+ * because backend containers are internal-network-only;
+ * Nginx edge proxy unconditionally overwrites {@code X-Real-IP} with the true
+ * remote socket address.</li>
+ * <li><b>JWT Memoization:</b> Parses the Bearer token once to identify user ID,
+ * attaching {@link ResolvedJwt} to
+ * {@link HttpServletRequest#setAttribute} so downstream
+ * {@link JwtAuthenticationFilter} avoids redundant parsing.</li>
  * </ul>
  * </p>
  */
@@ -40,6 +51,8 @@ import java.time.Instant;
 @RequiredArgsConstructor
 @Slf4j
 public class RateLimitingFilter extends OncePerRequestFilter {
+
+    private static final String PUBLIC_LINK_PATH_PREFIX = "/api/v1/shares/link/";
 
     private final RateLimiterService rateLimiterService;
     private final JwtTokenProvider tokenProvider;
@@ -110,19 +123,31 @@ public class RateLimitingFilter extends OncePerRequestFilter {
                 String key = "limit:" + identifier + ":" + path;
                 allowed = rateLimiterService.isAllowed(key, 60, mfaLimit);
 
-            } else if ("GET".equalsIgnoreCase(method) && path.startsWith("/api/v1/shares/link/")) {
+            } else if ("GET".equalsIgnoreCase(method) && path.startsWith(PUBLIC_LINK_PATH_PREFIX)) {
 
                 // Public link access rate limiting
-                String remaining = path.substring(20); // Length of "/api/v1/shares/link/"
+                String remaining = path.substring(PUBLIC_LINK_PATH_PREFIX.length());
                 int slashIdx = remaining.indexOf('/');
                 String shareCode = (slashIdx != -1) ? remaining.substring(0, slashIdx) : remaining;
 
-                String linkKey = "limit:link:" + shareCode + ":" + ip;
-                String globalKey = "limit:linkglobal:" + ip;
+                if (shareCode.isBlank()) {
+                    // Malformed/edge-case path under the prefix with no code — don't rate-limit on
+                    // an
+                    // empty key; fall through to general-endpoint handling instead of silently
+                    // using ""
+                    // as a shared rate-limit bucket for every malformed request.
+                    String userId = getUserIdFromAuthorizationHeader(request);
+                    String identifier = (userId != null) ? userId : ip;
+                    String key = "limit:general:" + identifier;
+                    allowed = rateLimiterService.isAllowed(key, 60, generalLimit);
+                } else {
+                    String linkKey = "limit:link:" + shareCode + ":" + ip;
+                    String globalKey = "limit:linkglobal:" + ip;
 
-                boolean linkAllowed = rateLimiterService.isAllowed(linkKey, 60, linkLimit);
-                boolean globalAllowed = rateLimiterService.isAllowed(globalKey, 60, linkGlobalLimit);
-                allowed = linkAllowed && globalAllowed;
+                    boolean linkAllowed = rateLimiterService.isAllowed(linkKey, 60, linkLimit);
+                    boolean globalAllowed = rateLimiterService.isAllowed(globalKey, 60, linkGlobalLimit);
+                    allowed = linkAllowed && globalAllowed;
+                }
 
             } else {
 
