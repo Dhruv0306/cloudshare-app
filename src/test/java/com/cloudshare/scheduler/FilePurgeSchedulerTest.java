@@ -3,6 +3,7 @@ package com.cloudshare.scheduler;
 import com.cloudshare.model.FileMetadata;
 import com.cloudshare.repository.FileRepository;
 import com.cloudshare.service.FileService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +16,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -27,11 +29,13 @@ class FilePurgeSchedulerTest {
     @Mock
     private FileService fileService;
 
+    private SimpleMeterRegistry meterRegistry;
     private FilePurgeScheduler filePurgeScheduler;
 
     @BeforeEach
     void setUp() {
-        filePurgeScheduler = new FilePurgeScheduler(fileRepository, fileService);
+        meterRegistry = new SimpleMeterRegistry();
+        filePurgeScheduler = new FilePurgeScheduler(fileRepository, fileService, meterRegistry);
     }
 
     @Test
@@ -43,6 +47,9 @@ class FilePurgeSchedulerTest {
 
         verify(fileRepository).findByDeletedTrueAndUpdatedAtBefore(any(Instant.class));
         verify(fileService, never()).purgeSoftDeletedFile(any(FileMetadata.class));
+
+        assertEquals(0.0, meterRegistry.counter("cloudshare.purge.success").count());
+        assertEquals(0.0, meterRegistry.counter("cloudshare.purge.failures").count());
     }
 
     @Test
@@ -62,5 +69,8 @@ class FilePurgeSchedulerTest {
 
         verify(fileService).purgeSoftDeletedFile(file1);
         verify(fileService).purgeSoftDeletedFile(file2);
+
+        assertEquals(1.0, meterRegistry.counter("cloudshare.purge.success").count());
+        assertEquals(1.0, meterRegistry.counter("cloudshare.purge.failures").count());
     }
 }
