@@ -4,6 +4,7 @@ import com.cloudshare.model.AuditLog;
 import com.cloudshare.model.Role;
 import com.cloudshare.model.User;
 import com.cloudshare.repository.UserRepository;
+import com.cloudshare.scheduler.AuditPartitionScheduler;
 import com.cloudshare.security.CustomUserDetailsService;
 import com.cloudshare.security.JwtTokenProvider;
 import com.cloudshare.security.ClientIpResolver;
@@ -25,7 +26,9 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -56,6 +59,9 @@ class AdminControllerTest {
 
     @MockitoBean(name = "securityRedisTemplate")
     private org.springframework.data.redis.core.StringRedisTemplate securityRedisTemplate;
+
+    @MockitoBean
+    private AuditPartitionScheduler auditPartitionScheduler;
 
     @org.junit.jupiter.api.BeforeEach
     @SuppressWarnings("unchecked")
@@ -181,5 +187,18 @@ class AdminControllerTest {
                         .with(user(getMockAdminPrincipal())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void triggerPartitionMaintenance_success() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/admin/audit-logs/partitions")
+                        .header("X-StepUp-Token", "valid-token")
+                        .with(user(getMockAdminPrincipal()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Audit log partition maintenance executed successfully."));
+
+        verify(auditPartitionScheduler).maintainPartitions();
     }
 }

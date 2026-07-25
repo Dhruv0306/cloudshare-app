@@ -5,6 +5,7 @@ import com.cloudshare.dto.ApiResponse;
 import com.cloudshare.model.AuditLog;
 import com.cloudshare.repository.UserRepository;
 import com.cloudshare.service.AuditLogService;
+import com.cloudshare.scheduler.AuditPartitionScheduler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -12,6 +13,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +28,13 @@ public class AdminController {
 
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
+    private final AuditPartitionScheduler auditPartitionScheduler;
+
+    @PostMapping("/audit-logs/partitions")
+    public ResponseEntity<ApiResponse<String>> triggerPartitionMaintenance() {
+        auditPartitionScheduler.maintainPartitions();
+        return ResponseEntity.ok(ApiResponse.success("Audit log partition maintenance executed successfully."));
+    }
 
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<Page<AdminUserResponse>>> listUsers(
