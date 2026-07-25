@@ -2,6 +2,7 @@ package com.cloudshare.scheduler;
 
 import com.cloudshare.repository.ShareLinkRepository;
 import com.cloudshare.service.AuditLogService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -24,11 +26,13 @@ class LinkCleanupSchedulerTest {
     @Mock
     private AuditLogService auditLogService;
 
+    private SimpleMeterRegistry meterRegistry;
     private LinkCleanupScheduler linkCleanupScheduler;
 
     @BeforeEach
     void setUp() {
-        linkCleanupScheduler = new LinkCleanupScheduler(shareLinkRepository, auditLogService);
+        meterRegistry = new SimpleMeterRegistry();
+        linkCleanupScheduler = new LinkCleanupScheduler(shareLinkRepository, auditLogService, meterRegistry);
     }
 
     @Test
@@ -40,6 +44,9 @@ class LinkCleanupSchedulerTest {
 
         verify(shareLinkRepository).deleteByExpiresAtBefore(any(Instant.class));
         verify(auditLogService, never()).log(any(), any(), any(), any(), any());
+
+        assertEquals(0.0, meterRegistry.counter("cloudshare.link_cleanup.success").count());
+        assertEquals(0.0, meterRegistry.counter("cloudshare.link_cleanup.failures").count());
     }
 
     @Test
@@ -57,5 +64,22 @@ class LinkCleanupSchedulerTest {
                 eq("system"),
                 eq("Bulk purged 5 expired share links")
         );
+
+        assertEquals(5.0, meterRegistry.counter("cloudshare.link_cleanup.success").count());
+        assertEquals(0.0, meterRegistry.counter("cloudshare.link_cleanup.failures").count());
+    }
+
+    @Test
+    void cleanupLinks_repositoryThrowsException_incrementsFailuresMetric() {
+        when(shareLinkRepository.deleteByExpiresAtBefore(any(Instant.class)))
+                .thenThrow(new RuntimeException("Database timeout"));
+
+        linkCleanupScheduler.cleanupLinks();
+
+        verify(shareLinkRepository).deleteByExpiresAtBefore(any(Instant.class));
+        verify(auditLogService, never()).log(any(), any(), any(), any(), any());
+
+        assertEquals(0.0, meterRegistry.counter("cloudshare.link_cleanup.success").count());
+        assertEquals(1.0, meterRegistry.counter("cloudshare.link_cleanup.failures").count());
     }
 }
