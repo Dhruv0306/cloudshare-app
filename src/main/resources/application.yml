@@ -35,6 +35,10 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
+    web:
+      pageable:
+        max-page-size: ${SPRING_DATA_WEB_PAGEABLE_MAX_PAGE_SIZE:100}
+        one-indexed-parameters: ${SPRING_DATA_WEB_PAGEABLE_ONE_INDEXED_PARAMETERS:false}
 
   servlet:
     multipart:
