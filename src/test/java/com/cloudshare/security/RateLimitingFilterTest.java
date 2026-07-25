@@ -248,4 +248,39 @@ class RateLimitingFilterTest {
         verify(request).setAttribute(eq(ResolvedJwt.REQUEST_ATTRIBUTE), eq(resolved));
         verify(filterChain).doFilter(request, response);
     }
+
+    @Test
+    void publicLinkPath_normalShareCode_extractsCorrectly() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "linkLimit", 30);
+        ReflectionTestUtils.setField(rateLimitingFilter, "linkGlobalLimit", 100);
+
+        when(request.getRequestURI()).thenReturn("/api/v1/shares/link/linkXYZ");
+        when(request.getMethod()).thenReturn("GET");
+        when(clientIpResolver.resolveIp(request)).thenReturn("192.168.1.50");
+
+        when(rateLimiterService.isAllowed(eq("limit:link:linkXYZ:192.168.1.50"), eq(60), eq(30))).thenReturn(true);
+        when(rateLimiterService.isAllowed(eq("limit:linkglobal:192.168.1.50"), eq(60), eq(100))).thenReturn(true);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        verify(response, never()).setStatus(429);
+    }
+
+    @Test
+    void publicLinkPath_prefixWithNoTrailingCode_doesNotThrowAndFallsThroughGracefully() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "generalLimit", 100);
+        when(request.getRequestURI()).thenReturn("/api/v1/shares/link/");
+        when(request.getMethod()).thenReturn("GET");
+        when(clientIpResolver.resolveIp(request)).thenReturn("192.168.1.50");
+
+        // Should fall through to general rate limiting (avoiding 500
+        // StringIndexOutOfBoundsException)
+        when(rateLimiterService.isAllowed(eq("limit:general:192.168.1.50"), eq(60), eq(100))).thenReturn(true);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        verify(response, never()).setStatus(429);
+    }
 }
