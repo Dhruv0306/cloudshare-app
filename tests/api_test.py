@@ -124,6 +124,62 @@ def promote_user_to_admin(username):
         return False
 
 
+def seed_audit_logs(count):
+    import subprocess
+
+    sql = (
+        f"INSERT INTO audit_logs (action, ip_address, details, created_at) "
+        f"SELECT 'SEEDED_TEST_LOG', '127.0.0.1', 'Seeded audit log for pagination testing', NOW() "
+        f"FROM generate_series(1, {count});"
+    )
+    cmd = [
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        "db",
+        "psql",
+        "-U",
+        "cloudshare_user",
+        "-d",
+        "cloudshare",
+        "-c",
+        sql,
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return True
+    except Exception as e:
+        print(f"(Warning: Failed to seed audit logs via docker: {e}) ", end="")
+        return False
+
+
+def clean_seeded_audit_logs():
+    import subprocess
+
+    sql = "DELETE FROM audit_logs WHERE action = 'SEEDED_TEST_LOG';"
+    cmd = [
+        "docker",
+        "compose",
+        "exec",
+        "-T",
+        "db",
+        "psql",
+        "-U",
+        "cloudshare_user",
+        "-d",
+        "cloudshare",
+        "-c",
+        sql,
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return True
+    except Exception as e:
+        print(f"(Warning: Failed to clean seeded audit logs via docker: {e}) ", end="")
+        return False
+
+
 # ----------------------------------------------------
 # 1. Auth Flow Tests
 # ----------------------------------------------------
@@ -1210,6 +1266,104 @@ def test_public_link_rate_limiting(url_prefix):
     # Thus, both outcomes (hitting 429 or completing without it under high limit settings) are considered valid.
 
 
+def test_admin_pagination_clamping(url_prefix):
+    # 1. Register and promote admin user
+    user = generate_random_user()
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    assert promote_user_to_admin(user["username"])
+
+    # 2. Login to get fresh JWT containing ROLE_ADMIN
+    login_res = requests.post(
+        f"{url_prefix}/api/v1/auth/login",
+        json={"usernameOrEmail": user["username"], "password": user["password"]},
+    ).json()
+    access_token = login_res["data"]["accessToken"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # 3. Setup and verify MFA to allow step-up
+    setup_res = requests.post(f"{url_prefix}/api/v1/auth/mfa/setup", headers=headers)
+    setup_data = setup_res.json()["data"]
+    secret = setup_data["secret"]
+
+    mfa_code = generate_totp(secret)
+    requests.post(
+        f"{url_prefix}/api/v1/auth/mfa/verify", headers=headers, json={"code": mfa_code}
+    )
+
+    # 4. Perform step-up challenge
+    wait_for_totp_rotation()
+    step_up_code = generate_totp(secret)
+    step_up_res = requests.post(
+        f"{url_prefix}/api/v1/auth/mfa/step-up",
+        headers=headers,
+        json={"code": step_up_code},
+    )
+    assert step_up_res.status_code == 200, f"Step-up failed: {step_up_res.text}"
+    step_up_token = step_up_res.json()["data"]["stepUpToken"]
+
+    admin_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "X-StepUp-Token": step_up_token,
+    }
+
+    # 5. Verify default page sizes (should be 25)
+    users_default = requests.get(f"{url_prefix}/api/v1/admin/users", headers=admin_headers)
+    assert users_default.status_code == 200
+    step_up_token_2 = users_default.headers.get("X-StepUp-Token")
+    assert step_up_token_2 is not None
+
+    admin_headers_2 = {
+        "Authorization": f"Bearer {access_token}",
+        "X-StepUp-Token": step_up_token_2,
+    }
+
+    logs_default = requests.get(
+        f"{url_prefix}/api/v1/admin/audit-logs", headers=admin_headers_2
+    )
+    assert logs_default.status_code == 200
+    assert users_default.json()["data"]["size"] == 25
+    assert logs_default.json()["data"]["size"] == 25
+
+    step_up_token_3 = logs_default.headers.get("X-StepUp-Token")
+    assert step_up_token_3 is not None
+
+    admin_headers_3 = {
+        "Authorization": f"Bearer {access_token}",
+        "X-StepUp-Token": step_up_token_3,
+    }
+
+    # 6. Seed and verify max page size clamping on audit logs
+    assert seed_audit_logs(120), "Seeding audit logs failed"
+    try:
+        logs_clamped = requests.get(
+            f"{url_prefix}/api/v1/admin/audit-logs?size=1000", headers=admin_headers_3
+        )
+        assert logs_clamped.status_code == 200
+        logs_data = logs_clamped.json()["data"]
+
+        assert (
+            logs_data["size"] == 100
+        ), f"Expected clamped page size 100, got {logs_data['size']}"
+        assert (
+            logs_data["numberOfElements"] == 100
+        ), f"Expected 100 elements returned, got {logs_data['numberOfElements']}"
+
+        step_up_token_4 = logs_clamped.headers.get("X-StepUp-Token")
+        assert step_up_token_4 is not None
+        admin_headers_4 = {
+            "Authorization": f"Bearer {access_token}",
+            "X-StepUp-Token": step_up_token_4,
+        }
+
+        users_clamped = requests.get(
+            f"{url_prefix}/api/v1/admin/users?size=1000", headers=admin_headers_4
+        )
+        assert users_clamped.status_code == 200
+        assert users_clamped.json()["data"]["size"] == 100
+    finally:
+        assert clean_seeded_audit_logs(), "Cleanup of seeded audit logs failed"
+
+
 # ----------------------------------------------------
 # Runner
 # ----------------------------------------------------
@@ -1233,6 +1387,9 @@ if __name__ == "__main__":
     )
     runner.run_case(
         "Public Link Rate Limiting", test_public_link_rate_limiting, BASE_URL
+    )
+    runner.run_case(
+        "Admin Pagination Clamping", test_admin_pagination_clamping, BASE_URL
     )
 
     success = runner.summary()

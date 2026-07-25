@@ -1,0 +1,185 @@
+package com.cloudshare.controller;
+
+import com.cloudshare.model.AuditLog;
+import com.cloudshare.model.Role;
+import com.cloudshare.model.User;
+import com.cloudshare.repository.UserRepository;
+import com.cloudshare.security.CustomUserDetailsService;
+import com.cloudshare.security.JwtTokenProvider;
+import com.cloudshare.security.ClientIpResolver;
+import com.cloudshare.service.AuditLogService;
+import com.cloudshare.service.RateLimiterService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.Instant;
+import java.util.Collections;
+import java.util.UUID;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(AdminController.class)
+class AdminControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private UserRepository userRepository;
+
+    @MockitoBean
+    private AuditLogService auditLogService;
+
+    @MockitoBean
+    private ClientIpResolver clientIpResolver;
+
+    @MockitoBean
+    private JwtTokenProvider jwtTokenProvider;
+
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
+
+    @MockitoBean
+    private RateLimiterService rateLimiterService;
+
+    @MockitoBean(name = "securityRedisTemplate")
+    private org.springframework.data.redis.core.StringRedisTemplate securityRedisTemplate;
+
+    @org.junit.jupiter.api.BeforeEach
+    @SuppressWarnings("unchecked")
+    void setUpMocks() {
+        when(rateLimiterService.isAllowed(any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(true);
+        when(clientIpResolver.resolveIp(any())).thenReturn("127.0.0.1");
+
+        io.jsonwebtoken.Claims mockClaims = org.mockito.Mockito.mock(io.jsonwebtoken.Claims.class);
+        when(mockClaims.getId()).thenReturn("test-jti");
+        when(mockClaims.getExpiration()).thenReturn(new java.util.Date(System.currentTimeMillis() + 60000));
+        when(mockClaims.get("orig_iat", Long.class)).thenReturn(System.currentTimeMillis());
+
+        when(jwtTokenProvider.parseAndValidateStepUpToken(any(), any())).thenReturn(mockClaims);
+        when(jwtTokenProvider.getStepUpSessionMaxSeconds()).thenReturn(300L);
+
+        org.springframework.data.redis.core.ValueOperations<String, String> mockValueOps = org.mockito.Mockito.mock(org.springframework.data.redis.core.ValueOperations.class);
+        when(securityRedisTemplate.opsForValue()).thenReturn(mockValueOps);
+        when(mockValueOps.setIfAbsent(any(), any(), any(java.time.Duration.class))).thenReturn(true);
+    }
+
+    private com.cloudshare.security.UserPrincipal getMockAdminPrincipal() {
+        User userEntity = User.builder()
+                .id(UUID.randomUUID())
+                .username("adminuser")
+                .email("adminuser@example.com")
+                .passwordHash("hashed")
+                .roles(Collections.singleton(new Role(2L, "ROLE_ADMIN")))
+                .build();
+        return new com.cloudshare.security.UserPrincipal(userEntity);
+    }
+
+    @Test
+    void listUsers_defaultPageSize() throws Exception {
+        User userEntity = User.builder()
+                .id(UUID.randomUUID())
+                .username("testuser")
+                .email("testuser@example.com")
+                .roles(Collections.singleton(new Role(1L, "ROLE_USER")))
+                .createdAt(Instant.now())
+                .build();
+        Page<User> page = new PageImpl<>(Collections.singletonList(userEntity), PageRequest.of(0, 25), 1);
+        
+        when(userRepository.findAll(any(Pageable.class))).thenAnswer(invocation -> {
+            Pageable pageable = invocation.getArgument(0);
+            org.junit.jupiter.api.Assertions.assertEquals(25, pageable.getPageSize());
+            return page;
+        });
+
+        mockMvc.perform(get("/api/v1/admin/users")
+                        .header("X-StepUp-Token", "valid-token")
+                        .with(user(getMockAdminPrincipal())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void listUsers_maxPageSizeClamped() throws Exception {
+        User userEntity = User.builder()
+                .id(UUID.randomUUID())
+                .username("testuser")
+                .email("testuser@example.com")
+                .roles(Collections.singleton(new Role(1L, "ROLE_USER")))
+                .createdAt(Instant.now())
+                .build();
+        Page<User> page = new PageImpl<>(Collections.singletonList(userEntity), PageRequest.of(0, 100), 1);
+
+        when(userRepository.findAll(any(Pageable.class))).thenAnswer(invocation -> {
+            Pageable pageable = invocation.getArgument(0);
+            org.junit.jupiter.api.Assertions.assertEquals(100, pageable.getPageSize());
+            return page;
+        });
+
+        mockMvc.perform(get("/api/v1/admin/users")
+                        .param("size", "1000")
+                        .header("X-StepUp-Token", "valid-token")
+                        .with(user(getMockAdminPrincipal())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void getAuditLogs_defaultPageSize() throws Exception {
+        AuditLog log = AuditLog.builder()
+                .id(1L)
+                .action("LOGIN_SUCCESS")
+                .ipAddress("127.0.0.1")
+                .createdAt(Instant.now())
+                .build();
+        Page<AuditLog> page = new PageImpl<>(Collections.singletonList(log), PageRequest.of(0, 25), 1);
+
+        when(auditLogService.getAuditLogs(any(), any(), any(Pageable.class))).thenAnswer(invocation -> {
+            Pageable pageable = invocation.getArgument(2);
+            org.junit.jupiter.api.Assertions.assertEquals(25, pageable.getPageSize());
+            return page;
+        });
+
+        mockMvc.perform(get("/api/v1/admin/audit-logs")
+                        .header("X-StepUp-Token", "valid-token")
+                        .with(user(getMockAdminPrincipal())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void getAuditLogs_maxPageSizeClamped() throws Exception {
+        AuditLog log = AuditLog.builder()
+                .id(1L)
+                .action("LOGIN_SUCCESS")
+                .ipAddress("127.0.0.1")
+                .createdAt(Instant.now())
+                .build();
+        Page<AuditLog> page = new PageImpl<>(Collections.singletonList(log), PageRequest.of(0, 100), 1);
+
+        when(auditLogService.getAuditLogs(any(), any(), any(Pageable.class))).thenAnswer(invocation -> {
+            Pageable pageable = invocation.getArgument(2);
+            org.junit.jupiter.api.Assertions.assertEquals(100, pageable.getPageSize());
+            return page;
+        });
+
+        mockMvc.perform(get("/api/v1/admin/audit-logs")
+                        .param("size", "1000")
+                        .header("X-StepUp-Token", "valid-token")
+                        .with(user(getMockAdminPrincipal())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+}
