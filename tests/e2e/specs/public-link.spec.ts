@@ -97,4 +97,12 @@ test.describe('Public Share Links (Scenario 4 & Public Link Revocation)', () => 
 
         await guestContext.close();
     });
+
+    test('requesting malformed public link route does not throw 500 exception and downstream routing returns 404', async ({ request, baseURL }) => {
+        const response1 = await request.get(`${baseURL}/api/v1/shares/link/`);
+        expect(response1.status()).toBe(404);
+
+        const response2 = await request.get(`${baseURL}/api/v1/shares/link`);
+        expect(response2.status()).toBe(404);
+    });
 });
