@@ -46,7 +46,7 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Page<AuditLog>>> getAuditLogs(
             @RequestParam(required = false) UUID userId,
             @RequestParam(required = false) String action,
-            Pageable pageable) {
+            @PageableDefault(size = 25, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         Page<AuditLog> logs = auditLogService.getAuditLogs(userId, action, pageable);
         return ResponseEntity.ok(ApiResponse.success(logs));
     }
