@@ -501,7 +501,9 @@ def test_sharing_flow(url_prefix):
 
     # Validate /info endpoint on nonexistent code
     bad_info_res = requests.get(f"{url_prefix}/api/v1/shares/link/nonexistent/info")
-    assert bad_info_res.status_code == 404, f"Expected 404, got {bad_info_res.status_code}"
+    assert (
+        bad_info_res.status_code == 404
+    ), f"Expected 404, got {bad_info_res.status_code}"
 
     # Guest downloads public link with wrong password -> 404 to harden against enumeration
     bad_guest_headers = {"X-Share-Password": "WrongPassword"}
@@ -538,8 +540,12 @@ def test_sharing_flow(url_prefix):
     ), f"Expected 404 (expired), got {expired_download.status_code}. Response: {expired_download.text}"
 
     # Expired link info should also return 404
-    expired_info_res = requests.get(f"{url_prefix}/api/v1/shares/link/{exp_share_code}/info")
-    assert expired_info_res.status_code == 404, f"Expected 404, got {expired_info_res.status_code}"
+    expired_info_res = requests.get(
+        f"{url_prefix}/api/v1/shares/link/{exp_share_code}/info"
+    )
+    assert (
+        expired_info_res.status_code == 404
+    ), f"Expected 404, got {expired_info_res.status_code}"
 
     # Test download limit: create public link with limit of 1
     limit_payload = {"fileId": file_id, "expiresInSeconds": 3600, "downloadLimit": 1}
@@ -1266,6 +1272,21 @@ def test_public_link_rate_limiting(url_prefix):
     # Thus, both outcomes (hitting 429 or completing without it under high limit settings) are considered valid.
 
 
+def test_public_link_rate_limiting_malformed(url_prefix):
+    # Requesting public link prefix with no trailing code (exactly "/api/v1/shares/link/")
+    # should not throw 500 StringIndexOutOfBoundsException but instead return a clean 404 (from downstream routing)
+    res1 = requests.get(f"{url_prefix}/api/v1/shares/link/")
+    assert (
+        res1.status_code == 404
+    ), f"Expected 404 from downstream routing, got {res1.status_code}. Response: {res1.text}"
+
+    # Requesting without trailing slash ("/api/v1/shares/link")
+    res2 = requests.get(f"{url_prefix}/api/v1/shares/link")
+    assert (
+        res2.status_code == 404
+    ), f"Expected 404 from downstream routing, got {res2.status_code}. Response: {res2.text}"
+
+
 def test_admin_pagination_clamping(url_prefix):
     # 1. Register and promote admin user
     user = generate_random_user()
@@ -1307,7 +1328,9 @@ def test_admin_pagination_clamping(url_prefix):
     }
 
     # 5. Verify default page sizes (should be 25)
-    users_default = requests.get(f"{url_prefix}/api/v1/admin/users", headers=admin_headers)
+    users_default = requests.get(
+        f"{url_prefix}/api/v1/admin/users", headers=admin_headers
+    )
     assert users_default.status_code == 200
     step_up_token_2 = users_default.headers.get("X-StepUp-Token")
     assert step_up_token_2 is not None
@@ -1387,6 +1410,11 @@ if __name__ == "__main__":
     )
     runner.run_case(
         "Public Link Rate Limiting", test_public_link_rate_limiting, BASE_URL
+    )
+    runner.run_case(
+        "Public Link Rate Limiting Malformed Paths",
+        test_public_link_rate_limiting_malformed,
+        BASE_URL,
     )
     runner.run_case(
         "Admin Pagination Clamping", test_admin_pagination_clamping, BASE_URL
