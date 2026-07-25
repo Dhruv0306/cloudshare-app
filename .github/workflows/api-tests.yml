@@ -47,6 +47,8 @@ jobs:
           echo "CRYPTO_KEK_ALLOW_RAW_PASSPHRASE=true" >> tests/.env.ci
           echo "RATE_LIMIT_REDIS_HOST=cache-ratelimit" >> tests/.env.ci
           echo "RATE_LIMIT_REDIS_PORT=6379" >> tests/.env.ci
+          echo "SPRING_DATA_WEB_PAGEABLE_MAX_PAGE_SIZE=100" >> tests/.env.ci
+          echo "SPRING_DATA_WEB_PAGEABLE_ONE_INDEXED_PARAMETERS=false" >> tests/.env.ci
 
       - name: Generate self-signed Nginx certs
         run: bash nginx/ssl/generate-certs.sh
