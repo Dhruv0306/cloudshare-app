@@ -82,6 +82,8 @@ clamav:
 # File Storage Configuration
 storage:
   provider: ${STORAGE_PROVIDER:LOCAL} # LOCAL or MINIO
+  max-concurrent-decrypt-downloads: ${STORAGE_MAX_CONCURRENT_DECRYPT_DOWNLOADS:20}
+  decrypt-acquire-timeout-seconds: ${STORAGE_DECRYPT_ACQUIRE_TIMEOUT_SECONDS:10}
   local:
     directory: ${STORAGE_LOCAL_DIRECTORY:./uploads}
   minio:
