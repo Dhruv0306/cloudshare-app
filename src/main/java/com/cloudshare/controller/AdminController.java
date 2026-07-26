@@ -6,6 +6,7 @@ import com.cloudshare.model.AuditLog;
 import com.cloudshare.repository.UserRepository;
 import com.cloudshare.service.AuditLogService;
 import com.cloudshare.scheduler.AuditPartitionScheduler;
+import com.cloudshare.service.ClamAvService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +30,13 @@ public class AdminController {
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
     private final AuditPartitionScheduler auditPartitionScheduler;
+    private final ClamAvService clamAvService;
+
+    @PostMapping("/clamav/limit")
+    public ResponseEntity<ApiResponse<String>> updateClamavConcurrencyLimit(@RequestParam int limit) {
+        clamAvService.setMaxConcurrentScans(limit);
+        return ResponseEntity.ok(ApiResponse.success("ClamAV scan concurrency limit updated to " + limit + " successfully."));
+    }
 
     @PostMapping("/audit-logs/partitions")
     public ResponseEntity<ApiResponse<String>> triggerPartitionMaintenance() {
