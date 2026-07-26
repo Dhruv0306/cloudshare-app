@@ -1,5 +1,6 @@
 package com.cloudshare.service;
 
+import com.cloudshare.exception.ScanCapacityExceededException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -9,21 +10,62 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
 public class ClamAvService {
 
-    @Value("${clamav.host:localhost}")
-    private String host;
+    private final String host;
+    private final int port;
+    private final int timeout;
+    private final int concurrencyTimeoutSeconds;
+    private volatile Semaphore scanConcurrencyLimiter;
 
-    @Value("${clamav.port:3310}")
-    private int port;
+    public ClamAvService(
+            @Value("${clamav.host:localhost}") String host,
+            @Value("${clamav.port:3310}") int port,
+            @Value("${clamav.timeout-ms:10000}") int timeout,
+            @Value("${clamav.max-concurrent-scans:8}") int maxConcurrentScans,
+            @Value("${clamav.concurrency-timeout-seconds:30}") int concurrencyTimeoutSeconds) {
+        this.host = host;
+        this.port = port;
+        this.timeout = timeout;
+        this.concurrencyTimeoutSeconds = concurrencyTimeoutSeconds;
+        this.scanConcurrencyLimiter = new Semaphore(maxConcurrentScans, true);
+    }
 
-    @Value("${clamav.timeout-ms:10000}")
-    private int timeout;
+    public synchronized void setMaxConcurrentScans(int limit) {
+        if (limit < 1) {
+            throw new IllegalArgumentException("Concurrency limit must be at least 1");
+        }
+        log.info("Updating ClamAV scan concurrency limit to {}", limit);
+        this.scanConcurrencyLimiter = new Semaphore(limit, true);
+    }
 
     public boolean scan(InputStream inputStream) throws IOException {
+        Semaphore limiter = this.scanConcurrencyLimiter;
+        boolean acquired = false;
+        try {
+            acquired = limiter.tryAcquire(concurrencyTimeoutSeconds, TimeUnit.SECONDS);
+            if (!acquired) {
+                log.warn("ClamAV scan concurrency limit reached; rejecting upload to protect scan throughput");
+                throw new ScanCapacityExceededException("Virus scanning is temporarily at capacity. Please try again shortly.");
+            }
+            return performSocketScan(inputStream);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Thread was interrupted while waiting for ClamAV scan permit", e);
+            throw new IOException("Virus scanning wait was interrupted", e);
+        } finally {
+            if (acquired) {
+                limiter.release();
+            }
+        }
+    }
+
+    boolean performSocketScan(InputStream inputStream) throws IOException {
         log.debug("Connecting to ClamAV daemon at {}:{}", host, port);
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), timeout);
