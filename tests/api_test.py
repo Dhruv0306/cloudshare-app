@@ -1559,6 +1559,116 @@ def test_clamav_concurrency_limit(url_prefix):
         ), f"Failed to restore ClamAV limit: {restore_res.text}"
 
 
+def test_download_concurrency_limit(url_prefix):
+    # 1. Register and promote admin user
+    user = generate_random_user()
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    assert promote_user_to_admin(user["username"])
+
+    # 2. Login to get fresh JWT containing ROLE_ADMIN
+    login_res = requests.post(
+        f"{url_prefix}/api/v1/auth/login",
+        json={"usernameOrEmail": user["username"], "password": user["password"]},
+    ).json()
+    access_token = login_res["data"]["accessToken"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # 3. Setup and verify MFA to allow step-up
+    setup_res = requests.post(f"{url_prefix}/api/v1/auth/mfa/setup", headers=headers)
+    setup_data = setup_res.json()["data"]
+    secret = setup_data["secret"]
+
+    mfa_code = generate_totp(secret)
+    requests.post(
+        f"{url_prefix}/api/v1/auth/mfa/verify", headers=headers, json={"code": mfa_code}
+    )
+
+    # 4. Perform step-up challenge
+    wait_for_totp_rotation()
+    step_up_code = generate_totp(secret)
+    step_up_res = requests.post(
+        f"{url_prefix}/api/v1/auth/mfa/step-up",
+        headers=headers,
+        json={"code": step_up_code},
+    )
+    assert step_up_res.status_code == 200, f"Step-up failed: {step_up_res.text}"
+    step_up_token = step_up_res.json()["data"]["stepUpToken"]
+
+    admin_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "X-StepUp-Token": step_up_token,
+    }
+
+    # 5. Update downloads limit to 1 dynamically
+    res = requests.post(
+        f"{url_prefix}/api/v1/admin/downloads/limit?limit=1", headers=admin_headers
+    )
+    assert res.status_code == 200, f"Updating downloads limit failed: {res.text}"
+
+    # Rotate the step-up token for the restore call
+    next_step_up_token = res.headers.get("X-StepUp-Token")
+    assert next_step_up_token is not None, "Expected rotated step-up token in header"
+
+    restore_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "X-StepUp-Token": next_step_up_token,
+    }
+
+    # 6. Upload a clean test file
+    content = b"Download concurrency test file content " * 200000
+    files = {"file": ("download_concurrency_test.txt", content, "text/plain")}
+    upload_res = requests.post(
+        f"{url_prefix}/api/v1/files/upload", headers=headers, files=files
+    )
+    assert upload_res.status_code == 201, f"File upload failed: {upload_res.text}"
+    file_id = upload_res.json()["data"]["id"]
+
+    session = requests.Session()
+    session.headers.update(headers)
+
+    # Warm up the connection pool with a single request
+    warmup_res = session.get(f"{url_prefix}/api/v1/files/{file_id}/download")
+    assert warmup_res.status_code == 200
+
+    try:
+        # Submit multiple parallel downloads concurrently using threads
+        import concurrent.futures
+
+        def download_file(index):
+            return session.get(
+                f"{url_prefix}/api/v1/files/{file_id}/download"
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(download_file, i) for i in range(10)]
+            results = [f.result() for f in futures]
+
+        status_codes = {r.status_code for r in results}
+        assert (
+            200 in status_codes
+        ), f"Expected at least one 200 OK. Got status codes: {status_codes}"
+        assert (
+            503 in status_codes
+        ), f"Expected at least one 503 Service Unavailable. Got status codes: {status_codes}"
+
+        failed_res = next(r for r in results if r.status_code == 503)
+        failed_json = failed_res.json()
+        assert failed_json.get("success") is False
+        assert failed_json.get("error", {}).get("code") == "DOWNLOAD_CAPACITY_EXCEEDED"
+        assert "Too many downloads in progress" in failed_json.get(
+            "error", {}
+        ).get("message")
+
+    finally:
+        # Guaranteed restoration of the concurrency limit to 20
+        restore_res = requests.post(
+            f"{url_prefix}/api/v1/admin/downloads/limit?limit=20", headers=restore_headers
+        )
+        assert (
+            restore_res.status_code == 200
+        ), f"Failed to restore downloads limit: {restore_res.text}"
+
+
 # ----------------------------------------------------
 # Runner
 # ----------------------------------------------------
@@ -1596,6 +1706,9 @@ if __name__ == "__main__":
     )
     runner.run_case(
         "ClamAV Scan Concurrency Limit", test_clamav_concurrency_limit, BASE_URL
+    )
+    runner.run_case(
+        "Download Concurrency Limit", test_download_concurrency_limit, BASE_URL
     )
 
     success = runner.summary()
