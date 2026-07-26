@@ -76,6 +76,8 @@ clamav:
   host: ${CLAMAV_HOST:localhost}
   port: ${CLAMAV_PORT:3310}
   timeout-ms: 10000
+  max-concurrent-scans: ${CLAMAV_MAX_CONCURRENT_SCANS:8}
+  concurrency-timeout-seconds: ${CLAMAV_CONCURRENCY_TIMEOUT_SECONDS:30}
 
 # File Storage Configuration
 storage:
