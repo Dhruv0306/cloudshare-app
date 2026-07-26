@@ -1428,27 +1428,135 @@ def test_audit_partition_maintenance(url_prefix):
     }
 
     # 5. Invoke POST /api/v1/admin/audit-logs/partitions
-    res = requests.post(f"{url_prefix}/api/v1/admin/audit-logs/partitions", headers=admin_headers)
+    res = requests.post(
+        f"{url_prefix}/api/v1/admin/audit-logs/partitions", headers=admin_headers
+    )
     assert res.status_code == 200, f"Trigger failed: {res.text}"
     assert res.json()["success"] is True
 
     # 6. Run local docker compose exec check against postgres catalog pg_inherits
     import datetime
     import subprocess
+
     now = datetime.datetime.now(datetime.timezone.utc)
     expected_partition = f"audit_logs_y{now.year}m{now.month:02d}"
 
     cmd = [
-        "docker", "compose", "--env-file", "tests/.env.ci", "exec", "-T", "db",
-        "sh", "-c", "PGPASSWORD=A1000Rocks psql -U cloudshare_user -d cloudshare -t -c \"SELECT child.relname FROM pg_inherits JOIN pg_class parent ON pg_inherits.inhparent = parent.oid JOIN pg_class child ON pg_inherits.inhrelid = child.oid WHERE parent.relname = 'audit_logs';\""
+        "docker",
+        "compose",
+        "--env-file",
+        "tests/.env.ci",
+        "exec",
+        "-T",
+        "db",
+        "sh",
+        "-c",
+        "PGPASSWORD=A1000Rocks psql -U cloudshare_user -d cloudshare -t -c \"SELECT child.relname FROM pg_inherits JOIN pg_class parent ON pg_inherits.inhparent = parent.oid JOIN pg_class child ON pg_inherits.inhrelid = child.oid WHERE parent.relname = 'audit_logs';\"",
     ]
-    
+
     result = subprocess.run(cmd, capture_output=True, text=True)
     assert result.returncode == 0, f"psql execution failed: {result.stderr}"
-    
-    partitions = [p.strip() for p in result.stdout.split('\n') if p.strip()]
-    assert expected_partition in partitions, f"Expected partition {expected_partition} not found in PostgreSQL partition list: {partitions}"
-    print(f"PostgreSQL Partition Validation Successful. Found: {partitions}")
+
+    partitions = [p.strip() for p in result.stdout.split("\n") if p.strip()]
+    assert (
+        expected_partition in partitions
+    ), f"Expected partition {expected_partition} not found in PostgreSQL partition list: {partitions}"
+
+
+def test_clamav_concurrency_limit(url_prefix):
+    # 1. Register and promote admin user
+    user = generate_random_user()
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    assert promote_user_to_admin(user["username"])
+
+    # 2. Login to get fresh JWT containing ROLE_ADMIN
+    login_res = requests.post(
+        f"{url_prefix}/api/v1/auth/login",
+        json={"usernameOrEmail": user["username"], "password": user["password"]},
+    ).json()
+    access_token = login_res["data"]["accessToken"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # 3. Setup and verify MFA to allow step-up
+    setup_res = requests.post(f"{url_prefix}/api/v1/auth/mfa/setup", headers=headers)
+    setup_data = setup_res.json()["data"]
+    secret = setup_data["secret"]
+
+    mfa_code = generate_totp(secret)
+    requests.post(
+        f"{url_prefix}/api/v1/auth/mfa/verify", headers=headers, json={"code": mfa_code}
+    )
+
+    # 4. Perform step-up challenge
+    wait_for_totp_rotation()
+    step_up_code = generate_totp(secret)
+    step_up_res = requests.post(
+        f"{url_prefix}/api/v1/auth/mfa/step-up",
+        headers=headers,
+        json={"code": step_up_code},
+    )
+    assert step_up_res.status_code == 200, f"Step-up failed: {step_up_res.text}"
+    step_up_token = step_up_res.json()["data"]["stepUpToken"]
+
+    admin_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "X-StepUp-Token": step_up_token,
+    }
+
+    # 5. Update ClamAV limit to 1 dynamically
+    res = requests.post(
+        f"{url_prefix}/api/v1/admin/clamav/limit?limit=1", headers=admin_headers
+    )
+    assert res.status_code == 200, f"Updating ClamAV limit failed: {res.text}"
+
+    # Rotate the step-up token for the restore call
+    next_step_up_token = res.headers.get("X-StepUp-Token")
+    assert next_step_up_token is not None, "Expected rotated step-up token in header"
+
+    restore_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "X-StepUp-Token": next_step_up_token,
+    }
+
+    try:
+        # Submit multiple parallel uploads concurrently using threads
+        import concurrent.futures
+
+        def upload_file(index):
+            content = f"Parallel upload test file content {index}".encode()
+            files = {"file": (f"parallel_{index}.txt", content, "text/plain")}
+            return requests.post(
+                f"{url_prefix}/api/v1/files/upload", headers=headers, files=files
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(upload_file, i) for i in range(5)]
+            results = [f.result() for f in futures]
+
+        status_codes = {r.status_code for r in results}
+        assert (
+            201 in status_codes
+        ), f"Expected at least one 201 Created. Got status codes: {status_codes}"
+        assert (
+            503 in status_codes
+        ), f"Expected at least one 503 Service Unavailable. Got status codes: {status_codes}"
+
+        failed_res = next(r for r in results if r.status_code == 503)
+        failed_json = failed_res.json()
+        assert failed_json.get("success") is False
+        assert failed_json.get("error", {}).get("code") == "SCAN_CAPACITY_EXCEEDED"
+        assert "Virus scanning is temporarily at capacity" in failed_json.get(
+            "error", {}
+        ).get("message")
+
+    finally:
+        # Guaranteed restoration of the concurrency limit to 8
+        restore_res = requests.post(
+            f"{url_prefix}/api/v1/admin/clamav/limit?limit=8", headers=restore_headers
+        )
+        assert (
+            restore_res.status_code == 200
+        ), f"Failed to restore ClamAV limit: {restore_res.text}"
 
 
 # ----------------------------------------------------
@@ -1485,6 +1593,9 @@ if __name__ == "__main__":
     )
     runner.run_case(
         "Audit Log Partition Maintenance", test_audit_partition_maintenance, BASE_URL
+    )
+    runner.run_case(
+        "ClamAV Scan Concurrency Limit", test_clamav_concurrency_limit, BASE_URL
     )
 
     success = runner.summary()

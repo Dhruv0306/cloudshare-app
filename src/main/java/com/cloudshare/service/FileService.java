@@ -5,6 +5,7 @@ import com.cloudshare.dto.SharedFileResponse;
 import com.cloudshare.exception.ResourceNotFoundException;
 import com.cloudshare.exception.UnsupportedMediaTypeException;
 import com.cloudshare.exception.VirusDetectedException;
+import com.cloudshare.exception.ScanCapacityExceededException;
 import com.cloudshare.model.FileMetadata;
 import com.cloudshare.model.FileShare;
 import com.cloudshare.model.PermissionType;
@@ -208,7 +209,7 @@ public class FileService {
 
             return mapToFileResponse(savedMetadata);
 
-        } catch (VirusDetectedException | UnsupportedMediaTypeException e) {
+        } catch (VirusDetectedException | UnsupportedMediaTypeException | ScanCapacityExceededException e) {
             throw e;
         } catch (Exception e) {
             log.error("Internal error during file upload pipeline execution", e);
