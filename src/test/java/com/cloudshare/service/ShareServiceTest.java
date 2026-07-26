@@ -53,15 +53,18 @@ class ShareServiceTest {
         private StringRedisTemplate cacheRedisTemplate;
         @Mock
         private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
+        @Mock
+        private DownloadConcurrencyLimiter downloadConcurrencyLimiter;
 
         private ShareService shareService;
 
         @BeforeEach
         void setUp() {
+                lenient().when(downloadConcurrencyLimiter.getSemaphore()).thenReturn(new java.util.concurrent.Semaphore(20, true));
                 shareService = new ShareService(
                                 fileShareRepository, shareLinkRepository, fileRepository, userRepository,
                                 passwordEncoder, auditLogService, encryptionService, storageService,
-                                cacheRedisTemplate);
+                                cacheRedisTemplate, downloadConcurrencyLimiter, 10);
         }
 
         @Test

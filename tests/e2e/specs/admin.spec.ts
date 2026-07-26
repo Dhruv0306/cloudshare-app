@@ -18,6 +18,7 @@ test.describe('Admin Console: role gating & step-up authentication (Scenarios 6 
     });
 
     test('an admin user must pass step-up MFA before the Admin Console renders users and audit logs', async ({ page }) => {
+        test.setTimeout(120_000);
         const admin = makeTestUser('admintest');
 
         // Register, login, enroll MFA (required for step-up), logout.

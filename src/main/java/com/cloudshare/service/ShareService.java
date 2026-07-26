@@ -3,7 +3,10 @@ package com.cloudshare.service;
 import com.cloudshare.dto.*;
 import com.cloudshare.exception.AccessDeniedException;
 import com.cloudshare.exception.ResourceNotFoundException;
+import com.cloudshare.exception.DownloadCapacityExceededException;
 import com.cloudshare.model.*;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import com.cloudshare.repository.FileRepository;
 import com.cloudshare.repository.FileShareRepository;
 import com.cloudshare.repository.ShareLinkRepository;
@@ -64,6 +67,8 @@ public class ShareService {
     private final EncryptionService encryptionService;
     private final StorageService storageService;
     private final StringRedisTemplate cacheRedisTemplate;
+    private final DownloadConcurrencyLimiter downloadConcurrencyLimiter;
+    private final int decryptAcquireTimeoutSeconds;
 
     private static final String BASE62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -80,7 +85,9 @@ public class ShareService {
             AuditLogService auditLogService,
             EncryptionService encryptionService,
             StorageService storageService,
-            @Qualifier("redisTemplate") StringRedisTemplate cacheRedisTemplate) {
+            @Qualifier("redisTemplate") StringRedisTemplate cacheRedisTemplate,
+            DownloadConcurrencyLimiter downloadConcurrencyLimiter,
+            @Value("${storage.decrypt-acquire-timeout-seconds:10}") int decryptAcquireTimeoutSeconds) {
         this.fileShareRepository = fileShareRepository;
         this.shareLinkRepository = shareLinkRepository;
         this.fileRepository = fileRepository;
@@ -90,6 +97,8 @@ public class ShareService {
         this.encryptionService = encryptionService;
         this.storageService = storageService;
         this.cacheRedisTemplate = cacheRedisTemplate;
+        this.downloadConcurrencyLimiter = downloadConcurrencyLimiter;
+        this.decryptAcquireTimeoutSeconds = decryptAcquireTimeoutSeconds;
     }
 
     @Transactional
@@ -268,8 +277,15 @@ public class ShareService {
         }
 
         // 6. Decrypt and stream file
+        Semaphore limiter = this.downloadConcurrencyLimiter.getSemaphore();
+        boolean acquired = false;
         Path decryptedTempFile = null;
         try {
+            acquired = limiter.tryAcquire(decryptAcquireTimeoutSeconds, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new DownloadCapacityExceededException("Too many downloads in progress. Please try again shortly.");
+            }
+
             SecretKey fek = encryptionService.unwrapFek(file.getEncryptedFek(), file.getKekVersion());
             byte[] iv = Base64.getDecoder().decode(file.getIvGcm());
 
@@ -278,7 +294,25 @@ public class ShareService {
                     OutputStream decryptedOut = Files.newOutputStream(decryptedTempFile)) {
                 encryptionService.decryptStreamFully(encryptedStream, decryptedOut, fek, iv);
             }
+        } catch (DownloadCapacityExceededException e) {
+            throw e;
+        } catch (Exception e) {
+            if (decryptedTempFile != null) {
+                try {
+                    Files.deleteIfExists(decryptedTempFile);
+                } catch (IOException ioException) {
+                    log.warn("Failed to delete temporary public download file: {}", decryptedTempFile, ioException);
+                }
+            }
+            log.error("Failed to decrypt public file: {}", file.getId(), e);
+            throw new RuntimeException("Error occurred while processing file download", e);
+        } finally {
+            if (acquired) {
+                limiter.release();
+            }
+        }
 
+        try {
             InputStream decryptedStream = new DeleteOnCloseInputStream(
                     Files.newInputStream(decryptedTempFile),
                     decryptedTempFile);
@@ -297,7 +331,6 @@ public class ShareService {
                     file.getOriginalFilename(),
                     file.getMimeType(),
                     file.getFileSizeBytes());
-
         } catch (Exception e) {
             if (decryptedTempFile != null) {
                 try {

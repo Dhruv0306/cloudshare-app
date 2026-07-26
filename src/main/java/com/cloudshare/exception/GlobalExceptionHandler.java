@@ -122,6 +122,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
     }
 
+    @ExceptionHandler(DownloadCapacityExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDownloadCapacityExceededException(DownloadCapacityExceededException ex) {
+        log.warn("Download capacity exceeded: {}", ex.getMessage());
+        ApiResponse<Void> response = ApiResponse.error("DOWNLOAD_CAPACITY_EXCEEDED", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleAllExceptions(Exception ex) {
         log.error("Unhandled system exception", ex);

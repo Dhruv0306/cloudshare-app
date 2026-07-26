@@ -10,6 +10,7 @@ import com.cloudshare.security.JwtTokenProvider;
 import com.cloudshare.security.ClientIpResolver;
 import com.cloudshare.service.AuditLogService;
 import com.cloudshare.service.ClamAvService;
+import com.cloudshare.service.DownloadConcurrencyLimiter;
 import com.cloudshare.service.RateLimiterService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,6 +67,9 @@ class AdminControllerTest {
 
     @MockitoBean
     private ClamAvService clamAvService;
+
+    @MockitoBean
+    private DownloadConcurrencyLimiter downloadConcurrencyLimiter;
 
     @org.junit.jupiter.api.BeforeEach
     @SuppressWarnings("unchecked")
@@ -218,5 +222,19 @@ class AdminControllerTest {
                 .andExpect(jsonPath("$.data").value("ClamAV scan concurrency limit updated to 5 successfully."));
 
         verify(clamAvService).setMaxConcurrentScans(5);
+    }
+
+    @Test
+    void updateDownloadConcurrencyLimit_success() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/admin/downloads/limit")
+                        .param("limit", "15")
+                        .header("X-StepUp-Token", "valid-token")
+                        .with(user(getMockAdminPrincipal()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").value("Download concurrency limit updated to 15 successfully."));
+
+        verify(downloadConcurrencyLimiter).setMaxConcurrentDownloads(15);
     }
 }
