@@ -6,12 +6,15 @@ import com.cloudshare.exception.ResourceNotFoundException;
 import com.cloudshare.exception.UnsupportedMediaTypeException;
 import com.cloudshare.exception.VirusDetectedException;
 import com.cloudshare.exception.ScanCapacityExceededException;
+import com.cloudshare.exception.DownloadCapacityExceededException;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import com.cloudshare.model.FileMetadata;
 import com.cloudshare.model.FileShare;
 import com.cloudshare.model.PermissionType;
 import com.cloudshare.repository.FileRepository;
 import com.cloudshare.repository.FileShareRepository;
-import lombok.Value;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -74,6 +77,8 @@ public class FileService {
     private final AuditLogService auditLogService;
     private final FileShareRepository fileShareRepository;
     private final StringRedisTemplate cacheRedisTemplate;
+    private final DownloadConcurrencyLimiter downloadConcurrencyLimiter;
+    private final int decryptAcquireTimeoutSeconds;
 
     public FileService(
             FileRepository fileRepository,
@@ -82,7 +87,9 @@ public class FileService {
             EncryptionService encryptionService,
             AuditLogService auditLogService,
             FileShareRepository fileShareRepository,
-            @Qualifier("redisTemplate") StringRedisTemplate cacheRedisTemplate) {
+            @Qualifier("redisTemplate") StringRedisTemplate cacheRedisTemplate,
+            DownloadConcurrencyLimiter downloadConcurrencyLimiter,
+            @Value("${storage.decrypt-acquire-timeout-seconds:10}") int decryptAcquireTimeoutSeconds) {
         this.fileRepository = fileRepository;
         this.storageService = storageService;
         this.clamAvService = clamAvService;
@@ -90,6 +97,8 @@ public class FileService {
         this.auditLogService = auditLogService;
         this.fileShareRepository = fileShareRepository;
         this.cacheRedisTemplate = cacheRedisTemplate;
+        this.downloadConcurrencyLimiter = downloadConcurrencyLimiter;
+        this.decryptAcquireTimeoutSeconds = decryptAcquireTimeoutSeconds;
     }
 
     private final Tika tika = new Tika();
@@ -231,8 +240,15 @@ public class FileService {
         FileMetadata metadata = fileRepository.findAccessibleFile(fileId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("File not found or access denied"));
 
+        Semaphore limiter = this.downloadConcurrencyLimiter.getSemaphore();
+        boolean acquired = false;
         Path decryptedTempFile = null;
         try {
+            acquired = limiter.tryAcquire(decryptAcquireTimeoutSeconds, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new DownloadCapacityExceededException("Too many downloads in progress. Please try again shortly.");
+            }
+
             // Unwrap FEK with KEK using AESWrap
             SecretKey fek = encryptionService.unwrapFek(metadata.getEncryptedFek(), metadata.getKekVersion());
             byte[] iv = Base64.getDecoder().decode(metadata.getIvGcm());
@@ -243,7 +259,25 @@ public class FileService {
                  OutputStream decryptedOut = Files.newOutputStream(decryptedTempFile)) {
                 encryptionService.decryptStreamFully(encryptedStream, decryptedOut, fek, iv);
             }
+        } catch (DownloadCapacityExceededException e) {
+            throw e;
+        } catch (Exception e) {
+            if (decryptedTempFile != null) {
+                try {
+                    Files.deleteIfExists(decryptedTempFile);
+                } catch (IOException ioException) {
+                    log.warn("Failed to delete temporary download file: {}", decryptedTempFile, ioException);
+                }
+            }
+            log.error("Failed to retrieve or decrypt file for download: {}", fileId, e);
+            throw new RuntimeException("Error occurred while processing file download", e);
+        } finally {
+            if (acquired) {
+                limiter.release();
+            }
+        }
 
+        try {
             InputStream decryptedStream = new DeleteOnCloseInputStream(
                     Files.newInputStream(decryptedTempFile), 
                     decryptedTempFile
@@ -567,7 +601,7 @@ public class FileService {
         }
     }
 
-    @Value
+    @lombok.Value
     public static class DecryptedFileStream {
         InputStream inputStream;
         String filename;
