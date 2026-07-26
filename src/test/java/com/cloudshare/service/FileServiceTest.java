@@ -62,10 +62,14 @@ class FileServiceTest {
     @Mock
     private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
 
+    @Mock
+    private DownloadConcurrencyLimiter downloadConcurrencyLimiter;
+
     private FileService fileService;
 
     @BeforeEach
     void setUp() {
+        lenient().when(downloadConcurrencyLimiter.getSemaphore()).thenReturn(new java.util.concurrent.Semaphore(20, true));
         fileService = new FileService(
             fileRepository, 
             storageService, 
@@ -73,7 +77,9 @@ class FileServiceTest {
             encryptionService, 
             auditLogService,
             fileShareRepository,
-            cacheRedisTemplate
+            cacheRedisTemplate,
+            downloadConcurrencyLimiter,
+            10
         );
     }
 
