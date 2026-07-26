@@ -51,6 +51,10 @@ jobs:
           echo "SPRING_DATA_WEB_PAGEABLE_ONE_INDEXED_PARAMETERS=false" >> tests/.env.ci
           echo "CLAMAV_MAX_CONCURRENT_SCANS=8" >> tests/.env.ci
           echo "CLAMAV_CONCURRENCY_TIMEOUT_SECONDS=0" >> tests/.env.ci
+          echo "JWT_STEP_UP_SESSION_MAX=900" >> tests/.env.ci
+          echo "PASSWORD_BREACH_CHECK_TIMEOUT_MS=3000" >> tests/.env.ci
+          echo "STORAGE_MAX_CONCURRENT_DECRYPT_DOWNLOADS=20" >> tests/.env.ci
+          echo "STORAGE_DECRYPT_ACQUIRE_TIMEOUT_SECONDS=0" >> tests/.env.ci
 
       - name: Generate self-signed Nginx certs
         run: bash nginx/ssl/generate-certs.sh
