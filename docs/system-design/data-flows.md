@@ -2,6 +2,8 @@
 
 This document contains step-by-step sequence diagrams showing the interaction between the Client, Spring Boot Application, Spring Security, Redis, ClamAV, the Database, and the Storage backend for key system operations.
 
+> **Note:** Sections 5 and 6 below reflect the **current v1.2.0 behavior** for upload and public-link download, including the fail-closed AV scan, Tika MIME verification, and the enumeration-safe `/info` + atomic download-limit check introduced during the security audit remediation cycle. Sections 2 and 4 predate that cycle and are kept for historical reference — consider consolidating or removing them once verified against the current codebase.
+
 ---
 
 ## 1. User Authentication & Session Setup
@@ -170,5 +172,85 @@ sequenceDiagram
         Storage-->>Service: Encrypted stream
         Service->>Crypto: Decrypt stream on-the-fly (AES-GCM)
         Service-->>Guest: HTTP 200 OK + Attachment Stream
+    end
+```
+
+---
+
+## 5. Encrypted Upload with AV Scan (Current — v1.2.0)
+
+This is the up-to-date upload flow, showing the fail-closed ClamAV gate, Tika-verified MIME type, and per-file envelope encryption via the active KEK version.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client
+    participant Nginx as Nginx Gateway
+    participant App as Spring Boot App
+    participant Tika as Apache Tika
+    participant AV as ClamAV
+    participant Crypto as EncryptionService
+    participant Store as MinIO / Local FS
+    participant DB as PostgreSQL
+
+    Client->>Nginx: POST /api/v1/files/upload (multipart, Bearer JWT)
+    Nginx->>App: proxy_pass
+    App->>App: JwtAuthenticationFilter validates access token
+    App->>App: RateLimitingFilter checks RATE_LIMIT_UPLOAD (cache-ratelimit)
+    App->>Tika: Detect true MIME type (magic bytes)
+    Tika-->>App: Verified content type
+    App->>AV: Stream file bytes for scan (bounded by CLAMAV_MAX_CONCURRENT_SCANS)
+    AV-->>App: CLEAN / INFECTED
+    alt Infected or scan timeout
+        App-->>Client: 422 Rejected (fail-closed)
+    else Clean
+        App->>Crypto: Generate per-file AES-256-GCM FEK
+        Crypto->>Crypto: Wrap FEK with active KEK (AESWrap)
+        App->>Store: Upload ciphertext stream
+        Store-->>App: Object reference
+        App->>DB: Persist FileMetadata (wrapped FEK, KEK version, hash, size)
+        App-->>Client: 201 Created (file metadata)
+    end
+```
+
+---
+
+## 6. Public Share Link Download (Current — v1.2.0, Enumeration-Safe)
+
+This is the up-to-date public link flow, reflecting the audit-driven `/info` + `/download` split (which prevents share-code enumeration) and the atomic, TOCTOU-hardened download-limit check.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Guest as Guest (no account)
+    participant Nginx as Nginx Gateway
+    participant App as Spring Boot App
+    participant RedisSec as cache-security
+    participant DB as PostgreSQL
+    participant Store as MinIO / Local FS
+    participant Crypto as EncryptionService
+
+    Guest->>Nginx: GET /api/v1/shares/link/{code}/info
+    Nginx->>App: proxy_pass
+    App->>DB: Look up ShareLink by code
+    alt Not found, expired, or invalid
+        App-->>Guest: Generic "unavailable" response (no signal leak)
+    else Valid
+        App-->>Guest: passwordRequired: true/false
+    end
+
+    Guest->>Nginx: GET /api/v1/shares/link/{code}/download (+ password if required)
+    Nginx->>App: proxy_pass
+    App->>DB: Re-fetch ShareLink with row lock / atomic check
+    App->>App: Verify password hash
+    App->>RedisSec: Atomic increment-and-check of download count
+    alt Limit exceeded or password invalid
+        App-->>Guest: Generic rejection (same shape as "not found")
+    else Allowed
+        App->>Store: Fetch ciphertext object
+        App->>Crypto: Unwrap FEK via KEK, decrypt stream
+        Crypto-->>App: Decrypted stream
+        App->>DB: Write audit log entry (download event)
+        App-->>Guest: 200 OK, file stream
     end
 ```
