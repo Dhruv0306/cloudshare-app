@@ -16,7 +16,7 @@ graph TD
         Nginx[Nginx Reverse Proxy / WAF]
     end
 
-    subgraph Application Tier (Stateless)
+    subgraph "Application Tier (Stateless)"
         SpringApp1[Spring Boot App Instance 1]
         SpringApp2[Spring Boot App Instance 2]
     end
@@ -27,8 +27,9 @@ graph TD
 
     subgraph Data & Storage Tier
         Postgres[(PostgreSQL Relational DB)]
-        RedisCache[(Redis Cache-Aside Node)]
-        RedisSecurity[(Redis Security Node)]
+        RedisCache[(Redis cache-aside Node<br/>allkeys-lru)]
+        RedisSecurity[(Redis cache-security Node<br/>noeviction)]
+        RedisRateLimit[(Redis cache-ratelimit Node<br/>allkeys-lru)]
         
         %% Pluggable Storage
         subgraph Pluggable Storage Layer
@@ -45,7 +46,8 @@ graph TD
     %% Backend Integrations
     SpringApp1 & SpringApp2 -->|Read/Write Metadata| Postgres
     SpringApp1 & SpringApp2 -->|App Caching| RedisCache
-    SpringApp1 & SpringApp2 -->|Sessions & Rate Limits| RedisSecurity
+    SpringApp1 & SpringApp2 -->|Token Blacklist & MFA Replay Defense| RedisSecurity
+    SpringApp1 & SpringApp2 -->|Sliding-Window Rate Limits| RedisRateLimit
     SpringApp1 & SpringApp2 -->|Synchronous Virus Scan| ClamAV
     
     %% Storage access
@@ -68,9 +70,10 @@ graph TD
 4.  **Security Services (ClamAV):**
     *   A lightweight antivirus daemon exposed via a TCP socket.
     *   Spring Boot streams files to ClamAV during the upload pipeline *before* storing them or saving metadata.
-5.  **Cache & Security Tier (Dual Redis Mappings):**
+5.  **Cache & Security Tier (Triple Redis Mappings):**
     *   **Redis Cache-Aside Node (`cache-aside`):** Stores user metadata, JPA queries, and resource access permissions with LRU eviction policies to prevent database lookup hotspots.
-    *   **Redis Security Node (`cache-security`):** Stores JWT blacklists, active session listings, and rate limiting counters with a strict `noeviction` policy to preserve session and access control integrity.
+    *   **Redis Security Node (`cache-security`):** Stores JWT blacklists, single-use step-up token enforcement, and MFA/TOTP anti-replay tracking with a strict `noeviction` policy to preserve session and access control integrity.
+    *   **Redis Rate-Limit Node (`cache-ratelimit`):** Stores sliding-window rate-limit counters (auth, MFA, upload, public link — per-link and global) on its own `allkeys-lru` instance, introduced in v1.2.0 to isolate high-write rate-limiter traffic from security-critical token state so rate-limiter volume can never trigger OOM-driven failures in unrelated security enforcement paths.
 6.  **Database Tier (PostgreSQL):**
     *   Houses relational schemas for users, credentials, roles, file metadata (names, paths, hash sums, sizes), permissions, and audit logs.
 7.  **Storage Tier (Pluggable):**
