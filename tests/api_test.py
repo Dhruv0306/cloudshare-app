@@ -1441,17 +1441,26 @@ def test_audit_partition_maintenance(url_prefix):
     now = datetime.datetime.now(datetime.timezone.utc)
     expected_partition = f"audit_logs_y{now.year}m{now.month:02d}"
 
+    sql = (
+        "SELECT child.relname FROM pg_inherits "
+        "JOIN pg_class parent ON pg_inherits.inhparent = parent.oid "
+        "JOIN pg_class child ON pg_inherits.inhrelid = child.oid "
+        "WHERE parent.relname = 'audit_logs';"
+    )
     cmd = [
         "docker",
         "compose",
-        "--env-file",
-        "tests/.env.ci",
         "exec",
         "-T",
         "db",
-        "sh",
+        "psql",
+        "-U",
+        "cloudshare_user",
+        "-d",
+        "cloudshare",
+        "-t",
         "-c",
-        "PGPASSWORD=A1000Rocks psql -U cloudshare_user -d cloudshare -t -c \"SELECT child.relname FROM pg_inherits JOIN pg_class parent ON pg_inherits.inhparent = parent.oid JOIN pg_class child ON pg_inherits.inhrelid = child.oid WHERE parent.relname = 'audit_logs';\"",
+        sql,
     ]
 
     result = subprocess.run(cmd, capture_output=True, text=True)
