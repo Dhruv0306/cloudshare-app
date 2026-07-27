@@ -10,31 +10,33 @@ CloudShare is designed as a secure, stateless, multi-tier web application. To en
 
 ```mermaid
 graph TD
-    Client[Client Browser / JS App]
-    
-    subgraph Edge & Security Layer
-        Nginx[Nginx Reverse Proxy / WAF]
+    Client(["🖥️ Client Browser / JS App"])
+
+    subgraph Edge["🌐 Edge & Security Layer"]
+        Nginx["Nginx Reverse Proxy / WAF"]
     end
 
-    subgraph "Application Tier (Stateless)"
-        SpringApp1[Spring Boot App Instance 1]
-        SpringApp2[Spring Boot App Instance 2]
+    subgraph AppTier["⚙️ Application Tier (Stateless)"]
+        SpringApp1["Spring Boot App Instance 1"]
+        SpringApp2["Spring Boot App Instance 2"]
     end
 
-    subgraph Security Services
-        ClamAV[ClamAV Virus Scanner Daemon]
+    subgraph SecuritySvc["🛡️ Security Services"]
+        ClamAV["ClamAV Virus Scanner Daemon"]
     end
 
-    subgraph Data & Storage Tier
-        Postgres[(PostgreSQL Relational DB)]
-        RedisCache[(Redis cache-aside Node<br/>allkeys-lru)]
-        RedisSecurity[(Redis cache-security Node<br/>noeviction)]
-        RedisRateLimit[(Redis cache-ratelimit Node<br/>allkeys-lru)]
-        
-        %% Pluggable Storage
-        subgraph Pluggable Storage Layer
-            MinIO[(Self-Hosted MinIO S3 Container)]
-            LocalStorage[(Local Host Filesystem)]
+    subgraph DataTier["💾 Data & Storage Tier"]
+        Postgres[("PostgreSQL Relational DB")]
+
+        subgraph RedisTier["Redis Tier — 3 isolated instances"]
+            RedisCache[("cache-aside\nallkeys-lru")]
+            RedisSecurity[("cache-security\nnoeviction")]
+            RedisRateLimit[("cache-ratelimit\nallkeys-lru")]
+        end
+
+        subgraph StorageLayer["Pluggable Storage Layer"]
+            MinIO[("Self-Hosted MinIO S3 Container")]
+            LocalStorage[("Local Host Filesystem")]
         end
     end
 
@@ -42,17 +44,45 @@ graph TD
     Client -->|HTTPS / TLS 1.3| Nginx
     Nginx -->|Load Balancing / HTTP| SpringApp1
     Nginx -->|Load Balancing / HTTP| SpringApp2
-    
+
     %% Backend Integrations
     SpringApp1 & SpringApp2 -->|Read/Write Metadata| Postgres
     SpringApp1 & SpringApp2 -->|App Caching| RedisCache
     SpringApp1 & SpringApp2 -->|Token Blacklist & MFA Replay Defense| RedisSecurity
     SpringApp1 & SpringApp2 -->|Sliding-Window Rate Limits| RedisRateLimit
     SpringApp1 & SpringApp2 -->|Synchronous Virus Scan| ClamAV
-    
+
     %% Storage access
     SpringApp1 & SpringApp2 -->|Write Files / Direct Disk I/O| LocalStorage
     SpringApp1 & SpringApp2 -->|S3 API / Upload & Download| MinIO
+
+    %% Styling
+    classDef client fill:#eef2ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b
+    classDef edge fill:#0f766e,stroke:#134e4a,stroke-width:2px,color:#f0fdfa
+    classDef app fill:#1d4ed8,stroke:#1e3a8a,stroke-width:2px,color:#eff6ff
+    classDef security fill:#b91c1c,stroke:#7f1d1d,stroke-width:2px,color:#fef2f2
+    classDef db fill:#7c3aed,stroke:#4c1d95,stroke-width:2px,color:#f5f3ff
+    classDef cacheAside fill:#2563eb,stroke:#1e3a8a,stroke-width:2px,color:#eff6ff
+    classDef cacheSecurity fill:#dc2626,stroke:#7f1d1d,stroke-width:2px,color:#fef2f2
+    classDef cacheRate fill:#d97706,stroke:#78350f,stroke-width:2px,color:#fffbeb
+    classDef storage fill:#059669,stroke:#065f46,stroke-width:2px,color:#ecfdf5
+
+    class Client client
+    class Nginx edge
+    class SpringApp1,SpringApp2 app
+    class ClamAV security
+    class Postgres db
+    class RedisCache cacheAside
+    class RedisSecurity cacheSecurity
+    class RedisRateLimit cacheRate
+    class MinIO,LocalStorage storage
+
+    style Edge fill:#f0fdfa,stroke:#0f766e,stroke-width:1px
+    style AppTier fill:#eff6ff,stroke:#1d4ed8,stroke-width:1px
+    style SecuritySvc fill:#fef2f2,stroke:#b91c1c,stroke-width:1px
+    style DataTier fill:#faf5ff,stroke:#7c3aed,stroke-width:1px
+    style RedisTier fill:#fffbeb,stroke:#d97706,stroke-width:1px,stroke-dasharray: 3 3
+    style StorageLayer fill:#ecfdf5,stroke:#059669,stroke-width:1px,stroke-dasharray: 3 3
 ```
 
 ### Component Breakdown
