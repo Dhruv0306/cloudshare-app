@@ -28,6 +28,8 @@ storage:
 security:
   jwt:
     secret: AValid64ByteLongDummyJWTSecretKeyForTestsThatIsAtLeast512BitsLong
+  redis:
+    require-password: false
 
 crypto:
   master-kek: test_crypto_master_kek_32_bytes_x

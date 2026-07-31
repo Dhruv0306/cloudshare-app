@@ -27,10 +27,13 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
       - SPRING_DATA_REDIS_HOST=cache-aside
       - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATA_REDIS_PASSWORD=${REDIS_CACHE_PASSWORD}
       - SECURITY_REDIS_HOST=cache-security
       - SECURITY_REDIS_PORT=6379
+      - SECURITY_REDIS_PASSWORD=${REDIS_SECURITY_PASSWORD}
       - RATE_LIMIT_REDIS_HOST=cache-ratelimit
       - RATE_LIMIT_REDIS_PORT=6379
+      - RATE_LIMIT_REDIS_PASSWORD=${REDIS_RATELIMIT_PASSWORD}
       - CLAMAV_HOST=clamav
       - CLAMAV_PORT=3310
       - STORAGE_PROVIDER=MINIO
@@ -73,21 +76,21 @@ services:
   # Redis Cache-Aside Instance
   cache-aside:
     image: redis:7-alpine
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_CACHE_PASSWORD}
     volumes:
       - redisdata-aside:/data
 
   # Redis Security Instance (Blacklists, Token Families)
   cache-security:
     image: redis:7-alpine
-    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --requirepass ${REDIS_SECURITY_PASSWORD}
     volumes:
       - redisdata-security:/data
 
   # Redis Rate Limiting Instance (Ephemeral sliding windows)
   cache-ratelimit:
     image: redis:7-alpine
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_RATELIMIT_PASSWORD}
 
   # ClamAV Virus Scanner Daemon
   clamav:
