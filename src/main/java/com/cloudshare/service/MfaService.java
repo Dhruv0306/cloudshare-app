@@ -17,6 +17,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
 @Service
@@ -72,9 +75,21 @@ public class MfaService {
             if (!codeVerifier.isValidCode(secret, trimmedCode)) {
                 return false;
             }
-            long timeStep = timeProvider.getTime() / 30;
-            String usedKey = "mfa:used:" + userId + ":" + timeStep;
 
+            // Bind the single-use guard to the *code value itself* (hashed, not the
+            // raw code, to avoid persisting live OTPs in Redis), not to "now / 30".
+            // Keying on the current time-step is unsafe: DefaultCodeVerifier accepts
+            // a +/-1 step discrepancy window by default, so a code valid for step T
+            // can still validate during step T+1, at which point "now/30" computes a
+            // *different* Redis key than the one claimed during step T — allowing the
+            // same code to be replayed once per adjacent window. Keying on the code's
+            // own value closes this regardless of which step in the discrepancy
+            // window it was accepted under.
+            String usedKey = "mfa:used:" + userId + ":" + sha256Hex(trimmedCode);
+
+            // TTL must cover the verifier's full discrepancy window (default +/-1
+            // step = 3 * 30s = 90s) so a code can't be replayed just after the key
+            // expires but while the code is still otherwise valid.
             Boolean firstUse;
             try {
                 firstUse = securityRedisTemplate.opsForValue()
@@ -85,13 +100,27 @@ public class MfaService {
             }
 
             if (!Boolean.TRUE.equals(firstUse)) {
-                log.warn("Rejected replayed TOTP code for user {} at time-step {}", userId, timeStep);
+                log.warn("Rejected replayed TOTP code for user {}", userId);
                 return false;
             }
             return true;
         } catch (Exception e) {
             log.warn("Error verifying MFA code", e);
             return false;
+        }
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
         }
     }
 }

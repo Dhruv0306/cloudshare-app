@@ -110,7 +110,12 @@ logging:
   level:
     org.springframework.security: INFO
     org.flywaydb: INFO
-    com.cloudshare: DEBUG
+    # DEBUG is intentionally NOT the base/default level for com.cloudshare: several
+    # service classes log identifiers and correlation data at DEBUG, and DEBUG-level
+    # logging should be an explicit, reviewed opt-in per environment (e.g. via
+    # application-dev.yml), not the value shipped for every environment including
+    # production.
+    com.cloudshare: INFO
     org.springframework.data.repository.config: WARN
 
 management:

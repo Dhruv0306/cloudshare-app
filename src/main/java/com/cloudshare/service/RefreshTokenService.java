@@ -49,7 +49,8 @@ public class RefreshTokenService {
         double cutoff = (double) (System.currentTimeMillis() - (refreshExpirationSeconds * 1000L));
         securityRedisTemplate.opsForZSet().removeRangeByScore(familyKey, Double.NEGATIVE_INFINITY, cutoff);
 
-        log.debug("Created refresh token {} for user {}", tokenId, userId);
+        // Never log the raw token value — it is the bearer secret itself (CWE-532).
+        log.debug("Created refresh token for user {}", userId);
         return tokenId;
     }
 
@@ -72,7 +73,7 @@ public class RefreshTokenService {
 
         if (userIdStr != null) {
             UUID userId = UUID.fromString(userIdStr);
-            log.debug("Valid refresh token rotation request for token {} (user {})", oldTokenId, userId);
+            log.debug("Valid refresh token rotation request for user {}", userId);
 
             // Note: we keep oldTokenId in the family set and metadata to detect reuse
 
@@ -132,7 +133,7 @@ public class RefreshTokenService {
             securityRedisTemplate.delete(activeKey);
             securityRedisTemplate.delete("refresh:metadata:" + tokenId);
             securityRedisTemplate.opsForZSet().remove("refresh:family:" + userId, tokenId);
-            log.debug("Revoked refresh token {}", tokenId);
+            log.debug("Revoked refresh token for user {}", userId);
         }
     }
 

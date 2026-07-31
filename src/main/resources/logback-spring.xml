@@ -46,6 +46,9 @@
         </root>
         
         <logger name="org.springframework.security" level="WARN"/>
-        <logger name="com.cloudshare" level="DEBUG"/>
+        <!-- DEBUG for com.cloudshare belongs to the "dev" profile only (see above) —
+             several service classes log identifiers and correlation data at DEBUG
+             that shouldn't ship at DEBUG in the production/default profile. -->
+        <logger name="com.cloudshare" level="INFO"/>
     </springProfile>
 </configuration>
