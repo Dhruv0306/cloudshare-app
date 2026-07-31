@@ -46,6 +46,18 @@ public class SecretsStartupValidator {
     @Value("${crypto.master-kek:}")
     private String masterKek;
 
+    @Value("${spring.data.redis.password:}")
+    private String cacheRedisPassword;
+
+    @Value("${security.redis.password:}")
+    private String securityRedisPassword;
+
+    @Value("${security.rate-limiting.redis.password:}")
+    private String rateLimitRedisPassword;
+
+    @Value("${security.redis.require-password:true}")
+    private boolean requireRedisPassword;
+
     private static final Set<String> FORMER_DEFAULTS = Set.of(
             "StrongDBPassword123!",
             "32ByteSecretKeyForHMACSHA256SignatureAuthenticationOfCloudShareTokens",
@@ -64,8 +76,36 @@ public class SecretsStartupValidator {
         validateSecret("crypto.master-kek", masterKek, 32);
 
         validateKekShape();
+        validateRedisPasswords();
 
         log.info("All application secrets validated successfully.");
+    }
+
+    /**
+     * Fails startup if any Redis instance is unauthenticated, unless explicitly
+     * overridden via {@code security.redis.require-password=false} (e.g. for a
+     * local dev profile relying solely on Docker network isolation). All three
+     * Redis instances hold security-sensitive state (token blacklists, MFA
+     * replay guards, refresh-token families, rate-limit counters).
+     */
+    private void validateRedisPasswords() {
+        if (!requireRedisPassword) {
+            log.warn("security.redis.require-password=false — starting with potentially unauthenticated " +
+                    "Redis connections. This should only be used in local development.");
+            return;
+        }
+        requireNonBlank("spring.data.redis.password", cacheRedisPassword);
+        requireNonBlank("security.redis.password", securityRedisPassword);
+        requireNonBlank("security.rate-limiting.redis.password", rateLimitRedisPassword);
+    }
+
+    private void requireNonBlank(String name, String value) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalStateException(String.format(
+                    "Secret '%s' is required but is blank. Set security.redis.require-password=false only for " +
+                            "local development with network-isolated Redis instances.",
+                    name));
+        }
     }
 
     private void validateKekShape() {
