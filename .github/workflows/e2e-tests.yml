@@ -20,6 +20,9 @@ jobs:
                   CI_DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
                   CI_JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
                   CI_CRYPTO_MASTER_KEK: ${{ secrets.CI_CRYPTO_MASTER_KEK }}
+                  CI_REDIS_CACHE_PASSWORD: ${{ secrets.CI_REDIS_CACHE_PASSWORD }}
+                  CI_REDIS_SECURITY_PASSWORD: ${{ secrets.CI_REDIS_SECURITY_PASSWORD }}
+                  CI_REDIS_RATELIMIT_PASSWORD: ${{ secrets.CI_REDIS_RATELIMIT_PASSWORD }}
               run: |
                   # Same pattern as api-tests.yml: use repo secrets if configured,
                   # otherwise generate secure one-off keys for this run only.
@@ -35,14 +38,34 @@ jobs:
                   CRYPTO_KEK="$CI_CRYPTO_MASTER_KEK"
                   [ -z "$CRYPTO_KEK" ] && CRYPTO_KEK=$(openssl rand -hex 64)
 
+                  REDIS_CACHE_PW="$CI_REDIS_CACHE_PASSWORD"
+                  [ -z "$REDIS_CACHE_PW" ] && REDIS_CACHE_PW=$(openssl rand -hex 32)
+
+                  REDIS_SECURITY_PW="$CI_REDIS_SECURITY_PASSWORD"
+                  [ -z "$REDIS_SECURITY_PW" ] && REDIS_SECURITY_PW=$(openssl rand -hex 32)
+
+                  REDIS_RATELIMIT_PW="$CI_REDIS_RATELIMIT_PASSWORD"
+                  [ -z "$REDIS_RATELIMIT_PW" ] && REDIS_RATELIMIT_PW=$(openssl rand -hex 32)
+
                   echo "SPRING_DATASOURCE_USERNAME=cloudshare_user" > tests/.env.ci
                   echo "SPRING_DATASOURCE_PASSWORD=$DB_PASSWORD" >> tests/.env.ci
+                  echo "SPRING_DATA_REDIS_HOST=cache-aside" >> tests/.env.ci
+                  echo "SPRING_DATA_REDIS_PORT=6379" >> tests/.env.ci
+                  echo "REDIS_CACHE_PASSWORD=$REDIS_CACHE_PW" >> tests/.env.ci
+                  echo "SECURITY_REDIS_HOST=cache-security" >> tests/.env.ci
+                  echo "SECURITY_REDIS_PORT=6379" >> tests/.env.ci
+                  echo "REDIS_SECURITY_PASSWORD=$REDIS_SECURITY_PW" >> tests/.env.ci
+                  echo "RATE_LIMIT_REDIS_HOST=cache-ratelimit" >> tests/.env.ci
+                  echo "RATE_LIMIT_REDIS_PORT=6379" >> tests/.env.ci
+                  echo "REDIS_RATELIMIT_PASSWORD=$REDIS_RATELIMIT_PW" >> tests/.env.ci
                   echo "JWT_SECRET=$JWT_SECRET" >> tests/.env.ci
                   echo "JWT_EXPIRATION=900" >> tests/.env.ci
                   echo "JWT_REFRESH_EXPIRATION=604800" >> tests/.env.ci
+                  echo "JWT_STEP_UP_SESSION_MAX=900" >> tests/.env.ci
                   echo "MINIO_ROOT_USER=cloudshare_ci_minio" >> tests/.env.ci
                   echo "MINIO_ROOT_PASSWORD=A1000Minio" >> tests/.env.ci
                   echo "CRYPTO_MASTER_KEK=$CRYPTO_KEK" >> tests/.env.ci
+                  echo "CRYPTO_KEK_ALLOW_RAW_PASSPHRASE=true" >> tests/.env.ci
                   # Rate limits opened up: the E2E suite logs in/enrolls MFA/refreshes
                   # tokens repeatedly against the same handful of test users.
                   echo "RATE_LIMIT_AUTH=10000" >> tests/.env.ci
@@ -52,17 +75,13 @@ jobs:
                   echo "RATE_LIMIT_LINK_GLOBAL=10000" >> tests/.env.ci
                   echo "RATE_LIMIT_GENERAL=10000" >> tests/.env.ci
                   echo "PASSWORD_BREACH_CHECK_ENABLED=false" >> tests/.env.ci
-                  echo "CRYPTO_KEK_ALLOW_RAW_PASSPHRASE=true" >> tests/.env.ci
-                  echo "RATE_LIMIT_REDIS_HOST=cache-ratelimit" >> tests/.env.ci
-                  echo "RATE_LIMIT_REDIS_PORT=6379" >> tests/.env.ci
-                  echo "SPRING_DATA_WEB_PAGEABLE_MAX_PAGE_SIZE=100" >> tests/.env.ci
-                  echo "SPRING_DATA_WEB_PAGEABLE_ONE_INDEXED_PARAMETERS=false" >> tests/.env.ci
+                  echo "PASSWORD_BREACH_CHECK_TIMEOUT_MS=3000" >> tests/.env.ci
                   echo "CLAMAV_MAX_CONCURRENT_SCANS=8" >> tests/.env.ci
                   echo "CLAMAV_CONCURRENCY_TIMEOUT_SECONDS=0" >> tests/.env.ci
-                  echo "JWT_STEP_UP_SESSION_MAX=900" >> tests/.env.ci
-                  echo "PASSWORD_BREACH_CHECK_TIMEOUT_MS=3000" >> tests/.env.ci
                   echo "STORAGE_MAX_CONCURRENT_DECRYPT_DOWNLOADS=20" >> tests/.env.ci
                   echo "STORAGE_DECRYPT_ACQUIRE_TIMEOUT_SECONDS=0" >> tests/.env.ci
+                  echo "SPRING_DATA_WEB_PAGEABLE_MAX_PAGE_SIZE=100" >> tests/.env.ci
+                  echo "SPRING_DATA_WEB_PAGEABLE_ONE_INDEXED_PARAMETERS=false" >> tests/.env.ci
 
             - name: Generate self-signed Nginx certs
               run: bash nginx/ssl/generate-certs.sh
