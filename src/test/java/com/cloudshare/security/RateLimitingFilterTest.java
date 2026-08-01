@@ -1,9 +1,13 @@
 package com.cloudshare.security;
 
 import com.cloudshare.service.RateLimiterService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ReadListener;
+import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.ByteArrayInputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,11 +43,13 @@ class RateLimitingFilterTest {
     @Mock
     private FilterChain filterChain;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     private RateLimitingFilter rateLimitingFilter;
 
     @BeforeEach
     void setUp() {
-        rateLimitingFilter = new RateLimitingFilter(rateLimiterService, tokenProvider, clientIpResolver);
+        rateLimitingFilter = new RateLimitingFilter(rateLimiterService, tokenProvider, clientIpResolver, objectMapper);
     }
 
     @Test
@@ -123,8 +129,9 @@ class RateLimitingFilterTest {
         when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
 
         when(request.getHeader("Authorization")).thenReturn("Bearer valid-jwt");
-        when(tokenProvider.validateToken("valid-jwt")).thenReturn(true);
-        when(tokenProvider.getUserIdFromToken("valid-jwt")).thenReturn("user-123");
+        when(request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE)).thenReturn(null);
+        ResolvedJwt resolved = new ResolvedJwt("valid-jwt", true, "user-123", "access", "jti-123");
+        when(tokenProvider.resolveToken("valid-jwt")).thenReturn(resolved);
 
         when(rateLimiterService.isAllowed(eq("limit:user-123:/api/v1/auth/mfa/verify"), eq(60), eq(5)))
                 .thenReturn(true);
@@ -281,6 +288,94 @@ class RateLimitingFilterTest {
         rateLimitingFilter.doFilterInternal(request, response, filterChain);
 
         verify(filterChain).doFilter(request, response);
+        verify(response, never()).setStatus(429);
+    }
+
+    private ServletInputStream createServletInputStream(String content) {
+        ByteArrayInputStream bais = new ByteArrayInputStream(content.getBytes());
+        return new ServletInputStream() {
+            @Override
+            public boolean isFinished() {
+                return bais.available() == 0;
+            }
+
+            @Override
+            public boolean isReady() {
+                return true;
+            }
+
+            @Override
+            public void setReadListener(ReadListener listener) {
+            }
+
+            @Override
+            public int read() {
+                return bais.read();
+            }
+        };
+    }
+
+    @Test
+    void testFilterLogin_AccountAllowed() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "authLimit", 5);
+        when(request.getRequestURI()).thenReturn("/api/v1/auth/login");
+        when(request.getMethod()).thenReturn("POST");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+
+        String jsonBody = "{\"usernameOrEmail\":\"testuser@example.com\"}";
+        ServletInputStream servletInputStream = createServletInputStream(jsonBody);
+        when(request.getInputStream()).thenReturn(servletInputStream);
+
+        when(rateLimiterService.isAllowed(eq("limit:127.0.0.1:/api/v1/auth/login"), eq(60), eq(5))).thenReturn(true);
+        when(rateLimiterService.isAllowed(startsWith("limit:acct:"), eq(60), eq(15))).thenReturn(true);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(any(HttpServletRequest.class), eq(response));
+        verify(response, never()).setStatus(429);
+    }
+
+    @Test
+    void testFilterLogin_AccountBlocked() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "authLimit", 5);
+        when(request.getRequestURI()).thenReturn("/api/v1/auth/login");
+        when(request.getMethod()).thenReturn("POST");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+
+        String jsonBody = "{\"usernameOrEmail\":\"testuser@example.com\"}";
+        ServletInputStream servletInputStream = createServletInputStream(jsonBody);
+        when(request.getInputStream()).thenReturn(servletInputStream);
+
+        when(rateLimiterService.isAllowed(eq("limit:127.0.0.1:/api/v1/auth/login"), eq(60), eq(5))).thenReturn(true);
+        when(rateLimiterService.isAllowed(startsWith("limit:acct:"), eq(60), eq(15))).thenReturn(false);
+
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(stringWriter);
+        when(response.getWriter()).thenReturn(printWriter);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain, never()).doFilter(any(), any());
+        verify(response).setStatus(429);
+    }
+
+    @Test
+    void testFilterLogin_MalformedJson_FailsOpenOnAccount() throws Exception {
+        ReflectionTestUtils.setField(rateLimitingFilter, "authLimit", 5);
+        when(request.getRequestURI()).thenReturn("/api/v1/auth/login");
+        when(request.getMethod()).thenReturn("POST");
+        when(clientIpResolver.resolveIp(request)).thenReturn("127.0.0.1");
+
+        String jsonBody = "invalid json";
+        ServletInputStream servletInputStream = createServletInputStream(jsonBody);
+        when(request.getInputStream()).thenReturn(servletInputStream);
+
+        when(rateLimiterService.isAllowed(eq("limit:127.0.0.1:/api/v1/auth/login"), eq(60), eq(5))).thenReturn(true);
+
+        rateLimitingFilter.doFilterInternal(request, response, filterChain);
+
+        verify(rateLimiterService, never()).isAllowed(startsWith("limit:acct:"), anyInt(), anyInt());
+        verify(filterChain).doFilter(any(HttpServletRequest.class), eq(response));
         verify(response, never()).setStatus(429);
     }
 }

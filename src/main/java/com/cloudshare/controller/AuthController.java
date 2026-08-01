@@ -81,7 +81,10 @@ public class AuthController {
     @PostMapping("/mfa/step-up")
     public ResponseEntity<ApiResponse<MfaStepUpResponse>> stepUpMfa(
             @AuthenticationPrincipal UserPrincipal principal,
-            @Valid @RequestBody MfaVerifyRequest request) {
-        MfaStepUpResponse response = authService.stepUpMfa(principal.getId(), request.getCode());
+            @Valid @RequestBody MfaVerifyRequest request,
+            HttpServletRequest servletRequest) {
+        MfaStepUpResponse response = authService.stepUpMfa(principal.getId(), request.getCode(),
+                clientIpResolver.resolveIp(servletRequest));
         return ResponseEntity.ok(ApiResponse.success(response));
-    }}
+    }
+}

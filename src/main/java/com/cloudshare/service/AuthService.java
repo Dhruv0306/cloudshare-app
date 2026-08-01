@@ -282,7 +282,7 @@ public class AuthService {
         auditLogService.log(userId, "MFA_ENABLED", null, ipAddress, "MFA enabled successfully");
     }
 
-    public MfaStepUpResponse stepUpMfa(UUID userId, String code) {
+    public MfaStepUpResponse stepUpMfa(UUID userId, String code, String ipAddress) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -291,10 +291,19 @@ public class AuthService {
         }
 
         if (!mfaService.verifyCode(userId.toString(), user.getMfaSecret(), code)) {
+            // Audit trail for a failed elevated-privilege attempt — this is a
+            // security-sensitive event and, like every other sensitive action in
+            // this service, should not be silently un-logged.
+            auditLogService.log(userId, "STEP_UP_FAILED", null, ipAddress,
+                    "Invalid MFA code presented for step-up authentication");
             throw new org.springframework.security.authentication.BadCredentialsException("Invalid MFA code");
         }
 
         String stepUpToken = tokenProvider.generateStepUpToken(user.getId().toString(), user.getUsername());
+
+        auditLogService.log(userId, "STEP_UP_GRANTED", null, ipAddress,
+                "Step-up MFA session issued");
+
         return MfaStepUpResponse.builder()
                 .stepUpToken(stepUpToken)
                 .expiresInSeconds(300)

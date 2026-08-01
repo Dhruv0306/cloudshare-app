@@ -52,7 +52,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({ AuthenticationException.class, SecurityException.class, UsernameNotFoundException.class })
     public ResponseEntity<ApiResponse<Void>> handleAuthenticationException(Exception ex) {
         log.warn("Authentication or Security violation: {}", ex.getMessage());
-        ApiResponse<Void> response = ApiResponse.error("UNAUTHORIZED", ex.getMessage());
+        // UsernameNotFoundException messages (e.g. "User not found with ID: <uuid>")
+        // are useful server-side but should not be echoed to the client verbatim.
+        // SecurityException messages here are intentional, reviewed user-facing
+        // copy (e.g. the refresh-token-reuse "force re-authentication" notice), so
+        // those are still surfaced as-is.
+        String clientMessage = (ex instanceof UsernameNotFoundException)
+                ? "Authentication failed."
+                : ex.getMessage();
+        ApiResponse<Void> response = ApiResponse.error("UNAUTHORIZED", clientMessage);
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 

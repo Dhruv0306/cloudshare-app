@@ -21,9 +21,13 @@ public class DownloadConcurrencyLimiter {
         return this.permits;
     }
 
+    /** Upper sanity bound for admin-tunable concurrency; prevents resource exhaustion from misconfiguration. */
+    private static final int MAX_ALLOWED_CONCURRENCY = 200;
+
     public synchronized void setMaxConcurrentDownloads(int limit) {
-        if (limit < 1) {
-            throw new IllegalArgumentException("Concurrency limit must be at least 1");
+        if (limit < 1 || limit > MAX_ALLOWED_CONCURRENCY) {
+            throw new IllegalArgumentException(
+                    "Concurrency limit must be between 1 and " + MAX_ALLOWED_CONCURRENCY);
         }
         log.info("Updating download concurrency limit to {}", limit);
         this.permits = new Semaphore(limit, true);

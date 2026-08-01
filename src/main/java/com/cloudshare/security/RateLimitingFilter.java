@@ -1,6 +1,8 @@
 package com.cloudshare.security;
 
 import com.cloudshare.service.RateLimiterService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +15,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 
 /**
@@ -57,6 +62,10 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     private final RateLimiterService rateLimiterService;
     private final JwtTokenProvider tokenProvider;
     private final ClientIpResolver clientIpResolver;
+    private final ObjectMapper objectMapper;
+
+    /** Hard cap on how much of the login body we'll buffer in memory to peek at it. */
+    private static final int MAX_LOGIN_BODY_PEEK_BYTES = 8 * 1024;
 
     @Value("${security.rate-limiting.enabled:true}")
     private boolean rateLimitingEnabled = true;
@@ -93,6 +102,11 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         String method = request.getMethod();
         String ip = clientIpResolver.resolveIp(request);
 
+        // requestToUse is the (possibly body-wrapped) request forwarded down the
+        // filter chain. Only /auth/login gets wrapped, and only up to a small size
+        // cap, to peek at the account identifier for per-account rate limiting.
+        HttpServletRequest requestToUse = request;
+
         boolean allowed = true;
 
         if (path.startsWith("/api/v1/")) {
@@ -101,9 +115,36 @@ public class RateLimitingFilter extends OncePerRequestFilter {
                             path.equals("/api/v1/auth/register") ||
                             path.equals("/api/v1/auth/refresh"))) {
 
-                // Auth rate limiting
-                String key = "limit:" + ip + ":" + path;
-                allowed = rateLimiterService.isAllowed(key, 60, authLimit);
+                // Per-IP auth rate limiting (existing protection)
+                String ipKey = "limit:" + ip + ":" + path;
+                boolean ipAllowed = rateLimiterService.isAllowed(ipKey, 60, authLimit);
+
+                // Per-account rate limiting, login only: an IP-only guard doesn't stop
+                // credential stuffing distributed across many source IPs against a
+                // single target account. We key on a hash of the submitted identifier
+                // (never the raw value) so the rate-limit store never holds plaintext
+                // usernames/emails.
+                boolean accountAllowed = true;
+                if (path.equals("/api/v1/auth/login")) {
+                    try {
+                        CachedBodyHttpServletRequest cachedRequest = new CachedBodyHttpServletRequest(request);
+                        requestToUse = cachedRequest;
+                        String usernameOrEmail = extractUsernameOrEmail(cachedRequest);
+                        if (StringUtils.hasText(usernameOrEmail)) {
+                            String acctKey = "limit:acct:" + sha256Hex(usernameOrEmail.trim().toLowerCase());
+                            // Wider window than per-IP: this is a defense-in-depth backstop
+                            // against distributed attempts, not the primary throttle.
+                            accountAllowed = rateLimiterService.isAllowed(acctKey, 60, authLimit * 3);
+                        }
+                    } catch (Exception e) {
+                        // Fail open on parsing problems — never let a malformed body break
+                        // login for legitimate users; the per-IP limit above still applies.
+                        log.debug("Could not parse login body for account-level rate limiting: {}",
+                                e.getMessage());
+                    }
+                }
+
+                allowed = ipAllowed && accountAllowed;
 
             } else if ("POST".equalsIgnoreCase(method) && path.equals("/api/v1/files/upload")) {
 
@@ -169,7 +210,42 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             return;
         }
 
-        filterChain.doFilter(request, response);
+        filterChain.doFilter(requestToUse, response);
+    }
+
+    /**
+     * Extracts {@code usernameOrEmail} from a JSON login request body without
+     * consuming the underlying stream for downstream consumers (the request must
+     * be a {@link CachedBodyHttpServletRequest}). Bounded to a small byte cap and
+     * fails silently (returns {@code null}) on any parsing problem.
+     */
+    private String extractUsernameOrEmail(CachedBodyHttpServletRequest cachedRequest) {
+        try {
+            byte[] body = cachedRequest.getInputStream().readNBytes(MAX_LOGIN_BODY_PEEK_BYTES);
+            if (body.length == 0) {
+                return null;
+            }
+            JsonNode node = objectMapper.readTree(body);
+            JsonNode field = node.get("usernameOrEmail");
+            return (field != null && field.isTextual()) ? field.asText() : null;
+        } catch (Exception e) {
+            log.debug("Failed to extract usernameOrEmail from login body: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
     }
 
     private String getUserIdFromAuthorizationHeader(HttpServletRequest request) {
@@ -179,13 +255,10 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             try {
                 ResolvedJwt resolved = (ResolvedJwt) request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE);
                 if (resolved == null || !jwt.equals(resolved.token())) {
+                    // JwtTokenProvider#resolveToken is guaranteed to return a non-null
+                    // ResolvedJwt (valid=false on parse failure), so no null fallback
+                    // is needed here.
                     resolved = tokenProvider.resolveToken(jwt);
-                    if (resolved == null) {
-                        // Fallback for mock/legacy provider stubs
-                        boolean valid = tokenProvider.validateToken(jwt);
-                        String userId = valid ? tokenProvider.getUserIdFromToken(jwt) : null;
-                        resolved = new ResolvedJwt(jwt, valid, userId, null, null);
-                    }
                     request.setAttribute(ResolvedJwt.REQUEST_ATTRIBUTE, resolved);
                 }
                 if (resolved.valid()) {

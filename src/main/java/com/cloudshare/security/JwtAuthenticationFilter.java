@@ -60,15 +60,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(jwt)) {
                 ResolvedJwt resolved = (ResolvedJwt) request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE);
                 if (resolved == null || !jwt.equals(resolved.token())) {
+                    // JwtTokenProvider#resolveToken is guaranteed to return a non-null
+                    // ResolvedJwt (valid=false on parse failure), so no null fallback
+                    // is needed here.
                     resolved = tokenProvider.resolveToken(jwt);
-                    if (resolved == null) {
-                        // Fallback for mock/legacy provider stubs
-                        boolean valid = tokenProvider.validateToken(jwt);
-                        String tokenType = valid ? tokenProvider.getTokenType(jwt) : null;
-                        String jti = valid ? tokenProvider.getJtiFromToken(jwt) : null;
-                        String userIdStr = valid ? tokenProvider.getUserIdFromToken(jwt) : null;
-                        resolved = new ResolvedJwt(jwt, valid, userIdStr, tokenType, jti);
-                    }
                 }
 
                 if (resolved.valid() && "access".equals(resolved.tokenType())) {

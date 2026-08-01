@@ -75,11 +75,9 @@ class JwtAuthenticationFilterTest {
         UUID userId = UUID.randomUUID();
 
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
-        when(tokenProvider.validateToken(token)).thenReturn(true);
-        when(tokenProvider.getTokenType(token)).thenReturn("access");
-        when(tokenProvider.getJtiFromToken(token)).thenReturn("jti-123");
+        when(request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE)).thenReturn(null);
+        when(tokenProvider.resolveToken(token)).thenReturn(new ResolvedJwt(token, true, userId.toString(), "access", "jti-123"));
         when(securityRedisTemplate.hasKey("blacklist:token:jti-123")).thenReturn(false);
-        when(tokenProvider.getUserIdFromToken(token)).thenReturn(userId.toString());
         when(customUserDetailsService.loadUserById(userId)).thenReturn(userDetails);
 
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
@@ -94,8 +92,8 @@ class JwtAuthenticationFilterTest {
         String token = "valid-stepup-token-presented-as-bearer";
 
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
-        when(tokenProvider.validateToken(token)).thenReturn(true);
-        when(tokenProvider.getTokenType(token)).thenReturn("step_up");
+        when(request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE)).thenReturn(null);
+        when(tokenProvider.resolveToken(token)).thenReturn(new ResolvedJwt(token, true, null, "step_up", null));
 
         jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
 
@@ -109,9 +107,8 @@ class JwtAuthenticationFilterTest {
         String token = "blacklisted-access-token";
 
         when(request.getHeader("Authorization")).thenReturn("Bearer " + token);
-        when(tokenProvider.validateToken(token)).thenReturn(true);
-        when(tokenProvider.getTokenType(token)).thenReturn("access");
-        when(tokenProvider.getJtiFromToken(token)).thenReturn("jti-123");
+        when(request.getAttribute(ResolvedJwt.REQUEST_ATTRIBUTE)).thenReturn(null);
+        when(tokenProvider.resolveToken(token)).thenReturn(new ResolvedJwt(token, true, null, "access", "jti-123"));
         when(securityRedisTemplate.hasKey("blacklist:token:jti-123")).thenReturn(true);
 
         StringWriter stringWriter = new StringWriter();

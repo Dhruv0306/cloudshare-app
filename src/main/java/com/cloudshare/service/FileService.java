@@ -135,7 +135,7 @@ public class FileService {
                 detectedMimeType = tika.detect(mimeStream, file.getOriginalFilename());
             }
 
-            if (isDangerousMimeType(detectedMimeType) || isDangerousExtension(file.getOriginalFilename())) {
+            if (isDangerousMimeType(detectedMimeType) || isDisallowedExtension(file.getOriginalFilename())) {
                 auditLogService.log(ownerId, "FILE_UPLOAD_FAILED", null, ipAddress, 
                         "Blocked upload of disallowed file type: " + file.getOriginalFilename());
                 throw new UnsupportedMediaTypeException("This file type or media extension is not allowed");
@@ -513,15 +513,27 @@ public class FileService {
                 .build();
     }
 
-    private boolean isDangerousExtension(String filename) {
+    /**
+     * Extensions permitted for upload. An allow-list is used deliberately instead
+     * of a deny-list: a deny-list of "dangerous" extensions is inherently
+     * incomplete against novel or less-common executable/script extensions
+     * (e.g. .cgi, .pyc, .py, .rb, .wasm, .reg, .ps1, .config) that a fixed
+     * blocklist won't anticipate. Extend this set per product requirements.
+     */
+    private static final java.util.Set<String> ALLOWED_EXTENSIONS = java.util.Set.of(
+            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "md",
+            "png", "jpg", "jpeg", "gif", "webp", "svg", "zip", "mp4", "mp3", "json", "xml"
+    );
+
+    private boolean isDisallowedExtension(String filename) {
         if (filename == null) return true;
         String lower = filename.toLowerCase();
-        return lower.endsWith(".exe") || lower.endsWith(".dll") || lower.endsWith(".bat") ||
-               lower.endsWith(".cmd") || lower.endsWith(".sh") || lower.endsWith(".bash") ||
-               lower.endsWith(".scr") || lower.endsWith(".pif") || lower.endsWith(".vbs") ||
-               lower.endsWith(".js") || lower.endsWith(".jar") || lower.endsWith(".msi") ||
-               lower.endsWith(".jsp") || lower.endsWith(".asp") || lower.endsWith(".aspx") ||
-               lower.endsWith(".php") || lower.endsWith(".htm") || lower.endsWith(".html");
+        int dot = lower.lastIndexOf('.');
+        if (dot < 0 || dot == lower.length() - 1) {
+            return true; // no extension at all — reject rather than guess
+        }
+        String ext = lower.substring(dot + 1);
+        return !ALLOWED_EXTENSIONS.contains(ext);
     }
 
     private boolean isMimeTypeCompatibleWithExtension(String filename, String detectedMimeType) {

@@ -36,9 +36,13 @@ public class ClamAvService {
         this.scanConcurrencyLimiter = new Semaphore(maxConcurrentScans, true);
     }
 
+    /** Upper sanity bound for admin-tunable concurrency; prevents resource exhaustion from misconfiguration. */
+    private static final int MAX_ALLOWED_CONCURRENCY = 200;
+
     public synchronized void setMaxConcurrentScans(int limit) {
-        if (limit < 1) {
-            throw new IllegalArgumentException("Concurrency limit must be at least 1");
+        if (limit < 1 || limit > MAX_ALLOWED_CONCURRENCY) {
+            throw new IllegalArgumentException(
+                    "Concurrency limit must be between 1 and " + MAX_ALLOWED_CONCURRENCY);
         }
         log.info("Updating ClamAV scan concurrency limit to {}", limit);
         this.scanConcurrencyLimiter = new Semaphore(limit, true);
