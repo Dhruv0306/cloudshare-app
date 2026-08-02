@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-08-02
+
+### Added
+
+- Added a container-level `HEALTHCHECK` to the production `Dockerfile`, polling the Actuator
+  liveness probe (`/actuator/health/liveness`, already exposed unauthenticated via
+  `SecurityConfig` and `management.endpoint.health.probes.enabled`). Gives `docker ps` and any
+  orchestrator visibility into application health without requiring compose-level tooling.
+
+### Security
+
+- Expanded the upload pipeline's dangerous-MIME deny-list (`isDangerousMimeType`) to also reject
+  `application/x-executable`, `application/x-elf`, `text/x-python`, and `application/x-httpd-php`,
+  closing a few common executable/script MIME variants that were previously absent from the
+  secondary content-based deny-list (the primary extension allow-list already blocks the
+  associated file extensions independently).
+
+### Changed
+
+- Reduced redundant work in the polyglot-file markup scanner (`containsDangerousMarkup`): the
+  sliding content window is now maintained pre-lowercased and updated incrementally per chunk,
+  instead of re-lowercasing the entire (up to 5000-character) window from scratch on every 8KB
+  read. The window size, trim threshold, and boundary-overlap behavior are unchanged, so detection
+  coverage for markers split across chunk reads is unaffected — this is a constant-factor
+  efficiency improvement, not a change in scanning behavior.
+- Split the permission-cache failure log tag in `FileService.verifyFileAccess` into two distinct
+  markers: `[PERMISSION_CACHE_EVICTION_FAILED]` (unchanged, used only when a permission-cache
+  *eviction* fails after a share/ownership change — a real stale-permission risk) and the new
+  `[PERMISSION_CACHE_READ_FAILED]` (used when a cache *read* fails and the code safely falls back
+  to the database as source of truth — not a security risk). Previously both conditions were
+  unlabeled/conflated, which would have caused false-positive alerting on the benign path if
+  either tag is used for monitoring.
+
 ## [1.2.1] - 2026-08-02
 
 ### Security
