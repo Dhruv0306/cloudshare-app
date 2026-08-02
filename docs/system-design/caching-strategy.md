@@ -42,6 +42,9 @@ flowchart TD
 To prevent dirty reads (returning outdated permissions or details), we implement active invalidation:
 *   **Write-Through Eviction:** Whenever file access permissions are modified (`POST /api/v1/shares/internal`), updated, or a file is soft-deleted, the application immediately deletes the corresponding Redis key (`cache:permissions:<file_id>`) in the same transaction.
 *   **Eviction Failure Bypass Marker (Fail-Loud Self-Healing):** If eviction fails (e.g. transient Redis network issue), the application sets a 10-minute bypass marker (`cache:permissions:bypass:<file_id>`). When present, `FileService.verifyFileAccess` bypasses the stale cache, queries PostgreSQL directly, and attempts a self-healing eviction of both the stale cache and bypass marker, guaranteeing authorization safety.
+*   **Cache Failure Logging Tags:** Cache-related errors are logged with distinct tags to isolate critical risks from normal fallback events:
+    *   `[PERMISSION_CACHE_EVICTION_FAILED]`: Logged when a cache eviction fails during share creation or revocation (indicates stale permission caching risk; triggers high-priority alerts).
+    *   `[PERMISSION_CACHE_READ_FAILED]`: Logged when a cache read fails due to timeout or connection drops (benign fallback to DB occurs; excluded from paging alerts).
 *   **No Cache for Files:** The binary streams of files are *never* stored in Redis. Redis is strictly reserved for metadata, session IDs, and rate limit counters.
 
 ---
