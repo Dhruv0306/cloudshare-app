@@ -592,7 +592,11 @@ public class FileService {
                lower.equals("application/x-bash") || 
                lower.equals("application/x-msdos-program") ||
                lower.equals("application/javascript") ||
-               lower.equals("text/html");
+               lower.equals("text/html") ||
+               lower.equals("application/x-executable") ||
+               lower.equals("application/x-elf") ||
+               lower.equals("text/x-python") ||
+               lower.equals("application/x-httpd-php");
     }
 
     private String bytesToHex(byte[] bytes) {
