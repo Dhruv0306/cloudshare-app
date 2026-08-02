@@ -152,9 +152,13 @@ flowchart TD
     *   Users might upload files containing path traversal sequences (e.g., `../../../etc/passwd`).
     *   The application strips directory paths and sanitizes characters.
     *   **Physical Isolation:** The actual file is written to storage using a random `UUIDv4` as its identifier. The user's input filename is kept only as an encoded text column in the metadata database.
-3.  **Magic Number Verification:**
-    *   Do not trust the `Content-Type` header sent by the browser or the file extension.
-    *   The backend reads the first few bytes (magic numbers) using Apache Tika to determine the true MIME type. If a user uploads an executable masquerading as a PDF, it is rejected.
+3.  **Two-Tiered File Upload Verification (Magic Numbers & Extension Allow-List):**
+    *   Do not trust the `Content-Type` header sent by the browser or the file extension alone.
+    *   **Extension Allow-List:** Uploaded file extensions are filtered against a strict allow-list of permitted formats (such as `.pdf`, `.jpg`, `.png`, etc.), preventing novel or uncommon script extensions from bypassing blocklists.
+    *   **Magic Number Deny-List:** The backend reads the first few bytes of the file and uses Apache Tika to determine its true MIME type. It blocks any file matching the dangerous-MIME deny-list (`isDangerousMimeType`), which rejects:
+        *   Executables: `application/x-msdownload`, `application/x-msdos-program`, `application/x-executable`, `application/x-elf`.
+        *   Scripts & Active Markup: `application/x-sh`, `application/x-bash`, `application/javascript`, `text/html`, `text/x-python`, `application/x-httpd-php`.
+    *   **Locale-Insensitive Matching:** Case-folding checks for both extension matching and MIME filtering strictly utilize `Locale.ROOT` (e.g., `toLowerCase(Locale.ROOT)`) to prevent JVM locale-specific folding inconsistencies (e.g., Turkish `I`/`i` folding discrepancies) from introducing security bypasses.
 4.  **Virus Scanning (ClamAV Integration):**
     *   The backend establishes a socket connection to a ClamAV daemon.
     *   The file stream is split: one stream is scanned by ClamAV in chunked format, and the other is buffered in memory/temp file.
