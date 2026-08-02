@@ -566,15 +566,18 @@ public class FileService {
         try (InputStream in = Files.newInputStream(path)) {
             byte[] buffer = new byte[8192];
             int read;
-            StringBuilder sb = new StringBuilder();
+            // Maintain the sliding window already lowercased, instead of re-lowercasing
+            // the entire (up to 5000 char) window from scratch on every chunk. Window
+            // size (5000) and trim threshold (4000) are unchanged, so the boundary-overlap
+            // behavior that catches markers split across chunk reads is preserved exactly.
+            StringBuilder lowerSb = new StringBuilder();
             while ((read = in.read(buffer)) != -1) {
                 String chunk = new String(buffer, 0, read, java.nio.charset.StandardCharsets.US_ASCII);
-                sb.append(chunk);
-                if (sb.length() > 5000) {
-                    sb.delete(0, 4000);
+                lowerSb.append(chunk.toLowerCase());
+                if (lowerSb.length() > 5000) {
+                    lowerSb.delete(0, 4000);
                 }
-                String lower = sb.toString().toLowerCase();
-                if (lower.contains("<script") || lower.contains("<?php") || lower.contains("<html")) {
+                if (lowerSb.indexOf("<script") != -1 || lowerSb.indexOf("<?php") != -1 || lowerSb.indexOf("<html") != -1) {
                     return true;
                 }
             }
