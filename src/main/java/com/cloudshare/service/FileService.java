@@ -356,7 +356,10 @@ public class FileService {
             } catch (ResourceNotFoundException e) {
                 throw e;
             } catch (Exception e) {
-                log.warn("Redis error during permission check, falling back to database", e);
+                // Distinct from [PERMISSION_CACHE_EVICTION_FAILED]: this is a read-path miss
+                // that safely falls back to the database as source of truth (no stale-permission
+                // risk), whereas eviction failures risk serving an over-permissive cached entry.
+                log.warn("[PERMISSION_CACHE_READ_FAILED] Redis error during permission check, falling back to database", e);
             }
         }
         
