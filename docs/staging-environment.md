@@ -15,6 +15,7 @@ To provide trustworthy performance numbers (like the p95 latency SLAs), the stag
 | **`db` (PostgreSQL)** | `2.0` | `2048M` | `1024M` |
 | **`cache-aside` (Redis)** | `1.0` | `512M` | maxmemory: `512mb` (allkeys-lru) |
 | **`cache-security` (Redis)**| `1.0` | `512M` | maxmemory: `512mb` (noeviction) |
+| **`cache-ratelimit` (Redis)**| N/A (Inherited) | N/A (Inherited) | maxmemory: `128mb` (allkeys-lru) |
 | **`clamav` (Virus Scan)** | `2.0` | `2048M` | N/A |
 | **`storage` (MinIO S3)** | `1.0` | `1024M` | N/A |
 

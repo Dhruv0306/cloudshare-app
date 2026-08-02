@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS audit_logs_y2026m10 PARTITION OF audit_logs
 ```sql
 SELECT child.relname AS partition_name
 FROM pg_inherits
-JOIN pg_class parent ON pg_inherits.inheritsparent = parent.oid
-JOIN pg_class child ON pg_inherits.inheritsid = child.oid
+JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
+JOIN pg_class child ON pg_inherits.inhrelid = child.oid
 WHERE parent.relname = 'audit_logs';
 ```
 5. Confirm that write operations (like uploading or deleting a small test file) are restored.
