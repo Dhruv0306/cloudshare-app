@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   secondary content-based deny-list (the primary extension allow-list already blocks the
   associated file extensions independently).
 
+- Fixed locale-sensitive case folding in `FileService`: `String#toLowerCase()`/`toUpperCase()`
+  called with no `Locale` argument use the JVM's default locale, which can silently corrupt
+  ASCII-only string matching under certain locales (e.g. Turkish, where `I`/`i` fold differently).
+  Switched to `toLowerCase(Locale.ROOT)` in `containsDangerousMarkup` (polyglot markup scan),
+  `isDangerousMimeType` (MIME deny-list check), and `isDisallowedExtension` (extension allow-list
+  check) to make case folding deterministic regardless of server locale. Caught in PR review.
+
 ### Changed
 
 - Reduced redundant work in the polyglot-file markup scanner (`containsDangerousMarkup`): the
