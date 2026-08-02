@@ -530,7 +530,7 @@ public class FileService {
 
     private boolean isDisallowedExtension(String filename) {
         if (filename == null) return true;
-        String lower = filename.toLowerCase();
+        String lower = filename.toLowerCase(java.util.Locale.ROOT);
         int dot = lower.lastIndexOf('.');
         if (dot < 0 || dot == lower.length() - 1) {
             return true; // no extension at all — reject rather than guess
@@ -576,7 +576,7 @@ public class FileService {
             StringBuilder lowerSb = new StringBuilder();
             while ((read = in.read(buffer)) != -1) {
                 String chunk = new String(buffer, 0, read, java.nio.charset.StandardCharsets.US_ASCII);
-                lowerSb.append(chunk.toLowerCase());
+                lowerSb.append(chunk.toLowerCase(java.util.Locale.ROOT));
                 if (lowerSb.length() > 5000) {
                     lowerSb.delete(0, 4000);
                 }
@@ -592,7 +592,7 @@ public class FileService {
 
     private boolean isDangerousMimeType(String mimeType) {
         if (mimeType == null) return true;
-        String lower = mimeType.toLowerCase();
+        String lower = mimeType.toLowerCase(java.util.Locale.ROOT);
         return lower.equals("application/x-msdownload") || 
                lower.equals("application/x-sh") || 
                lower.equals("application/x-bash") || 
