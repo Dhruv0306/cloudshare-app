@@ -356,7 +356,10 @@ public class FileService {
             } catch (ResourceNotFoundException e) {
                 throw e;
             } catch (Exception e) {
-                log.warn("Redis error during permission check, falling back to database", e);
+                // Distinct from [PERMISSION_CACHE_EVICTION_FAILED]: this is a read-path miss
+                // that safely falls back to the database as source of truth (no stale-permission
+                // risk), whereas eviction failures risk serving an over-permissive cached entry.
+                log.warn("[PERMISSION_CACHE_READ_FAILED] Redis error during permission check, falling back to database", e);
             }
         }
         
@@ -527,7 +530,7 @@ public class FileService {
 
     private boolean isDisallowedExtension(String filename) {
         if (filename == null) return true;
-        String lower = filename.toLowerCase();
+        String lower = filename.toLowerCase(java.util.Locale.ROOT);
         int dot = lower.lastIndexOf('.');
         if (dot < 0 || dot == lower.length() - 1) {
             return true; // no extension at all — reject rather than guess
@@ -566,15 +569,18 @@ public class FileService {
         try (InputStream in = Files.newInputStream(path)) {
             byte[] buffer = new byte[8192];
             int read;
-            StringBuilder sb = new StringBuilder();
+            // Maintain the sliding window already lowercased, instead of re-lowercasing
+            // the entire (up to 5000 char) window from scratch on every chunk. Window
+            // size (5000) and trim threshold (4000) are unchanged, so the boundary-overlap
+            // behavior that catches markers split across chunk reads is preserved exactly.
+            StringBuilder lowerSb = new StringBuilder();
             while ((read = in.read(buffer)) != -1) {
                 String chunk = new String(buffer, 0, read, java.nio.charset.StandardCharsets.US_ASCII);
-                sb.append(chunk);
-                if (sb.length() > 5000) {
-                    sb.delete(0, 4000);
+                lowerSb.append(chunk.toLowerCase(java.util.Locale.ROOT));
+                if (lowerSb.length() > 5000) {
+                    lowerSb.delete(0, 4000);
                 }
-                String lower = sb.toString().toLowerCase();
-                if (lower.contains("<script") || lower.contains("<?php") || lower.contains("<html")) {
+                if (lowerSb.indexOf("<script") != -1 || lowerSb.indexOf("<?php") != -1 || lowerSb.indexOf("<html") != -1) {
                     return true;
                 }
             }
@@ -586,13 +592,17 @@ public class FileService {
 
     private boolean isDangerousMimeType(String mimeType) {
         if (mimeType == null) return true;
-        String lower = mimeType.toLowerCase();
+        String lower = mimeType.toLowerCase(java.util.Locale.ROOT);
         return lower.equals("application/x-msdownload") || 
                lower.equals("application/x-sh") || 
                lower.equals("application/x-bash") || 
                lower.equals("application/x-msdos-program") ||
                lower.equals("application/javascript") ||
-               lower.equals("text/html");
+               lower.equals("text/html") ||
+               lower.equals("application/x-executable") ||
+               lower.equals("application/x-elf") ||
+               lower.equals("text/x-python") ||
+               lower.equals("application/x-httpd-php");
     }
 
     private String bytesToHex(byte[] bytes) {

@@ -30,6 +30,7 @@ import static org.mockito.Mockito.*;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.HashOperations;
+import org.springframework.test.util.ReflectionTestUtils;
 import com.cloudshare.repository.FileShareRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -536,5 +537,29 @@ class FileServiceTest {
             // Verify storage write is skipped
             verify(storageService, never()).store(any(String.class), any(InputStream.class));
         }
+    }
+
+    // isDangerousMimeType is invoked directly via reflection here (rather than through a full
+    // uploadFile() call with a real fixture) because it isolates the deny-list logic itself from
+    // Apache Tika's exact content-sniffing output, which cannot be reliably asserted for these
+    // formats without a live Tika run against crafted binaries.
+    @Test
+    void isDangerousMimeType_executableAndElfBinaries_returnsTrue() {
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(fileService, "isDangerousMimeType", "application/x-executable"));
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(fileService, "isDangerousMimeType", "APPLICATION/X-EXECUTABLE"));
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(fileService, "isDangerousMimeType", "application/x-elf"));
+    }
+
+    @Test
+    void isDangerousMimeType_scriptInterpreterTypes_returnsTrue() {
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(fileService, "isDangerousMimeType", "text/x-python"));
+        assertTrue((Boolean) ReflectionTestUtils.invokeMethod(fileService, "isDangerousMimeType", "application/x-httpd-php"));
+    }
+
+    @Test
+    void isDangerousMimeType_safeTypes_returnsFalse() {
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(fileService, "isDangerousMimeType", "application/pdf"));
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(fileService, "isDangerousMimeType", "image/png"));
+        assertFalse((Boolean) ReflectionTestUtils.invokeMethod(fileService, "isDangerousMimeType", "text/plain"));
     }
 }

@@ -42,6 +42,13 @@ USER spring:spring
 # Expose backend API port
 EXPOSE 8080
 
+# Container-level health check. Hits the Actuator liveness probe (exposed via
+# management.endpoint.health.probes.enabled=true) and is permitted without
+# authentication in SecurityConfig (/actuator/health/**). Uses wget since the
+# eclipse-temurin:17-jre-alpine base includes it via busybox; no curl is present.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+    CMD wget -qO- http://localhost:8080/actuator/health/liveness || exit 1
+
 # Environment-agnostic JVM tuning parameters
 ENV JAVA_OPTS="-XX:+UseG1GC \
     -XX:MaxRAMPercentage=75.0 \
