@@ -213,7 +213,7 @@ All operations in this section require an `Authorization: Bearer <accessToken>` 
     *   `422 Unprocessable Entity`: Virus detected by ClamAV scanner.
 
 ### 3.2 List Files (Paged)
-*   **Endpoint:** `GET /api/v1/files?page=0&size=10&sort=uploadedAt,desc`
+*   **Endpoint:** `GET /api/v1/files?page=0&size=10&sort=createdAt,desc`
 *   **Response Body:**
     ```json
     {
@@ -305,7 +305,23 @@ All operations in this section require an `Authorization: Bearer <accessToken>` 
     }
     ```
 
-### 4.3 Download via Public Link
+### 4.3 Get Public Link Info
+*   **Endpoint:** `GET /api/v1/shares/link/{shareCode}/info`
+*   **Authentication:** None (Public)
+*   **Response Body:**
+    ```json
+    {
+      "success": true,
+      "data": {
+        "passwordProtected": true
+      }
+    }
+    ```
+*   **Responses:**
+    *   `200 OK`: Link details resolved.
+    *   `404 Not Found`: Link does not exist, has expired, or the file was deleted (generic enumeration protection).
+
+### 4.4 Download via Public Link
 *   **Endpoint:** `GET /api/v1/shares/link/{shareCode}/download`
 *   **Authentication:** None (Public)
 *   **Headers Required if Password Protected:**
@@ -314,9 +330,8 @@ All operations in this section require an `Authorization: Bearer <accessToken>` 
 *   **Response Body:** Binary Stream of decrypted file.
 *   **Responses:**
     *   `200 OK`: Success.
-    *   `401 Unauthorized`: Password required but missing/invalid.
-    *   `403 Forbidden`: Link has expired, or reached its download limit.
-    *   `404 Not Found`: Link code does not exist.
+    *   `403 Forbidden`: Download limit has been reached (`AccessDeniedException`).
+    *   `404 Not Found`: Link code does not exist, has expired, the file was soft-deleted, or the password was missing/incorrect. (All verification failures are folded into a generic `404 Not Found` response to prevent link enumeration).
 
 ---
 
@@ -339,6 +354,30 @@ All administrative endpoints require Role-Based Access Control (`ROLE_ADMIN`) an
 *   **Endpoint:** `GET /api/v1/admin/audit-logs?page=0&size=20&userId=xxx&action=FILE_UPLOAD`
 *   **Responses:**
     *   `200 OK`: Returns the system event log history.
+
+### 5.3 Update ClamAV Concurrency Limit
+*   **Endpoint:** `POST /api/v1/admin/clamav/limit?limit={limit}`
+*   **Authentication:** Bearer Token + Step-Up Token
+*   **Request Params:**
+    *   `limit` (Integer): The new scan concurrency limit (sanity check enforces bounds between 1 and 200).
+*   **Responses:**
+    *   `200 OK`: Limit updated successfully.
+    *   `400 Bad Request`: Limit parameter invalid or out of sanity bounds.
+
+### 5.4 Update Download Concurrency Limit
+*   **Endpoint:** `POST /api/v1/admin/downloads/limit?limit={limit}`
+*   **Authentication:** Bearer Token + Step-Up Token
+*   **Request Params:**
+    *   `limit` (Integer): The new download concurrency limit (sanity check enforces bounds between 1 and 200).
+*   **Responses:**
+    *   `200 OK`: Limit updated successfully.
+    *   `400 Bad Request`: Limit parameter invalid or out of sanity bounds.
+
+### 5.5 Trigger Audit Logs Partition Maintenance
+*   **Endpoint:** `POST /api/v1/admin/audit-logs/partitions`
+*   **Authentication:** Bearer Token + Step-Up Token
+*   **Responses:**
+    *   `200 OK`: Partition maintenance executed successfully.
 
 ---
 

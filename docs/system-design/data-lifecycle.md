@@ -60,12 +60,12 @@ To prevent **orphaned storage files** (files taking up space on disk/S3 with no 
 
 ## 3. GDPR Compliance: "Right to be Forgotten"
 
-GDPR Article 17 requires that users can request the permanent removal of their personal data. CloudShare supports an **Account Deletion Flow**:
+GDPR Article 17 requires that users can request the permanent removal of their personal data. Although self-service account deactivation is not currently exposed via the application's REST API, the system is designed to support manual/administrative **Account Deletion Flows** executed directly by DBAs:
 
-1.  **Immediate Soft-Delete:** The user's account is deactivated (`active = false`).
-2.  **File Flagging:** All files owned by the user are immediately moved to `deleted = true`, with the deletion timestamp set to current time.
+1.  **Manual User Pruning:** A database administrator manually soft-deletes or removes the user record.
+2.  **File Flagging:** All files owned by the user are flagged as `deleted = true` in PostgreSQL.
 3.  **Cascade Cleanup:**
-    *   All direct permissions mapping to other users (`file_shares`) are deleted immediately.
-    *   All public sharing links (`share_links`) pointing to the user's files are deleted immediately.
-4.  **Wipe Execution:** 30 days later, the automated `FilePurgeScheduler` permanently deletes all files from disk and removes the corresponding database records.
+    *   All direct permissions mapping to other users (`file_shares`) are immediately deleted.
+    *   All public sharing links (`share_links`) pointing to the user's files are immediately deleted.
+4.  **Wipe Execution:** The automated `FilePurgeScheduler` runs daily at 2:00 AM UTC. Any file owned by the user that has been flagged as `deleted = true` for over 30 days is permanently deleted from storage, and its metadata row is dropped.
 5.  **Audit Exception:** For compliance and security tracking, the audit log entries showing past transactions are *not* deleted immediately. They are kept for the standard 1-year archive window, anonymizing user names where required.

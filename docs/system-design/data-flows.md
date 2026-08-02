@@ -225,7 +225,6 @@ sequenceDiagram
     actor Guest as Guest (no account)
     participant Nginx as Nginx Gateway
     participant App as Spring Boot App
-    participant RedisSec as cache-security
     participant DB as PostgreSQL
     participant Store as MinIO / Local FS
     participant Crypto as EncryptionService
@@ -241,11 +240,12 @@ sequenceDiagram
 
     Guest->>Nginx: GET /api/v1/shares/link/{code}/download (+ password if required)
     Nginx->>App: proxy_pass
-    App->>DB: Re-fetch ShareLink with row lock / atomic check
+    App->>DB: Re-fetch ShareLink and verify properties
     App->>App: Verify password hash
-    App->>RedisSec: Atomic increment-and-check of download count
-    alt Limit exceeded or password invalid
-        App-->>Guest: Generic rejection (same shape as "not found")
+    App->>DB: Atomic conditional update (increment downloadCount if < downloadLimit)
+    DB-->>App: Return rows updated (1 if allowed, 0 if limit reached)
+    alt Limit exceeded, password invalid, expired, or not found
+        App-->>Guest: Generic 404 response (403 if limit specifically reached)
     else Allowed
         App->>Store: Fetch ciphertext object
         App->>Crypto: Unwrap FEK via KEK, decrypt stream

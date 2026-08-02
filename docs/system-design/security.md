@@ -65,7 +65,7 @@ CloudShare supports two-factor authentication using the **Time-Based One-Time Pa
     *   The user scans the QR code in their authenticator app (Google Authenticator, Authy, etc.) and submits the current 6-digit code.
     *   The backend calculates the expected code for the current time window (allowing a drift window of +/- 1 interval).
     *   If correct, the backend permanently saves the secret key in the `users` table and toggles `mfa_enabled = true`.
-    *   **MFA Anti-Replay Protection**: Successfully verified TOTP codes are registered in the Redis Security database under `mfa:used:<userId>:<timeStep>` with a 90-second TTL. Subsequent login or step-up verification attempts presenting the same code within that time window are rejected to prevent token replay attacks.
+    *   **MFA Anti-Replay Protection**: Successfully verified TOTP codes are registered in the Redis Security database under `mfa:used:<userId>:<sha256Hex(code)>` with a 90-second TTL. Subsequent login or step-up verification attempts presenting the same code within that time window are rejected to prevent token replay attacks. Keying on a hash of the code itself resolves the anti-replay bypass that occurs if a code is replayed within a discrepancy window across adjacent steps (which would otherwise compute different time-step claim keys).
 
 #### Administrative Step-Up Authentication
 To protect critical configurations (like viewing system logs or modifying other user accounts), endpoints protected by `ROLE_ADMIN` require **step-up authentication**:

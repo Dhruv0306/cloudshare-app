@@ -4,19 +4,22 @@ To prevent relational database saturation and block malicious scraping or brute-
 
 ---
 
-## 1. Dual-Redis Split Instance Architecture
+## 1. Triple-Redis Split Instance Architecture
 
-To prevent eviction of security-critical keys (like JWT blacklists and rate limiter counters) under memory pressure, CloudShare deploys **two separate physical/logical Redis instances** with tailored configurations:
+To prevent eviction of security-critical keys (like JWT blacklists and refresh tokens) under memory pressure, and to isolate high-write rate limiter volume, CloudShare deploys **three separate physical/logical Redis instances** with tailored configurations:
 
 1.  **Redis Cache (`cache-aside`)**: Holds transient business objects. Allows key eviction when RAM limits are reached.
-2.  **Redis Security (`cache-security`)**: Holds JWT blacklists, MFA session states, and sliding-window rate limit sets. Strict `noeviction` policy enforces security rules.
+2.  **Redis Security (`cache-security`)**: Holds JWT blacklists, refresh token session states, and MFA anti-replay records. Strict `noeviction` policy enforces security rules.
+3.  **Redis Rate-Limiting (`cache-ratelimit`)**: Holds sliding-window rate limit counters. Eviction is enabled (`allkeys-lru`) to bound memory consumption under DDoS workloads.
 
 | Target Instance | Dataset Category | Redis Key Pattern | Data Structure | TTL | Eviction Policy |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Redis Security** | **Revoked / Single-Use JWTs** | `blacklist:token:<jti>` | String | Token expiry | **No Eviction** |
-| **Redis Security** | **API Rate Limits** | `limit:<ip_or_userid>:<endpoint>` <br> `limit:link:<shareCode>:<ip>` <br> `limit:linkglobal:<ip>` | Sorted Set | 1 Minute | **No Eviction** |
+| **Redis Security** | **MFA TOTP Anti-Replay** | `mfa:used:<userId>:<sha256Hex(code)>` | String | 90 Seconds | **No Eviction** |
+| **Redis Rate-Limiting** | **API Rate Limits** | `limit:<ip_or_userid>:<endpoint>` <br> `limit:link:<shareCode>:<ip>` <br> `limit:linkglobal:<ip>` | Sorted Set | 1 Minute | `allkeys-lru` |
 | **Redis Cache** | **Cache-Aside Metadata** | `cache:user:<id>` <br> `cache:permissions:<file_id>` | Hash / String | 1 Hour | `allkeys-lru` |
 | **Redis Cache** | **Eviction Bypass Marker** | `cache:permissions:bypass:<file_id>` | String | 10 Minutes | `allkeys-lru` |
+
 
 ---
 
@@ -106,7 +109,7 @@ This design ensures IP rate limiting is fully protected against header-spoofing 
 
 ## 4. Redis Configuration & Tuning Spec
 
-The two Redis instances are configured with distinct memory limits and eviction policies to guarantee security and system reliability under load.
+The three Redis instances are configured with distinct memory limits, eviction policies, and passwords to guarantee security and system reliability under load.
 
 ### 4.1 Redis Cache Config (`cache-aside`)
 *   **Max Memory:** 256MB.
@@ -115,14 +118,26 @@ The two Redis instances are configured with distinct memory limits and eviction 
     ```properties
     maxmemory 268435456
     maxmemory-policy allkeys-lru
+    requirepass <configured_password>
     ```
 
 ### 4.2 Redis Security Config (`cache-security`)
 *   **Max Memory:** 256MB.
-*   **Max Memory Policy:** `noeviction`. Security records (such as blacklisted JWT IDs and IP rate limits) must never be dropped dynamically. If memory is full, new write requests fail with an Out-of-Memory error, protecting the application from brute-force floods or replay attacks bypassing checks.
+*   **Max Memory Policy:** `noeviction`. Security records (such as blacklisted JWT IDs and MFA anti-replay keys) must never be dropped dynamically. If memory is full, new write requests fail with an Out-of-Memory error, protecting the application from brute-force floods or replay attacks bypassing checks.
 *   **Tuning Properties:**
     ```properties
     maxmemory 268435456
     maxmemory-policy noeviction
+    requirepass <configured_password>
     ```
-*   **Alerting:** Prometheus monitors `redis_memory_used_bytes` for both instances. If usage exceeds 80% on either node, an automated alert triggers to notify operators to allocate more memory.
+
+### 4.3 Redis Rate-Limiting Config (`cache-ratelimit`)
+*   **Max Memory:** 128MB.
+*   **Max Memory Policy:** `allkeys-lru` (Least Recently Used). Ephemeral rate-limit counters can be safely evicted under extreme memory pressure since standard gateway limits still provide secondary protection.
+*   **Tuning Properties:**
+    ```properties
+    maxmemory 134217728
+    maxmemory-policy allkeys-lru
+    requirepass <configured_password>
+    ```
+*   **Alerting:** Prometheus monitors `redis_memory_used_bytes` for all three instances. If usage exceeds 80% on any node, an automated alert triggers to notify operators to allocate more memory.

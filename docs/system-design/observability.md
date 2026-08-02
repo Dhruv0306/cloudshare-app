@@ -56,7 +56,10 @@ The Logback configuration is optimized to output JSON logs to standard output (C
     
     <!-- Fine-grained security logs -->
     <logger name="org.springframework.security" level="WARN"/>
-    <logger name="com.cloudshare" level="DEBUG"/>
+    <!-- Note: com.cloudshare level is INFO in production (non-dev profile) to prevent 
+         leakage of sensitive identifiers/tokens in logs. Set com.cloudshare to DEBUG 
+         only in dev-specific configs. -->
+    <logger name="com.cloudshare" level="INFO"/>
 </configuration>
 ```
 

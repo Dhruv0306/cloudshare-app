@@ -29,37 +29,39 @@ CloudShare divides configuration secrets and cryptographic keys into distinct se
 
 ---
 
-## 2. Key Management Service (KMS) Integration
+## 2. Local Key Encrypting Key (KEK) Resolution
 
-To keep the master **Key Encryption Key (KEK)** secure, CloudShare integrates with the **HashiCorp Vault Transit Secret Engine** (or cloud alternatives like AWS KMS).
+To achieve robust cryptographic protection without external operational dependencies, CloudShare implements local JCE-based **Envelope Encryption** within the JVM boundaries.
 
-Using the **Transit Engine**, the Spring Boot application *never* holds the plaintext KEK in its memory space. Instead, cryptography is offloaded:
+Master **Key Encryption Keys (KEKs)** are externalized to environment variables and resolved at runtime by the `EncryptionService`:
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant App as Spring Boot App
-    participant Vault as HashiCorp Vault (KMS)
+    participant JCE as JVM Cryptographic Engine (JCE)
     participant DB as PostgreSQL DB
 
-    Note over App, Vault: File Upload (Encryption)
-    App->>App: Generate random 256-bit FEK
-    App->>Vault: POST /v1/transit/encrypt/cloudshare-kek (Sends Plaintext FEK)
-    Vault->>Vault: Encrypt FEK using internal Master KEK
-    Vault-->>App: Return Ciphertext (e.g., vault:v1:8bX9z...)
-    App->>DB: Save Ciphertext (encrypted_fek) and key_version
+    Note over App, JCE: File Upload (Encryption)
+    App->>JCE: Generate random 256-bit FEK & 12-byte IV
+    App->>App: Resolve Master KEK by version (RAM lookup)
+    App->>JCE: Wrap FEK using KEK via AESWrap (RFC 3394)
+    JCE-->>App: Return Wrapped FEK (Base64)
+    App->>DB: Save Wrapped FEK, IV, and KEK version
 
-    Note over App, Vault: File Download (Decryption)
-    App->>DB: Query encrypted_fek and key_version
-    DB-->>App: Return Ciphertext
-    App->>Vault: POST /v1/transit/decrypt/cloudshare-kek (Sends Ciphertext)
-    Vault->>Vault: Decrypt using matching KEK version
-    Vault-->>App: Return Plaintext FEK
-    App->>App: Stream decrypt file (AES-GCM)
+    Note over App, JCE: File Download (Decryption)
+    App->>DB: Query wrapped FEK, IV, and KEK version
+    DB-->>App: Return Cryptographic parameters
+    App->>App: Resolve Master KEK by version (RAM lookup)
+    App->>JCE: Unwrap FEK using KEK via AESWrap (RFC 3394)
+    JCE-->>App: Return Plaintext FEK in memory
+    App->>JCE: Stream decrypt file using FEK (AES-GCM)
 ```
 
-### Benefit:
-If the Spring Boot container is fully compromised at runtime, the attacker can only read keys currently active in memory. They cannot extract the KEK to decrypt the rest of the database, as the master KEK remains isolated inside Vault.
+### Key Management Design:
+* **In-Memory Cache:** KEKs are loaded from the `crypto.masterKek` property or the versioned KEKs map (`crypto.keks`) in the configuration, parsed/decoded, and cached in a `ConcurrentHashMap` inside `EncryptionService`.
+* **Key Wrapping (RFC 3394):** The FEK is wrapped using the local JCE provider initialized with `Cipher.getInstance("AESWrap")`. The resulting wrapped key ciphertext is saved to PostgreSQL, preventing raw FEK leakage in database tables.
+* **Fail-Closed Shape Validation:** At startup, `SecretsStartupValidator` validates the shape of all configured keys. If a key is not exactly 32 Base64-decoded bytes, startup is aborted unless `crypto.kek.allow-raw-passphrase=true` is set (which digests keys via SHA-256 and warns loudly).
 
 ---
 
@@ -86,17 +88,17 @@ sequenceDiagram
     actor Admin
     participant Worker as Spring Boot ReKeyWorker
     participant DB as PostgreSQL DB
-    participant Vault as HashiCorp Vault (KMS)
+    participant JCE as EncryptionService (JCE)
 
-    Admin->>Worker: Run: java -jar app.jar --rekey --from-version=1 --to-version=2
+    Admin->>Worker: Run: java -jar app.jar --spring.profiles.active=rekey-job --rekey.oldVersion=1 --rekey.newVersion=2
     loop Batch Processing (e.g., 100 rows per transaction)
         Worker->>DB: SELECT * FROM files WHERE kek_version = 1 FOR UPDATE SKIP LOCKED LIMIT 100
         DB-->>Worker: List of 100 File Metadata records
         loop For Each File Record
-            Worker->>Vault: Decrypt FEK using KEK v1
-            Vault-->>Worker: Plaintext FEK
-            Worker->>Vault: Encrypt FEK using KEK v2
-            Vault-->>Worker: New Encrypted_FEK Ciphertext (v2)
+            Worker->>JCE: Unwrap FEK using KEK v1 (unwrapFek)
+            JCE-->>Worker: Plaintext FEK spec
+            Worker->>JCE: Wrap FEK using KEK v2 (wrapFek)
+            JCE-->>Worker: New Encrypted FEK Ciphertext (Base64)
             Worker->>Worker: Update memory record (new ciphertext, kek_version = 2)
         end
         Worker->>DB: UPDATE files SET encrypted_fek = :new_fek, kek_version = 2 WHERE id = :id
@@ -119,51 +121,46 @@ LIMIT 100;
 
 #### 2. Re-Keying Worker Implementation (Java Sketch)
 ```java
-@Component
-@Profile("rekey-job")
-public class ReKeyWorker implements CommandLineRunner {
+@Service
+@RequiredArgsConstructor
+public class ReKeyService {
 
-    @Autowired
-    private FileRepository fileRepository;
-    @Autowired
-    private VaultTransitService vaultService;
+    private final FileRepository fileRepository;
+    private final EncryptionService encryptionService;
+    private final AuditLogService auditLogService;
 
-    @Transactional
-    public int processNextBatch(int oldVersion, int newVersion) {
-        // Query utilizing FOR UPDATE SKIP LOCKED
-        List<FileMetadata> batch = fileRepository.findBatchForReKey(oldVersion, PageRequest.of(0, 100));
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int processNextBatch(int oldVersion, int newVersion, Set<UUID> failedIds) {
+        // Query utilizing FOR UPDATE SKIP LOCKED and excluding failed keys
+        List<FileMetadata> batch = fileRepository.findBatchForReKey(oldVersion, failedIds, 100);
         if (batch.isEmpty()) {
             return 0;
         }
 
         for (FileMetadata file : batch) {
-            // 1. Decrypt FEK using historical KEK version
-            byte[] plaintextFek = vaultService.decrypt(file.getEncryptedFek(), oldVersion);
-            
-            // 2. Encrypt FEK using target KEK version
-            String newCiphertext = vaultService.encrypt(plaintextFek, newVersion);
-            
-            // 3. Save new metadata
-            file.setEncryptedFek(newCiphertext);
-            file.setKekVersion(newVersion);
-            fileRepository.save(file);
-            
-            log.info("Successfully re-keyed file metadata. UUID: {}, New KEK Version: {}", file.getId(), newVersion);
+            try {
+                // 1. Decrypt FEK using historical KEK version
+                SecretKey fek = encryptionService.unwrapFek(file.getEncryptedFek(), oldVersion);
+                
+                // 2. Encrypt FEK using target KEK version
+                String newCiphertext = encryptionService.wrapFek(fek, newVersion);
+                
+                // 3. Save new metadata
+                file.setEncryptedFek(newCiphertext);
+                file.setKekVersion(newVersion);
+                fileRepository.save(file);
+                
+                // 4. Log audit log
+                auditLogService.log(null, "SYSTEM_REKEY", file.getId(), "127.0.0.1", 
+                        "Successfully re-keyed file metadata from KEK version " + oldVersion + " to " + newVersion);
+                
+                log.info("Successfully re-keyed file metadata. UUID: {}, New KEK Version: {}", file.getId(), newVersion);
+            } catch (Exception e) {
+                failedIds.add(file.getId());
+                auditLogService.log(null, "SYSTEM_REKEY_FAILED", file.getId(), "127.0.0.1", e.getMessage());
+            }
         }
         return batch.size();
-    }
-
-    @Override
-    public void run(String... args) {
-        int oldVer = Integer.parseInt(System.getProperty("rekey.oldVersion"));
-        int newVer = Integer.parseInt(System.getProperty("rekey.newVersion"));
-        
-        int processed;
-        do {
-            processed = processNextBatch(oldVer, newVer);
-        } while (processed > 0);
-        
-        log.info("Re-keying job completed successfully.");
     }
 }
 ```

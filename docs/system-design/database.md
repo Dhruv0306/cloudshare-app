@@ -104,7 +104,7 @@ CREATE TABLE users (
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(60) NOT NULL, -- BCrypt generates 60 char hashes
-    mfa_secret VARCHAR(32),
+    mfa_secret VARCHAR(64), -- Altered to VARCHAR(64) to prevent padding issues
     mfa_enabled BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
@@ -222,6 +222,10 @@ The `audit_logs` table grows rapidly in active environments. Writing millions of
     CREATE TABLE audit_logs_y2026m07 PARTITION OF audit_logs
         FOR VALUES FROM ('2026-07-01 00:00:00+00') TO ('2026-08-01 00:00:00+00');
     ```
+*   **Automated Partition Management:** To prevent write outages under the fail-closed audit logging model, CloudShare automates partition pre-creation via the Java-based `AuditPartitionScheduler`. 
+    *   It executes daily at 4:00 AM UTC (`app.scheduler.audit-partition.cron`).
+    *   It queries `pg_inherits` to check partition availability and pre-creates tables up to 3 months in advance (`app.scheduler.audit-partition.lookahead-months`).
+    *   Manual maintenance can be triggered by administrators via `POST /api/v1/admin/audit-logs/partitions`.
 *   **Archiving:** A quarterly cron job detaches partitions older than 1 year, exports them to compressed cold storage (CSV/Parquet format), and drops the detached partitions from PostgreSQL.
 
 ---
