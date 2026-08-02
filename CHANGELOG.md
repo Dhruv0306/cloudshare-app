@@ -5,7 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - YYYY-MM-DD
+## [1.2.1] - 2026-08-02
+
+### Security
+
+- Fixed a TOTP anti-replay bypass where the single-use guard was keyed on the server's current
+  time-step rather than the submitted code's value. Because the code verifier accepts a +/-1
+  step discrepancy window by default, a code could be replayed once in an adjacent 30s window
+  since each window computed a different Redis claim key. The guard is now keyed on a hash of
+  the code itself, closing the window regardless of which step it validated under.
+- Removed logging of raw refresh-token values at `DEBUG` level in `RefreshTokenService`, and
+  changed the default `com.cloudshare` logging level from `DEBUG` to `INFO` in both
+  `application.yml` and the non-dev `logback-spring.xml` profile, so this class of sensitive
+  data-in-logs mistake isn't shipped as the default in any environment.
+- Added authentication (`requirepass`) to all three Redis instances (`cache-aside`,
+  `cache-security`, `cache-ratelimit`), which previously relied solely on Docker network
+  isolation. `SecretsStartupValidator` now fails closed at boot if a Redis password is missing,
+  unless explicitly overridden for local development.
+- Added a per-account (hashed-identifier) rate limit on `/api/v1/auth/login`, layered on top of
+  the existing per-IP limit, to reduce exposure to credential-stuffing attempts distributed
+  across many source IPs against a single target account.
+- Added audit logging (`STEP_UP_GRANTED` / `STEP_UP_FAILED`) for MFA step-up token issuance,
+  closing a gap where every other sensitive action had an audit trail except this one.
+- Client-facing authentication error responses no longer echo raw `UsernameNotFoundException`
+  messages (which could include internal identifiers); a generic message is returned instead
+  while the detail is still captured server-side in logs.
+
+### Fixed
+
+- Public share-link creation (`expiresInSeconds`) now enforces an upper bound (30 days) in
+  addition to the existing lower bound, preventing effectively-permanent share links and a
+  potential `Instant` overflow on extreme input values.
+- Admin-tunable ClamAV scan and download concurrency limits now enforce an upper sanity bound
+  (200) in addition to the existing lower bound, preventing accidental resource exhaustion from
+  a misconfigured value.
+
+### Changed
+
+- File-upload extension filtering switched from a deny-list of known-dangerous extensions to an
+  allow-list of permitted extensions, closing the inherent gap where novel or uncommon
+  executable/script extensions could bypass a fixed blocklist.
+- Removed unreachable fallback branches in `JwtAuthenticationFilter` and `RateLimitingFilter`
+  that handled a `null` return from `JwtTokenProvider#resolveToken`, which never actually
+  returns `null` (code clarity only, no behavior change).
+
+## [1.2.0] - 2026-07-27
 
 ### Security
 
