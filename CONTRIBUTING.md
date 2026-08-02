@@ -75,7 +75,7 @@ The backend is built with Spring Boot and uses Maven.
 1. Configure your local environment by copying `.env.example` to `.env`.
 2. Spin up the infrastructure dependencies:
    ```bash
-   docker-compose up -d db redis minio clamav
+   docker compose up -d db cache-aside cache-security cache-ratelimit storage clamav
    ```
 3. Run the backend application:
    ```bash
