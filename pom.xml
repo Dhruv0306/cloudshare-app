@@ -156,6 +156,14 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
+                    <!--
+                        Explicit rather than relying on the parent POM's default: this is
+                        now depended on to recover real parameter names (e.g. "limit") in
+                        HandlerMethodValidationException error responses (see
+                        AdminController / GlobalExceptionHandler), instead of falling back
+                        to synthetic names like "arg0".
+                    -->
+                    <parameters>true</parameters>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
