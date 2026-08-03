@@ -359,19 +359,19 @@ All administrative endpoints require Role-Based Access Control (`ROLE_ADMIN`) an
 *   **Endpoint:** `POST /api/v1/admin/clamav/limit?limit={limit}`
 *   **Authentication:** Bearer Token + Step-Up Token
 *   **Request Params:**
-    *   `limit` (Integer): The new scan concurrency limit (sanity check enforces bounds between 1 and 200).
+    *   `limit` (Integer): The new scan concurrency limit. Enforced with `@Min(1)` and `@Max(200)` validation constraints.
 *   **Responses:**
     *   `200 OK`: Limit updated successfully.
-    *   `400 Bad Request`: Limit parameter invalid or out of sanity bounds.
+    *   `400 Bad Request`: Limit parameter invalid, missing, or out of the required `[1, 200]` range (returns a structured `VALIDATION_FAILED` error response).
 
 ### 5.4 Update Download Concurrency Limit
 *   **Endpoint:** `POST /api/v1/admin/downloads/limit?limit={limit}`
 *   **Authentication:** Bearer Token + Step-Up Token
 *   **Request Params:**
-    *   `limit` (Integer): The new download concurrency limit (sanity check enforces bounds between 1 and 200).
+    *   `limit` (Integer): The new download concurrency limit. Enforced with `@Min(1)` and `@Max(200)` validation constraints.
 *   **Responses:**
     *   `200 OK`: Limit updated successfully.
-    *   `400 Bad Request`: Limit parameter invalid or out of sanity bounds.
+    *   `400 Bad Request`: Limit parameter invalid, missing, or out of the required `[1, 200]` range (returns a structured `VALIDATION_FAILED` error response).
 
 ### 5.5 Trigger Audit Logs Partition Maintenance
 *   **Endpoint:** `POST /api/v1/admin/audit-logs/partitions`
