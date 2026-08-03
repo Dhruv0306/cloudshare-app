@@ -120,6 +120,11 @@ public class RedisConfig {
      */
     private LettuceClientConfiguration buildPooledClientConfiguration(
             long timeoutMs, int maxTotal, int maxIdle, int minIdle) {
+        // NOTE: must be exactly GenericObjectPoolConfig<StatefulConnection<?, ?>>, not a
+        // wildcard GenericObjectPoolConfig<?> — LettucePoolingClientConfigurationBuilder
+        // .poolConfig(...) takes that exact invariant generic type (see Spring Data
+        // Redis's LettucePoolingClientConfiguration source); a wildcard does not satisfy
+        // it and fails to compile.
         GenericObjectPoolConfig<io.lettuce.core.api.StatefulConnection<?, ?>> poolConfig = new GenericObjectPoolConfig<>();
         poolConfig.setMaxTotal(maxTotal);
         poolConfig.setMaxIdle(maxIdle);
