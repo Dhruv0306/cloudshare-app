@@ -17,7 +17,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
 
 public class CloudShareLoadTest extends Simulation {
 
-    private static final String FILE_PATH = "src/test/resources/data/10mb_random.bin";
+    private static final String FILE_PATH = "src/test/resources/data/10mb_random.txt";
     private static final int FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
     static {
@@ -36,12 +36,14 @@ public class CloudShareLoadTest extends Simulation {
                 SecureRandom random = new SecureRandom();
                 int bytesWritten = 0;
                 while (bytesWritten < FILE_SIZE) {
-                    random.nextBytes(buffer);
+                    for (int i = 0; i < buffer.length; i++) {
+                        buffer[i] = (byte) (random.nextInt(95) + 32); // random printable ASCII
+                    }
                     int toWrite = Math.min(buffer.length, FILE_SIZE - bytesWritten);
                     fos.write(buffer, 0, toWrite);
                     bytesWritten += toWrite;
                 }
-                System.out.println("Generated 10MB random file at: " + file.getAbsolutePath());
+                System.out.println("Generated 10MB random text file at: " + file.getAbsolutePath());
             } catch (IOException e) {
                 throw new RuntimeException("Failed to generate random file for load testing", e);
             }
@@ -100,9 +102,9 @@ public class CloudShareLoadTest extends Simulation {
             .header("Authorization", "Bearer #{token}")
             .asMultipartForm()
             .bodyPart(
-                RawFileBodyPart("file", "data/10mb_random.bin")
-                    .contentType("application/octet-stream")
-                    .fileName("10mb_random.bin")
+                RawFileBodyPart("file", "data/10mb_random.txt")
+                    .contentType("text/plain")
+                    .fileName("10mb_random.txt")
             )
             .check(status().is(201))
             .check(jsonPath("$.data.id").saveAs("fileId"))
