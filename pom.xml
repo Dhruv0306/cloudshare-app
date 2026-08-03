@@ -13,7 +13,7 @@
 
     <groupId>com.cloudshare</groupId>
     <artifactId>cloudshare</artifactId>
-    <version>1.2.2</version>
+    <version>1.3.0</version>
     <name>cloudshare</name>
     <description>Secure File Sharing Web Application</description>
 
@@ -39,6 +39,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- Required for LettucePoolingClientConfiguration; spring-boot-starter-data-redis
+             does not pull this in transitively since connection pooling is opt-in. -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -150,6 +156,14 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
+                    <!--
+                        Explicit rather than relying on the parent POM's default: this is
+                        now depended on to recover real parameter names (e.g. "limit") in
+                        HandlerMethodValidationException error responses (see
+                        AdminController / GlobalExceptionHandler), instead of falling back
+                        to synthetic names like "arg0".
+                    -->
+                    <parameters>true</parameters>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
@@ -170,6 +184,35 @@
                         </exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+            <plugin>
+                <!--
+                    Report-only for now: generates an HTML/XML coverage report so coverage
+                    is visible in CI artifacts, but does NOT enforce a minimum threshold via
+                    jacoco:check. This repo's actual baseline coverage % hasn't been measured
+                    yet, so a blind threshold risks breaking the verify job on the first run
+                    it's added. Once a real baseline is visible from CI, a follow-up patch can
+                    add an enforced jacoco:check threshold based on that number.
+                -->
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

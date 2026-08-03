@@ -5,6 +5,7 @@ services:
   # If certificates are missing, container initialization will fail.
   gateway:
     image: nginx:1.25-alpine
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
@@ -13,13 +14,23 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - ./frontend:/usr/share/nginx/html:ro
     depends_on:
-      - app
+      app:
+        condition: service_healthy
+    healthcheck:
+      # nginx:alpine includes wget via busybox (no curl). Plain HTTP check against
+      # the static frontend root is enough to confirm the process is serving traffic.
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
 
   # Spring Boot Stateless App (Scaffolded for later phases)
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/cloudshare
@@ -55,50 +66,97 @@ services:
       - CLAMAV_CONCURRENCY_TIMEOUT_SECONDS=${CLAMAV_CONCURRENCY_TIMEOUT_SECONDS:-30}
       - STORAGE_MAX_CONCURRENT_DECRYPT_DOWNLOADS=${STORAGE_MAX_CONCURRENT_DECRYPT_DOWNLOADS:-20}
       - STORAGE_DECRYPT_ACQUIRE_TIMEOUT_SECONDS=${STORAGE_DECRYPT_ACQUIRE_TIMEOUT_SECONDS:-10}
+    # No healthcheck: block needed here — the Dockerfile already declares a HEALTHCHECK
+    # (added in v1.2.2) that Compose inherits automatically from the built image.
     depends_on:
-      - db
-      - cache-aside
-      - cache-security
-      - cache-ratelimit
-      - clamav
-      - storage
+      db:
+        condition: service_healthy
+      cache-aside:
+        condition: service_healthy
+      cache-security:
+        condition: service_healthy
+      cache-ratelimit:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
 
   # PostgreSQL Relational Metadata Database
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       - POSTGRES_DB=cloudshare
       - POSTGRES_USER=${SPRING_DATASOURCE_USERNAME}
       - POSTGRES_PASSWORD=${SPRING_DATASOURCE_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATASOURCE_USERNAME} -d cloudshare"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
 
   # Redis Cache-Aside Instance
   cache-aside:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_CACHE_PASSWORD}
     volumes:
       - redisdata-aside:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_CACHE_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      start_period: 5s
+      retries: 5
+    environment:
+      - REDIS_CACHE_PASSWORD=${REDIS_CACHE_PASSWORD}
 
   # Redis Security Instance (Blacklists, Token Families)
   cache-security:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --requirepass ${REDIS_SECURITY_PASSWORD}
     volumes:
       - redisdata-security:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_SECURITY_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      start_period: 5s
+      retries: 5
+    environment:
+      - REDIS_SECURITY_PASSWORD=${REDIS_SECURITY_PASSWORD}
 
   # Redis Rate Limiting Instance (Ephemeral sliding windows)
   cache-ratelimit:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_RATELIMIT_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_RATELIMIT_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      start_period: 5s
+      retries: 5
+    environment:
+      - REDIS_RATELIMIT_PASSWORD=${REDIS_RATELIMIT_PASSWORD}
 
   # ClamAV Virus Scanner Daemon
   clamav:
     image: clamav/clamav:latest
+    restart: unless-stopped
+    # No healthcheck: block needed — the official clamav/clamav image ships its own
+    # HEALTHCHECK (clamdcheck.sh, 6-minute start period to allow signature DB load)
+    # which Compose inherits automatically. depends_on below relies on it.
 
   # MinIO S3-Compatible Object Storage (Free local S3)
   storage:
     image: minio/minio:latest
+    restart: unless-stopped
     command: server /data
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
@@ -106,6 +164,15 @@ services:
       - MINIO_BROWSER=off
     volumes:
       - miniadata:/data
+    healthcheck:
+      # The minio/minio image dropped curl and wget in late 2023; the bundled `mc`
+      # client's "ready" subcommand is MinIO's own currently-recommended healthcheck
+      # (see minio/minio's official docker-compose.yaml) and needs no credentials.
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
 
 volumes:
   pgdata:

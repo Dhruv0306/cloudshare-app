@@ -36,6 +36,11 @@ spring:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
       password: ${SPRING_DATA_REDIS_PASSWORD:}
+      timeout-ms: ${SPRING_DATA_REDIS_TIMEOUT_MS:2000}
+      pool:
+        max-total: ${SPRING_DATA_REDIS_POOL_MAX_TOTAL:16}
+        max-idle: ${SPRING_DATA_REDIS_POOL_MAX_IDLE:8}
+        min-idle: ${SPRING_DATA_REDIS_POOL_MIN_IDLE:2}
     web:
       pageable:
         max-page-size: ${SPRING_DATA_WEB_PAGEABLE_MAX_PAGE_SIZE:100}
@@ -52,6 +57,15 @@ security:
     host: ${SECURITY_REDIS_HOST:localhost}
     port: ${SECURITY_REDIS_PORT:6380}
     password: ${SECURITY_REDIS_PASSWORD:}
+    # Deliberately the same order of magnitude as cache-aside, not shorter: the
+    # security instance is used fail-closed (step-up token blacklist/single-use
+    # checks), so a too-aggressive timeout would convert transient Redis latency
+    # into incorrectly rejected legitimate step-up attempts.
+    timeout-ms: ${SECURITY_REDIS_TIMEOUT_MS:2000}
+    pool:
+      max-total: ${SECURITY_REDIS_POOL_MAX_TOTAL:16}
+      max-idle: ${SECURITY_REDIS_POOL_MAX_IDLE:8}
+      min-idle: ${SECURITY_REDIS_POOL_MIN_IDLE:2}
   jwt:
     secret: ${JWT_SECRET:}
     expiration-seconds: ${JWT_EXPIRATION:900}
@@ -62,6 +76,17 @@ security:
       host: ${RATE_LIMIT_REDIS_HOST:localhost}
       port: ${RATE_LIMIT_REDIS_PORT:6381}
       password: ${RATE_LIMIT_REDIS_PASSWORD:}
+      # Shorter than the other two instances on purpose: RateLimiterService.isAllowed
+      # fails OPEN (allows the request) on any Redis error, specifically so a slow or
+      # unreachable rate-limit Redis never stalls every incoming request. A short
+      # timeout here just makes that fail-open trigger faster, with no security
+      # downside — unlike the cache/security instances, there's nothing to protect
+      # by waiting longer.
+      timeout-ms: ${RATE_LIMIT_REDIS_TIMEOUT_MS:500}
+      pool:
+        max-total: ${RATE_LIMIT_REDIS_POOL_MAX_TOTAL:16}
+        max-idle: ${RATE_LIMIT_REDIS_POOL_MAX_IDLE:8}
+        min-idle: ${RATE_LIMIT_REDIS_POOL_MIN_IDLE:2}
     enabled: ${RATE_LIMIT_ENABLED:true}
     auth-limit: ${RATE_LIMIT_AUTH:5}
     mfa-limit: ${RATE_LIMIT_MFA:5}

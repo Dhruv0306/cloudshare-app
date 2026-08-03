@@ -10,9 +10,11 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,6 +34,36 @@ public class GlobalExceptionHandler {
         ApiResponse<Void> response = ApiResponse.error(
                 "VALIDATION_FAILED",
                 "The request body failed to validate.",
+                errors);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * Handles constraint violations on {@code @RequestParam}/{@code @PathVariable}
+     * method parameters (e.g. {@code @Min}/{@code @Max} on AdminController's tunable
+     * limits). This is Spring Framework 6.1+'s native method-validation mechanism —
+     * deliberately NOT paired with a class-level {@code @Validated}, since that would
+     * route validation through the older AOP-proxy path and raise
+     * {@code ConstraintViolationException} instead, which Spring's own docs recommend
+     * against for controllers on this framework version.
+     */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHandlerMethodValidationException(HandlerMethodValidationException ex) {
+        List<ApiResponse.ValidationError> errors = new ArrayList<>();
+        ex.getParameterValidationResults().forEach(result -> {
+            String field = result.getMethodParameter().getParameterName();
+            String issue = result.getResolvableErrors().stream()
+                    .map(error -> error.getDefaultMessage() != null ? error.getDefaultMessage() : "Invalid value")
+                    .collect(Collectors.joining("; "));
+            errors.add(ApiResponse.ValidationError.builder()
+                    .field(field != null ? field : "parameter")
+                    .issue(issue)
+                    .build());
+        });
+
+        ApiResponse<Void> response = ApiResponse.error(
+                "VALIDATION_FAILED",
+                "The request parameters failed to validate.",
                 errors);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }

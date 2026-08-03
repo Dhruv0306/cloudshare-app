@@ -237,4 +237,36 @@ class AdminControllerTest {
 
         verify(downloadConcurrencyLimiter).setMaxConcurrentDownloads(15);
     }
+
+    // Confirms Spring's native (Spring Framework 6.1+) method-validation path fires for
+    // @RequestParam @Min/@Max — no class-level @Validated is used here, so a failure
+    // raises HandlerMethodValidationException, which GlobalExceptionHandler maps to the
+    // same VALIDATION_FAILED shape used for @Valid @RequestBody failures.
+    @Test
+    void updateClamavConcurrencyLimit_belowMin_returns400() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/admin/clamav/limit")
+                        .param("limit", "0")
+                        .header("X-StepUp-Token", "valid-token")
+                        .with(user(getMockAdminPrincipal()))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+
+        verify(clamAvService, org.mockito.Mockito.never()).setMaxConcurrentScans(org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void updateDownloadConcurrencyLimit_aboveMax_returns400() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/admin/downloads/limit")
+                        .param("limit", "201")
+                        .header("X-StepUp-Token", "valid-token")
+                        .with(user(getMockAdminPrincipal()))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+
+        verify(downloadConcurrencyLimiter, org.mockito.Mockito.never()).setMaxConcurrentDownloads(org.mockito.ArgumentMatchers.anyInt());
+    }
 }

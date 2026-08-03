@@ -8,6 +8,8 @@ import com.cloudshare.service.AuditLogService;
 import com.cloudshare.scheduler.AuditPartitionScheduler;
 import com.cloudshare.service.ClamAvService;
 import com.cloudshare.service.DownloadConcurrencyLimiter;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,14 +36,20 @@ public class AdminController {
     private final ClamAvService clamAvService;
     private final DownloadConcurrencyLimiter downloadConcurrencyLimiter;
 
+    // Bounds mirror DownloadConcurrencyLimiter.MAX_ALLOWED_CONCURRENCY /
+    // ClamAvService.MAX_ALLOWED_CONCURRENCY (both 1-200). Validated here too so a bad
+    // value gets a clean 400 with field-level detail instead of only failing one layer
+    // down; the service-layer check remains as the authoritative backstop.
     @PostMapping("/clamav/limit")
-    public ResponseEntity<ApiResponse<String>> updateClamavConcurrencyLimit(@RequestParam int limit) {
+    public ResponseEntity<ApiResponse<String>> updateClamavConcurrencyLimit(
+            @RequestParam @Min(1) @Max(200) int limit) {
         clamAvService.setMaxConcurrentScans(limit);
         return ResponseEntity.ok(ApiResponse.success("ClamAV scan concurrency limit updated to " + limit + " successfully."));
     }
 
     @PostMapping("/downloads/limit")
-    public ResponseEntity<ApiResponse<String>> updateDownloadConcurrencyLimit(@RequestParam int limit) {
+    public ResponseEntity<ApiResponse<String>> updateDownloadConcurrencyLimit(
+            @RequestParam @Min(1) @Max(200) int limit) {
         downloadConcurrencyLimiter.setMaxConcurrentDownloads(limit);
         return ResponseEntity.ok(ApiResponse.success("Download concurrency limit updated to " + limit + " successfully."));
     }
