@@ -144,3 +144,17 @@ The three Redis instances are configured with distinct memory limits, eviction p
     requirepass <configured_password>
     ```
 *   **Alerting:** Prometheus monitors `redis_memory_used_bytes` for all three instances. If usage exceeds 80% on any node, an automated alert triggers to notify operators to allocate more memory.
+
+### 4.4 Lettuce Client Connection Pooling & Timeout Config
+
+To prevent thread-blocking resource exhaustion and configure appropriate fail-safe profiles, Lettuce connections are pooled and tuned using environment-overridable properties:
+
+*   **Connection Pool Sizing (All Instances):**
+    *   `max-total`: 16 (maximum active connections allowed in the pool).
+    *   `max-idle`: 8 (maximum idle connections kept in the pool).
+    *   `min-idle`: 2 (minimum idle connections pre-warmed and maintained).
+*   **Command Timeout & Failure Semantics:**
+    *   **`cache-aside`:** Timeout defaults to `2000ms`. Slower timeouts are acceptable as it is a read-through fallback; transient blips should not force redundant DB hits.
+    *   **`cache-security`:** Timeout defaults to `2000ms`. Security check operations run fail-closed (meaning if Redis is unavailable, requests fail). A standard timeout ensures transient network drops do not block legitimate requests too aggressively.
+    *   **`cache-ratelimit`:** Timeout defaults to `500ms`. Rate-limiting runs fail-open (meaning if the Redis check times out or fails, the request is allowed through). A fast timeout policy ensures that rate-limit congestion never stalls standard application endpoints.
+
