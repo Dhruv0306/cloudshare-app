@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-08-02
+
+### Added
+
+- Added `healthcheck:` blocks and `restart: unless-stopped` to every service in
+  `docker-compose.yml`, and upgraded `app`'s `depends_on` to the long-form
+  `condition: service_healthy` syntax. Previously `depends_on` only guaranteed
+  container *start* order, not readiness — Postgres/Redis/MinIO could still be
+  unready when the app started. `db` uses `pg_isready`; the three Redis instances use
+  `redis-cli ping`; `storage` (MinIO) uses `mc ready local` (the currently-recommended
+  check — the official `minio/minio` image dropped both `curl` and `wget` in late
+  2023, so the commonly-referenced `curl .../minio/health/live` example no longer
+  works on current image tags); `clamav` needs no new healthcheck since the official
+  `clamav/clamav` image already ships its own (`clamdcheck.sh`).
+- Added JaCoCo coverage reporting (`jacoco-maven-plugin`, report-only — no enforced
+  `jacoco:check` threshold yet, since this repo's actual coverage baseline hasn't
+  been measured from a real build). The `verify` CI job now uploads the generated
+  HTML/XML report as a build artifact for visibility. An enforced minimum can follow
+  once a real baseline number is available.
+- Added `@Min(1)`/`@Max(200)` constraints directly to `AdminController`'s
+  `clamav/limit` and `downloads/limit` endpoint parameters, mirroring the bounds
+  already enforced in `ClamAvService`/`DownloadConcurrencyLimiter`. Uses Spring
+  Framework 6.1+'s native method-validation support (no class-level `@Validated`,
+  which would route through the older, discouraged-for-this-version AOP-proxy path).
+  A new `GlobalExceptionHandler` handler for `HandlerMethodValidationException`
+  returns the same `VALIDATION_FAILED` response shape already used for request-body
+  validation failures, instead of a bad value only surfacing one layer down.
+- Added explicit, environment-overridable connection pooling and command timeouts
+  for all three Redis `LettuceConnectionFactory` beans (cache-aside, security,
+  rate-limit), previously running on library defaults. Timeout defaults are chosen
+  per instance's actual failure semantics: the security instance (fail-closed on
+  step-up token checks) keeps a more forgiving 2000ms default so transient latency
+  doesn't turn into incorrectly rejected legitimate step-up attempts, while the
+  rate-limit instance (fails open by design in `RateLimiterService`) uses a
+  deliberately shorter 500ms default, since there's no security benefit to waiting
+  longer before falling through to "allow."
+
 ## [1.2.2] - 2026-08-02
 
 ### Added
