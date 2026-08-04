@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-08-04
+
+### Changed
+
+- **[Major/Internal]** Split the monolithic `frontend/js/app.js` (1,262 lines) into 10 ES
+  modules: `state.js` (the single shared state object, exported once as a true singleton),
+  `shared.js` (pure UI helpers with no state/API dependency), `session.js` (session lifecycle:
+  JWT parsing, active-session check, shell setup/teardown), `router.js` (the SPA router),
+  `views/{auth,dashboard,sharing,mfa,admin}.js` (one file per feature area), and a slim
+  bootstrap `app.js` that only wires up `DOMContentLoaded` and event listeners. No behavior
+  change — verified via a full function-name inventory diff (all 42 original top-level
+  functions present, none missing, none added), a byte-identical diff of the `state` object
+  definition, and a Node.js ESM import-resolution harness confirming every module's imports
+  resolve against real exports (this caught one real bug before merge: `bindGlobalEvents`'s
+  admin pagination/filter handlers weren't importing `loadAdminUsers`/`loadAdminLogs`).
+  `index.html` required no changes — it already loads `app.js` as `type="module"`, and the app
+  has zero inline `onclick="..."` HTML attributes. This is a breaking internal restructure
+  (import paths, module boundaries) but touches no external/public contract — no HTTP endpoint,
+  request/response shape, or user-facing behavior changed.
+- **[Major/Internal]** Extracted `PermissionCacheService` out of `FileService` and `ShareService`,
+  removing duplicated Redis permission-cache logic. The near-identical eviction-with-bypass-marker
+  pattern previously existed independently in `FileService.deleteFile` and
+  `ShareService.evictPermissionsCache`; the cache-read-with-self-heal pattern existed only in
+  `FileService.verifyFileAccess`. The new service owns only the Redis mechanics (cache-aside
+  read/write, eviction, bypass-marker self-healing) — it does not query repositories directly;
+  `FileService.verifyFileAccess` keeps owning the database-fallback orchestration. Both services'
+  constructors now take `PermissionCacheService` instead of a directly-qualified
+  `StringRedisTemplate`. Test coverage: `FileServiceTest`/`ShareServiceTest` mocks rewritten (37
+  prior Redis-mock references across both files) to mock the new service and verify correct
+  delegation; a new `PermissionCacheServiceTest` is now the authoritative coverage for the
+  extracted cache-aside/eviction/self-healing mechanics themselves. No API/endpoint contract
+  change.
+
 ## [1.3.0] - 2026-08-02
 
 ### Added
