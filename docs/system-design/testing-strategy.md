@@ -146,13 +146,21 @@ To enforce code style consistency and discover security vulnerabilities during e
 
 ## 5. Load & Performance Testing (Gatling)
 
-File uploads and downloads create distinct IO bottlenecks. CloudShare specifies a **Gatling** scenario to test concurrency capacity.
+File uploads and downloads create distinct IO bottlenecks. CloudShare specifies a **Gatling** simulation suite to verify concurrency capacity and streaming throughput under load.
 
-*   **Test Criteria:** Simulate 100 concurrent users performing:
-    1.  Login and token retrieval.
-    2.  Multipart upload of a 10MB random data stream.
-    3.  Fetching file list.
-    4.  Downloading the uploaded file.
+*   **Simulation Class:** [CloudShareLoadTest.java](file:///d:/github/cloudshare-app/src/test/java/com/cloudshare/performance/CloudShareLoadTest.java)
+*   **Test Scenario:** Simulates a ramp-up of 100 concurrent virtual users over 30 seconds. Each virtual user utilizes a dynamically generated username/password feeder to perform:
+    1.  **Register:** Post user registration (`POST /api/v1/auth/register`).
+    2.  **Login:** Authenticate and retrieve bearer token (`POST /api/v1/auth/login`).
+    3.  **Upload:** Stream a 10MB random data file to storage (`POST /api/v1/files/upload`).
+    4.  **List:** Query the active user file dashboard list (`GET /api/v1/files`).
+    5.  **Download:** Fetch the uploaded 10MB payload to verify streaming integrity (`GET /api/v1/files/{fileId}/download`).
 *   **Key Performance Indicators (KPIs):**
-    *   95th Percentile API Latency: `< 200ms` for API requests; `< 1500ms` for 10MB file streaming.
+    *   95th Percentile API Latency: `< 200ms` for API requests (Register, Login, List).
+    *   95th Percentile Streaming Latency: `< 1500ms` for 10MB file uploads and downloads.
     *   Error Rate: `< 0.1%` under peak concurrency.
+*   **Local Execution Command:**
+    ```bash
+    mvn clean verify -Pperformance -Dgatling.baseUrl=https://localhost -Dgatling.insecure=true
+    ```
+
