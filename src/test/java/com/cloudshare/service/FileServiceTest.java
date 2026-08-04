@@ -28,8 +28,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.HashOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.cloudshare.repository.FileShareRepository;
 
@@ -55,13 +53,7 @@ class FileServiceTest {
     private FileShareRepository fileShareRepository;
 
     @Mock
-    private StringRedisTemplate cacheRedisTemplate;
-
-    @Mock
-    private HashOperations<String, Object, Object> hashOperations;
-
-    @Mock
-    private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
+    private PermissionCacheService permissionCacheService;
 
     @Mock
     private DownloadConcurrencyLimiter downloadConcurrencyLimiter;
@@ -78,7 +70,7 @@ class FileServiceTest {
             encryptionService, 
             auditLogService,
             fileShareRepository,
-            cacheRedisTemplate,
+            permissionCacheService,
             downloadConcurrencyLimiter,
             10
         );
@@ -193,8 +185,7 @@ class FileServiceTest {
                 .build();
 
         // Stub cache-aside lookup as OWNER
-        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
-        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn("OWNER");
+        when(permissionCacheService.getCachedPermission(fileId, userId)).thenReturn(Optional.of("OWNER"));
 
         // Stub repository to return file
         when(fileRepository.findAccessibleFile(fileId, userId)).thenReturn(Optional.of(metadata));
@@ -225,9 +216,7 @@ class FileServiceTest {
         String ipAddress = "192.168.1.10";
 
         // Stub cache-aside miss
-        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
-        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn(null);
-        when(cacheRedisTemplate.hasKey("cache:permissions:" + fileId)).thenReturn(false);
+        when(permissionCacheService.getCachedPermission(fileId, userId)).thenReturn(Optional.empty());
 
         // Stub database lookup fail
         when(fileRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.empty());
@@ -263,7 +252,7 @@ class FileServiceTest {
         verify(fileRepository).save(metadata);
 
         // Verify cache eviction
-        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+        verify(permissionCacheService).evict(fileId);
 
         // Verify audit logging
         verify(auditLogService).log(eq(userId), eq("FILE_DELETE"), eq(fileId), eq(ipAddress), any(String.class));
@@ -276,8 +265,7 @@ class FileServiceTest {
         String ipAddress = "192.168.1.10";
 
         // Stub cache-aside lookup as NONE (insufficient)
-        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
-        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn("NONE");
+        when(permissionCacheService.getCachedPermission(fileId, userId)).thenReturn(Optional.of("NONE"));
 
         assertThrows(ResourceNotFoundException.class, () -> {
             fileService.downloadFile(fileId, userId, ipAddress);
@@ -294,10 +282,10 @@ class FileServiceTest {
         UUID userId = UUID.randomUUID();
         String ipAddress = "192.168.1.10";
 
-        // Stub cache key exists but user entry is null
-        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
-        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn(null);
-        when(cacheRedisTemplate.hasKey("cache:permissions:" + fileId)).thenReturn(true);
+        // Stub cache key exists but user entry is null: PermissionCacheService throws directly
+        // (fast-path deny), matching its documented contract.
+        when(permissionCacheService.getCachedPermission(fileId, userId))
+                .thenThrow(new ResourceNotFoundException("File not found or access denied"));
 
         assertThrows(ResourceNotFoundException.class, () -> {
             fileService.downloadFile(fileId, userId, ipAddress);
@@ -353,31 +341,32 @@ class FileServiceTest {
         assertEquals(com.cloudshare.model.PermissionType.READ, response.getPermissionType());
     }
 
+    // Fine-grained bypass-marker self-healing mechanics (the actual Redis calls) are now
+    // internal to PermissionCacheService and covered by PermissionCacheServiceTest. From
+    // FileService's perspective, a bypass-active outcome and a genuine cache miss are
+    // indistinguishable — both surface as Optional.empty() from getCachedPermission — so these
+    // tests only assert the orchestration: DB fallback occurs, and cachePermissions is only
+    // called when the DB fetch actually succeeds.
     @Test
-    void downloadFile_bypassMarkerPresent_staleCacheHit_revokedUser_throwsException() {
+    void downloadFile_cacheReturnsEmpty_dbLookupFails_throwsException_noCacheWrite() {
         UUID fileId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         String ipAddress = "192.168.1.10";
 
-        // Bypass marker exists
-        when(cacheRedisTemplate.hasKey("cache:permissions:bypass:" + fileId)).thenReturn(true);
-        // Self healing delete throws exception
-        doThrow(new RuntimeException("Redis connection error")).when(cacheRedisTemplate).delete("cache:permissions:" + fileId);
-
-        // Database lookup fails (revoked user has no share in DB)
+        when(permissionCacheService.getCachedPermission(fileId, userId)).thenReturn(Optional.empty());
         when(fileRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> {
             fileService.downloadFile(fileId, userId, ipAddress);
         });
 
-        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
-        // Should not write anything back to the cache while bypass is active
-        verify(cacheRedisTemplate, never()).opsForHash();
+        // DB fetch failed before a permission map could be built, so there is nothing to cache.
+        verify(permissionCacheService, never()).cachePermissions(any(), any());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    void downloadFile_bypassMarkerPresent_selfHealingSucceeds_resumesNormalCaching() throws Exception {
+    void downloadFile_cacheReturnsEmpty_dbLookupSucceeds_cachesResultAndSucceeds() throws Exception {
         UUID fileId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         String ipAddress = "192.168.1.10";
@@ -394,25 +383,13 @@ class FileServiceTest {
                 .deleted(false)
                 .build();
 
-        // 1. Bypass marker exists
-        when(cacheRedisTemplate.hasKey("cache:permissions:bypass:" + fileId)).thenReturn(true);
-        // 2. Self healing deletes succeed
-        when(cacheRedisTemplate.delete("cache:permissions:" + fileId)).thenReturn(true);
-        when(cacheRedisTemplate.delete("cache:permissions:bypass:" + fileId)).thenReturn(true);
-
-        // 3. Normal cache miss flows
-        when(cacheRedisTemplate.opsForHash()).thenReturn(hashOperations);
-        when(hashOperations.get("cache:permissions:" + fileId, userId.toString())).thenReturn(null);
-        when(cacheRedisTemplate.hasKey("cache:permissions:" + fileId)).thenReturn(false);
-
-        // 4. DB contains the file metadata
+        when(permissionCacheService.getCachedPermission(fileId, userId)).thenReturn(Optional.empty());
         when(fileRepository.findByIdAndDeletedFalse(fileId)).thenReturn(Optional.of(metadata));
         when(fileRepository.findAccessibleFile(fileId, userId)).thenReturn(Optional.of(metadata));
 
-        // Stub decryption keys
         SecretKey mockFek = new SecretKeySpec(new byte[32], "AES");
         when(encryptionService.unwrapFek("wrapped_fek", 1)).thenReturn(mockFek);
-        
+
         ByteArrayInputStream mockEncryptedStream = new ByteArrayInputStream("Encrypted Data".getBytes(StandardCharsets.UTF_8));
         when(storageService.retrieve("storage_uuid")).thenReturn(mockEncryptedStream);
 
@@ -421,15 +398,12 @@ class FileServiceTest {
         assertNotNull(result);
         assertEquals("sensitive_report.pdf", result.getFilename());
 
-        // Verify self-healing deletes occurred
-        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
-        verify(cacheRedisTemplate).delete("cache:permissions:bypass:" + fileId);
-        // Verify we wrote back to the cache because self-healing succeeded
-        verify(hashOperations).putAll(eq("cache:permissions:" + fileId), any(java.util.Map.class));
+        // Verify the DB-resolved permission map was handed to the cache service to warm the cache.
+        verify(permissionCacheService).cachePermissions(eq(fileId), any(java.util.Map.class));
     }
 
     @Test
-    void deleteFile_evictionThrows_setsBypassMarker() {
+    void deleteFile_evictionDelegatesToPermissionCacheService() {
         UUID fileId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         String ipAddress = "192.168.1.10";
@@ -442,16 +416,14 @@ class FileServiceTest {
                 .build();
 
         when(fileRepository.findByIdAndOwnerIdAndDeletedFalse(fileId, userId)).thenReturn(Optional.of(metadata));
-        // Eviction delete throws
-        doThrow(new RuntimeException("Redis error")).when(cacheRedisTemplate).delete("cache:permissions:" + fileId);
-        when(cacheRedisTemplate.opsForValue()).thenReturn(valueOperations);
 
         fileService.deleteFile(fileId, userId, ipAddress);
 
         assertTrue(metadata.isDeleted());
         verify(fileRepository).save(metadata);
-        verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
-        verify(valueOperations).set(eq("cache:permissions:bypass:" + fileId), eq("true"), eq(java.time.Duration.ofMinutes(10)));
+        // The bypass-marker-on-failure behavior is PermissionCacheService's own concern now
+        // (covered by PermissionCacheServiceTest); FileService just needs to delegate.
+        verify(permissionCacheService).evict(fileId);
         verify(auditLogService).log(eq(userId), eq("FILE_DELETE"), eq(fileId), eq(ipAddress), any(String.class));
     }
 

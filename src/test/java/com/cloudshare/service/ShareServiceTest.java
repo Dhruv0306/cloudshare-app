@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import javax.crypto.SecretKey;
@@ -50,9 +49,7 @@ class ShareServiceTest {
         @Mock
         private StorageService storageService;
         @Mock
-        private StringRedisTemplate cacheRedisTemplate;
-        @Mock
-        private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
+        private PermissionCacheService permissionCacheService;
         @Mock
         private DownloadConcurrencyLimiter downloadConcurrencyLimiter;
 
@@ -64,7 +61,7 @@ class ShareServiceTest {
                 shareService = new ShareService(
                                 fileShareRepository, shareLinkRepository, fileRepository, userRepository,
                                 passwordEncoder, auditLogService, encryptionService, storageService,
-                                cacheRedisTemplate, downloadConcurrencyLimiter, 10);
+                                permissionCacheService, downloadConcurrencyLimiter, 10);
         }
 
         @Test
@@ -106,7 +103,7 @@ class ShareServiceTest {
                 assertEquals("janedoe@example.com", response.getSharedWith());
                 assertEquals("READ", response.getPermission());
 
-                verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+                verify(permissionCacheService).evict(fileId);
                 verify(auditLogService).log(eq(ownerId), eq("SHARE_CREATED"), eq(fileId), eq(ipAddress),
                                 any(String.class));
         }
@@ -396,7 +393,7 @@ class ShareServiceTest {
                 shareService.revokeInternalShare(shareId, ownerId, ipAddress);
 
                 verify(fileShareRepository).delete(fileShare);
-                verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+                verify(permissionCacheService).evict(fileId);
                 verify(auditLogService).log(eq(ownerId), eq("SHARE_REVOKED"), eq(fileId), eq(ipAddress),
                                 any(String.class));
         }
@@ -428,7 +425,7 @@ class ShareServiceTest {
                 shareService.revokeInternalShare(shareId, sharedById, ipAddress);
 
                 verify(fileShareRepository).delete(fileShare);
-                verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
+                verify(permissionCacheService).evict(fileId);
                 verify(auditLogService).log(eq(sharedById), eq("SHARE_REVOKED"), eq(fileId), eq(ipAddress),
                                 any(String.class));
         }
@@ -459,7 +456,7 @@ class ShareServiceTest {
                                 () -> shareService.revokeInternalShare(shareId, randomUserId, "127.0.0.1"));
 
                 verify(fileShareRepository, never()).delete(any());
-                verify(cacheRedisTemplate, never()).delete(anyString());
+                verify(permissionCacheService, never()).evict(any());
                 verify(auditLogService, never()).log(any(), any(), any(), any(), any());
         }
 
@@ -523,8 +520,15 @@ class ShareServiceTest {
                                 () -> shareService.revokePublicLink(shareCode, callerId, "127.0.0.1"));
         }
 
+        // The two tests that used to live here (shareFileInternally_evictionDeleteThrows_setsBypassMarker,
+        // shareFileInternally_evictionDeleteAndBypassSetThrow_doesNotCrash) exercised the OLD inline
+        // eviction-with-bypass-marker exception handling that lived directly in ShareService. That
+        // handling — and its failure modes — now live entirely inside PermissionCacheService.evict(),
+        // which never propagates an exception back to its caller (see PermissionCacheServiceTest for
+        // the self-heal/bypass-marker-under-Redis-failure coverage). From ShareService's perspective
+        // there is only one meaningful behavior left to verify: that evict() is actually called.
         @Test
-        void shareFileInternally_evictionDeleteThrows_setsBypassMarker() {
+        void shareFileInternally_delegatesEvictionToPermissionCacheService() {
                 UUID ownerId = UUID.randomUUID();
                 UUID targetId = UUID.randomUUID();
                 UUID fileId = UUID.randomUUID();
@@ -555,66 +559,10 @@ class ShareServiceTest {
                                 .build();
                 when(fileShareRepository.save(any(FileShare.class))).thenReturn(savedShare);
 
-                // Make cacheRedisTemplate.delete throw exception
-                doThrow(new RuntimeException("Redis error")).when(cacheRedisTemplate)
-                                .delete("cache:permissions:" + fileId);
-                when(cacheRedisTemplate.opsForValue()).thenReturn(valueOperations);
-
                 InternalShareResponse response = shareService.shareFileInternally(request, ownerId, ipAddress);
 
                 assertNotNull(response);
-                verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
-                verify(valueOperations).set(eq("cache:permissions:bypass:" + fileId), eq("true"),
-                                eq(java.time.Duration.ofMinutes(10)));
-                verify(auditLogService).log(eq(ownerId), eq("SHARE_CREATED"), eq(fileId), eq(ipAddress),
-                                any(String.class));
-        }
-
-        @Test
-        void shareFileInternally_evictionDeleteAndBypassSetThrow_doesNotCrash() {
-                UUID ownerId = UUID.randomUUID();
-                UUID targetId = UUID.randomUUID();
-                UUID fileId = UUID.randomUUID();
-                String ipAddress = "192.168.1.10";
-
-                InternalShareRequest request = InternalShareRequest.builder()
-                                .fileId(fileId)
-                                .targetUsernameOrEmail("janedoe")
-                                .permissionType("READ")
-                                .build();
-
-                FileMetadata file = FileMetadata.builder().id(fileId).ownerId(ownerId).originalFilename("report.pdf")
-                                .deleted(false).build();
-                User targetUser = User.builder().id(targetId).username("janedoe").email("janedoe@example.com").build();
-                User ownerUser = User.builder().id(ownerId).username("john").email("john@example.com").build();
-
-                when(fileRepository.findByIdAndOwnerIdAndDeletedFalse(fileId, ownerId)).thenReturn(Optional.of(file));
-                when(userRepository.findByUsernameOrEmail("janedoe", "janedoe")).thenReturn(Optional.of(targetUser));
-                when(userRepository.findById(ownerId)).thenReturn(Optional.of(ownerUser));
-                when(fileShareRepository.findByFileIdAndSharedWithId(fileId, targetId)).thenReturn(Optional.empty());
-
-                FileShare savedShare = FileShare.builder()
-                                .id(UUID.randomUUID())
-                                .file(file)
-                                .sharedBy(ownerUser)
-                                .sharedWith(targetUser)
-                                .permissionType(PermissionType.READ)
-                                .build();
-                when(fileShareRepository.save(any(FileShare.class))).thenReturn(savedShare);
-
-                // Make cacheRedisTemplate.delete throw exception
-                doThrow(new RuntimeException("Redis error")).when(cacheRedisTemplate)
-                                .delete("cache:permissions:" + fileId);
-                when(cacheRedisTemplate.opsForValue()).thenReturn(valueOperations);
-                doThrow(new RuntimeException("Redis write error")).when(valueOperations).set(anyString(), anyString(),
-                                any(java.time.Duration.class));
-
-                InternalShareResponse response = shareService.shareFileInternally(request, ownerId, ipAddress);
-
-                assertNotNull(response);
-                verify(cacheRedisTemplate).delete("cache:permissions:" + fileId);
-                verify(valueOperations).set(eq("cache:permissions:bypass:" + fileId), eq("true"),
-                                eq(java.time.Duration.ofMinutes(10)));
+                verify(permissionCacheService).evict(fileId);
                 verify(auditLogService).log(eq(ownerId), eq("SHARE_CREATED"), eq(fileId), eq(ipAddress),
                                 any(String.class));
         }

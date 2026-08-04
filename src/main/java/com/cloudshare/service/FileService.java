@@ -17,10 +17,8 @@ import com.cloudshare.repository.FileShareRepository;
 import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,10 +56,13 @@ import java.util.UUID;
  *       <li>Compliance Audit Logging (Fail-Secure stance: audit failure aborts operation)</li>
  *     </ol>
  *   </li>
- *   <li><b>Permission Caching & Bypass Self-Healing:</b> {@link #verifyFileAccess} uses Redis hash key {@code cache:permissions:<file_id>}.
- *   If permission cache eviction fails during a share mutation or deletion, a 10-minute bypass marker key
- *   ({@code cache:permissions:bypass:<file_id>}) is set. This forces permission checks for that file to bypass stale cache
- *   and query PostgreSQL directly while attempting self-healing eviction retries.</li>
+ *   <li><b>Permission Caching & Bypass Self-Healing:</b> {@link #verifyFileAccess} delegates all
+ *   Redis cache mechanics — the {@code cache:permissions:<file_id>} hash, the self-healing
+ *   {@code cache:permissions:bypass:<file_id>} marker, cache writes, and eviction — to
+ *   {@link PermissionCacheService} (extracted in v2.0.0; also used by {@link ShareService} to
+ *   evict on share mutation/revocation, so the two services can no longer drift on this pattern).
+ *   This class owns only the orchestration: consult the cache, and on a miss/bypass, query
+ *   PostgreSQL directly and warm the cache with the result.</li>
  *   <li><b>BOLA Safety:</b> All database lookups enforce ownership or active share joins via {@link FileRepository#findAccessibleFile}.</li>
  * </ul>
  * </p>
@@ -76,7 +77,7 @@ public class FileService {
     private final EncryptionService encryptionService;
     private final AuditLogService auditLogService;
     private final FileShareRepository fileShareRepository;
-    private final StringRedisTemplate cacheRedisTemplate;
+    private final PermissionCacheService permissionCacheService;
     private final DownloadConcurrencyLimiter downloadConcurrencyLimiter;
     private final int decryptAcquireTimeoutSeconds;
 
@@ -87,7 +88,7 @@ public class FileService {
             EncryptionService encryptionService,
             AuditLogService auditLogService,
             FileShareRepository fileShareRepository,
-            @Qualifier("redisTemplate") StringRedisTemplate cacheRedisTemplate,
+            PermissionCacheService permissionCacheService,
             DownloadConcurrencyLimiter downloadConcurrencyLimiter,
             @Value("${storage.decrypt-acquire-timeout-seconds:10}") int decryptAcquireTimeoutSeconds) {
         this.fileRepository = fileRepository;
@@ -96,7 +97,7 @@ public class FileService {
         this.encryptionService = encryptionService;
         this.auditLogService = auditLogService;
         this.fileShareRepository = fileShareRepository;
-        this.cacheRedisTemplate = cacheRedisTemplate;
+        this.permissionCacheService = permissionCacheService;
         this.downloadConcurrencyLimiter = downloadConcurrencyLimiter;
         this.decryptAcquireTimeoutSeconds = decryptAcquireTimeoutSeconds;
     }
@@ -315,55 +316,15 @@ public class FileService {
     }
 
     public void verifyFileAccess(UUID fileId, UUID userId, PermissionType requiredPermission) {
-        String cacheKey = "cache:permissions:" + fileId;
-        String bypassKey = "cache:permissions:bypass:" + fileId;
-        boolean bypassActive = false;
-
-        try {
-            Boolean hasBypass = cacheRedisTemplate.hasKey(bypassKey);
-            if (Boolean.TRUE.equals(hasBypass)) {
-                bypassActive = true;
-                try {
-                    cacheRedisTemplate.delete(cacheKey);
-                    cacheRedisTemplate.delete(bypassKey);
-                    bypassActive = false;
-                    log.info("Self-healing retry of cache eviction succeeded for file: {}", fileId);
-                } catch (Exception retryEx) {
-                    log.error("[PERMISSION_CACHE_EVICTION_FAILED] Self-healing retry of cache eviction failed for file: {}", fileId, retryEx);
-                }
+        java.util.Optional<String> cachedPermission = permissionCacheService.getCachedPermission(fileId, userId);
+        if (cachedPermission.isPresent()) {
+            if (hasRequiredPermission(cachedPermission.get(), requiredPermission)) {
+                return; // Access allowed
             }
-        } catch (Exception e) {
-            log.error("[PERMISSION_CACHE_EVICTION_FAILED] Redis error checking bypass marker for file: {}", fileId, e);
-            bypassActive = true;
+            throw new ResourceNotFoundException("File not found or access denied");
         }
 
-        if (!bypassActive) {
-            try {
-                // Check cache hit
-                String cachedPermission = (String) cacheRedisTemplate.opsForHash().get(cacheKey, userId.toString());
-                if (cachedPermission != null) {
-                    if (hasRequiredPermission(cachedPermission, requiredPermission)) {
-                        return; // Access allowed
-                    }
-                    throw new ResourceNotFoundException("File not found or access denied");
-                }
-                
-                // Check if key exists (could be key exists but user not in hash, meaning no access)
-                Boolean keyExists = cacheRedisTemplate.hasKey(cacheKey);
-                if (Boolean.TRUE.equals(keyExists)) {
-                    throw new ResourceNotFoundException("File not found or access denied");
-                }
-            } catch (ResourceNotFoundException e) {
-                throw e;
-            } catch (Exception e) {
-                // Distinct from [PERMISSION_CACHE_EVICTION_FAILED]: this is a read-path miss
-                // that safely falls back to the database as source of truth (no stale-permission
-                // risk), whereas eviction failures risk serving an over-permissive cached entry.
-                log.warn("[PERMISSION_CACHE_READ_FAILED] Redis error during permission check, falling back to database", e);
-            }
-        }
-        
-        // Cache Miss or Redis error or Bypass Active: Query DB
+        // Cache Miss, Bypass Active, or Redis error: Query DB
         FileMetadata file = fileRepository.findByIdAndDeletedFalse(fileId)
                 .orElseThrow(() -> new ResourceNotFoundException("File not found or access denied"));
         
@@ -377,15 +338,7 @@ public class FileService {
             permissionMap.put(share.getSharedWith().getId().toString(), share.getPermissionType().name());
         }
         
-        // Write to Redis with 1 Hour TTL
-        if (!bypassActive) {
-            try {
-                cacheRedisTemplate.opsForHash().putAll(cacheKey, permissionMap);
-                cacheRedisTemplate.expire(cacheKey, java.time.Duration.ofHours(1));
-            } catch (Exception e) {
-                log.error("Failed to write permissions to Redis cache", e);
-            }
-        }
+        permissionCacheService.cachePermissions(fileId, permissionMap);
         
         String userPermission = permissionMap.get(userId.toString());
         if (userPermission != null && hasRequiredPermission(userPermission, requiredPermission)) {
@@ -420,19 +373,7 @@ public class FileService {
         fileRepository.save(metadata);
 
         // Evict permissions cache key in Redis
-        try {
-            String cacheKey = "cache:permissions:" + fileId;
-            cacheRedisTemplate.delete(cacheKey);
-            log.debug("Evicted permissions cache for deleted file: {}", fileId);
-        } catch (Exception e) {
-            log.error("[PERMISSION_CACHE_EVICTION_FAILED] Failed to evict permissions cache for deleted file: {}. Setting bypass marker.", fileId, e);
-            try {
-                String bypassKey = "cache:permissions:bypass:" + fileId;
-                cacheRedisTemplate.opsForValue().set(bypassKey, "true", java.time.Duration.ofMinutes(10));
-            } catch (Exception ex) {
-                log.error("[PERMISSION_CACHE_EVICTION_FAILED] Failed to set bypass marker for deleted file: {}", fileId, ex);
-            }
-        }
+        permissionCacheService.evict(fileId);
 
         // Log delete audit event
         // Audit failure rolls back the entire delete transaction (fail-secure).
