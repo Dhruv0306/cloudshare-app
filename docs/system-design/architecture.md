@@ -87,7 +87,13 @@ graph TD
 
 ### Component Breakdown
 
-1.  **Client Tier:** A responsive web application built with modern JS/HTML/CSS. It communicates with the backend solely via a secure REST API.
+1.  **Client Tier:** A responsive web application built with modern JS/HTML/CSS. Following the v2.0.0 frontend architecture refactor, the monolithic client script (`app.js`) is modularized into cohesive ES modules:
+    *   `state.js`: Defines the single shared frontend state object, exported as a true singleton.
+    *   `shared.js`: Holds stateless UI utility helpers (e.g., notifications/toast rendering, formatting).
+    *   `session.js`: Handles session lifecycle (JWT payload extraction, login state checks, navigation bar rendering).
+    *   `router.js`: The Single-Page Application (SPA) client-side router mapping hash parameters.
+    *   `views/*.js`: View controllers are partitioned by functionality (`auth.js`, `dashboard.js`, `sharing.js`, `mfa.js`, `admin.js`) to isolate page-specific DOM generation.
+    It communicates with the backend solely via a secure REST API.
 2.  **Reverse Proxy / Edge Layer (Nginx):** 
     *   Terminates TLS/SSL connections (TLS 1.3 strictly enforced).
     *   Serves static frontend assets.
