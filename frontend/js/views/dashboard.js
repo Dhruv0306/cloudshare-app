@@ -92,6 +92,7 @@ export function renderFilesTable() {
 
         // Download Action
         const btnDownload = document.createElement('button');
+        btnDownload.type = 'button';
         btnDownload.className = 'action-btn action-btn-download';
         btnDownload.textContent = '📥';
         btnDownload.title = 'Secure Download';
@@ -100,6 +101,7 @@ export function renderFilesTable() {
 
         // Share Action
         const btnShare = document.createElement('button');
+        btnShare.type = 'button';
         btnShare.className = 'action-btn action-btn-share';
         btnShare.textContent = '🔗';
         btnShare.title = 'Share File';
@@ -108,6 +110,7 @@ export function renderFilesTable() {
 
         // Delete Action
         const btnDelete = document.createElement('button');
+        btnDelete.type = 'button';
         btnDelete.className = 'action-btn action-btn-delete';
         btnDelete.textContent = '🗑️';
         btnDelete.title = 'Delete File';
@@ -192,6 +195,7 @@ export function renderSharedFilesTable() {
 
         // Download Action
         const btnDownload = document.createElement('button');
+        btnDownload.type = 'button';
         btnDownload.className = 'action-btn action-btn-download';
         btnDownload.textContent = '📥';
         btnDownload.title = 'Secure Download';

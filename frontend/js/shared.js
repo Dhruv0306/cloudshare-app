@@ -13,7 +13,9 @@ export function showToast(message, type = 'info') {
     textSpan.textContent = message;
 
     const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
     closeBtn.className = 'toast-close';
+    closeBtn.setAttribute('aria-label', 'Dismiss notification');
     closeBtn.textContent = '×';
     closeBtn.addEventListener('click', () => {
         toast.remove();
