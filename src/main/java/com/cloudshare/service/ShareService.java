@@ -12,9 +12,7 @@ import com.cloudshare.repository.FileShareRepository;
 import com.cloudshare.repository.ShareLinkRepository;
 import com.cloudshare.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,13 +36,15 @@ import java.util.UUID;
  * <b>Cache Eviction & Fail-Loud Bypass Rationale:</b>
  * <ul>
  * <li><b>Permission Cache Eviction:</b> Whenever internal shares are granted,
- * modified, or revoked, {@link #evictPermissionsCache(UUID)}
- * deletes the corresponding Redis key ({@code cache:permissions:<file_id>}) to
- * maintain permission consistency.</li>
+ * modified, or revoked, {@link #evictPermissionsCache(UUID)} delegates to
+ * {@link PermissionCacheService#evict} (extracted in v2.0.0; also used by
+ * {@link FileService} for the same key pattern, so the two services can no
+ * longer drift on this logic) to delete the corresponding Redis key
+ * ({@code cache:permissions:<file_id>}) and maintain permission consistency.</li>
  * <li><b>Bypass Marker (Self-Healing):</b> If Redis fails to evict the cache
- * key (e.g. transient Redis network disconnect),
- * a 10-minute bypass marker key ({@code cache:permissions:bypass:<file_id>}) is
- * set. When present, {@code FileService.verifyFileAccess}
+ * key (e.g. transient Redis network disconnect), {@link PermissionCacheService}
+ * sets a 10-minute bypass marker key ({@code cache:permissions:bypass:<file_id>}).
+ * When present, {@code FileService.verifyFileAccess}
  * bypasses Redis permission caches and queries PostgreSQL directly while
  * attempting to self-heal the stale cache. This prevents
  * revoked users from accessing files due to stale cache entries.</li>
@@ -66,7 +66,7 @@ public class ShareService {
     private final AuditLogService auditLogService;
     private final EncryptionService encryptionService;
     private final StorageService storageService;
-    private final StringRedisTemplate cacheRedisTemplate;
+    private final PermissionCacheService permissionCacheService;
     private final DownloadConcurrencyLimiter downloadConcurrencyLimiter;
     private final int decryptAcquireTimeoutSeconds;
 
@@ -85,7 +85,7 @@ public class ShareService {
             AuditLogService auditLogService,
             EncryptionService encryptionService,
             StorageService storageService,
-            @Qualifier("redisTemplate") StringRedisTemplate cacheRedisTemplate,
+            PermissionCacheService permissionCacheService,
             DownloadConcurrencyLimiter downloadConcurrencyLimiter,
             @Value("${storage.decrypt-acquire-timeout-seconds:10}") int decryptAcquireTimeoutSeconds) {
         this.fileShareRepository = fileShareRepository;
@@ -96,7 +96,7 @@ public class ShareService {
         this.auditLogService = auditLogService;
         this.encryptionService = encryptionService;
         this.storageService = storageService;
-        this.cacheRedisTemplate = cacheRedisTemplate;
+        this.permissionCacheService = permissionCacheService;
         this.downloadConcurrencyLimiter = downloadConcurrencyLimiter;
         this.decryptAcquireTimeoutSeconds = decryptAcquireTimeoutSeconds;
     }
@@ -411,20 +411,6 @@ public class ShareService {
     }
 
     private void evictPermissionsCache(UUID fileId) {
-        String cacheKey = "cache:permissions:" + fileId;
-        try {
-            cacheRedisTemplate.delete(cacheKey);
-            log.debug("Evicted permissions cache for file: {}", fileId);
-        } catch (Exception e) {
-            log.error(
-                    "[PERMISSION_CACHE_EVICTION_FAILED] Failed to evict permissions cache for file: {}. Setting bypass marker.",
-                    fileId, e);
-            try {
-                String bypassKey = "cache:permissions:bypass:" + fileId;
-                cacheRedisTemplate.opsForValue().set(bypassKey, "true", java.time.Duration.ofMinutes(10));
-            } catch (Exception ex) {
-                log.error("[PERMISSION_CACHE_EVICTION_FAILED] Failed to set bypass marker for file: {}", fileId, ex);
-            }
-        }
+        permissionCacheService.evict(fileId);
     }
 }
