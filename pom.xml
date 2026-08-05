@@ -187,12 +187,21 @@
             </plugin>
             <plugin>
                 <!--
-                    Report-only for now: generates an HTML/XML coverage report so coverage
-                    is visible in CI artifacts, but does NOT enforce a minimum threshold via
-                    jacoco:check. This repo's actual baseline coverage % hasn't been measured
-                    yet, so a blind threshold risks breaking the verify job on the first run
-                    it's added. Once a real baseline is visible from CI, a follow-up patch can
-                    add an enforced jacoco:check threshold based on that number.
+                    v2.1.0: added a jacoco:check gate bound to verify, on top of the
+                    report-only setup shipped in v1.3.0.
+
+                    IMPORTANT — the 30% instruction-coverage minimum below is a
+                    deliberately conservative PLACEHOLDER, not a measured baseline. No
+                    coding-agent session has had access to this repo's actual CI-measured
+                    coverage percentage (no local Maven/Maven Central access to run a real
+                    build, no gh/API access to pull a past CI run's artifact). Rather than
+                    guess a "realistic-looking" number and risk being wrong in either
+                    direction — too high (breaks verify immediately) or too low
+                    (rubber-stamps a regression) — this floor is set low enough that it
+                    should pass regardless of the real number, purely to get the
+                    enforcement MECHANISM in place now. Pull the actual percentage from a
+                    real `mvn clean verify` run or the jacoco-coverage-report CI artifact
+                    and raise this to a properly calibrated value in a follow-up patch.
                 -->
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -211,6 +220,28 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>INSTRUCTION</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <!-- Placeholder floor — see comment above. -->
+                                            <minimum>0.30</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
