@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Locale;
 
 /**
  * Security filter executing distributed sliding-window rate limiting via Redis
@@ -131,7 +132,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
                         requestToUse = cachedRequest;
                         String usernameOrEmail = extractUsernameOrEmail(cachedRequest);
                         if (StringUtils.hasText(usernameOrEmail)) {
-                            String acctKey = "limit:acct:" + sha256Hex(usernameOrEmail.trim().toLowerCase());
+                            String acctKey = "limit:acct:" + sha256Hex(usernameOrEmail.trim().toLowerCase(Locale.ROOT));
                             // Wider window than per-IP: this is a defense-in-depth backstop
                             // against distributed attempts, not the primary throttle.
                             accountAllowed = rateLimiterService.isAllowed(acctKey, 60, authLimit * 3);

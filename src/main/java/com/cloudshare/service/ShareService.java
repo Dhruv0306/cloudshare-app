@@ -26,6 +26,7 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -122,7 +123,7 @@ public class ShareService {
         // 3. Parse permission type
         PermissionType permissionType;
         try {
-            permissionType = PermissionType.valueOf(request.getPermissionType().toUpperCase());
+            permissionType = PermissionType.valueOf(request.getPermissionType().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid permission type. Must be READ or WRITE.");
         }
