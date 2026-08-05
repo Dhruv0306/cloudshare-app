@@ -13,7 +13,7 @@
 
     <groupId>com.cloudshare</groupId>
     <artifactId>cloudshare</artifactId>
-    <version>2.0.0</version>
+    <version>2.1.0</version>
     <name>cloudshare</name>
     <description>Secure File Sharing Web Application</description>
 
@@ -236,7 +236,7 @@
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
                                             <!-- Placeholder floor — see comment above. -->
-                                            <minimum>0.30</minimum>
+                                            <minimum>0.60</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
