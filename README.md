@@ -23,8 +23,8 @@ CloudShare is a portfolio-grade demonstration of enterprise backend engineering:
 
 | Layer | Technology |
 |---|---|
-| **Backend** | Java 17, Spring Boot 3.5.0 (Web, Security, Data JPA, Validation, Actuator) |
-| **Auth** | JJWT 0.12.6, Refresh Token Rotation, TOTP-based MFA, step-up admin tokens |
+| **Backend** | Java 17, Spring Boot 3.5.16 (Web, Security, Data JPA, Validation, Actuator) |
+| **Auth** | JJWT 0.13.0, Refresh Token Rotation, TOTP-based MFA, step-up admin tokens |
 | **Database** | PostgreSQL 17, Flyway migrations, monthly range-partitioned audit log table |
 | **Caching / Security State** | Triple-Redis architecture: `cache-aside` (LRU app cache), `cache-security` (no-eviction token blacklist/replay defense), `cache-ratelimit` (LRU sliding-window rate limiting) |
 | **Object Storage** | Pluggable — local filesystem (dev) or MinIO / S3-compatible (`io.minio`) |
@@ -35,7 +35,7 @@ CloudShare is a portfolio-grade demonstration of enterprise backend engineering:
 | **Frontend** | Vanilla JS SPA, native Fetch client, dark glassmorphic UI |
 | **Observability** | Micrometer + Prometheus, structured JSON logging (Logback + Logstash encoder) |
 | **Testing** | JUnit 5 / Mockito (unit), Playwright (E2E), Python `requests`-based API suite, Gatling (load) |
-| **CI/CD** | GitHub Actions (`verify`, `security-scans`, `api-tests` required checks on protected `main`) |
+| **CI/CD** | GitHub Actions (`verify`, `api-tests` required checks on protected `main`) |
 
 ---
 
@@ -89,7 +89,7 @@ mvn spring-boot:run
 or build and run the jar:
 ```bash
 mvn clean package -DskipTests
-java -jar target/cloudshare-2.1.0.jar
+java -jar target/cloudshare-2.2.0.jar
 ```
 
 ### 5. Open the app
@@ -112,7 +112,7 @@ See [`docs/system-design/api-spec.md`](docs/system-design/api-spec.md) for the f
 
 **Key Rotation:** to migrate to a new KEK version without downtime:
 ```bash
-java -jar target/cloudshare-2.1.0.jar \
+java -jar target/cloudshare-2.2.0.jar \
   --spring.profiles.active=rekey-job \
   --rekey.oldVersion=1 \
   --rekey.newVersion=2

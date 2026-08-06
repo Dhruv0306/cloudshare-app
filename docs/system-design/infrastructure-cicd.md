@@ -299,7 +299,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: cloudshare/backend:v2.1.0
+          image: cloudshare/backend:v2.2.0
           ports:
             - containerPort: 8080
           resources:
@@ -387,28 +387,35 @@ jobs:
           path: target/site/jacoco/
           retention-days: 14
 
-  # Job 2: Static Security Scanning
-  security-scans:
-    needs: verify
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Run OWASP Dependency-Check (SCA)
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'CloudShare'
-          path: '.'
-          format: 'HTML'
-          out: 'reports'
-
-      - name: Run Static Code Analysis (SonarCloud / Spotbugs)
-        run: mvn spotbugs:check -B
+  # Job 2: Static Security Scanning — PLANNED, NOT YET IMPLEMENTED.
+  # No `.github/workflows/security-scans.yml` exists in this repo; only maven.yml,
+  # api-tests.yml, e2e-tests.yml, load-tests.yml, and release.yml are live. The job
+  # below documents the intended design (OWASP Dependency-Check for SCA, SpotBugs for
+  # static analysis) so it isn't lost, but it is not a required status check on `main`
+  # today — verify the actual branch-protection settings in GitHub if that matters for
+  # your workflow. Tracked as a future addition; see project backlog.
+  #
+  # security-scans:
+  #   needs: verify
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout Source Code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Run OWASP Dependency-Check (SCA)
+  #       uses: dependency-check/Dependency-Check_Action@main
+  #       with:
+  #         project: 'CloudShare'
+  #         path: '.'
+  #         format: 'HTML'
+  #         out: 'reports'
+  #
+  #     - name: Run Static Code Analysis (SonarCloud / Spotbugs)
+  #       run: mvn spotbugs:check -B
 
   # Job 3: Build & Publish Container Images
   publish-images:
-    needs: security-scans
+    needs: verify
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
