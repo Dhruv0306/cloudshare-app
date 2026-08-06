@@ -190,18 +190,15 @@
                     v2.1.0: added a jacoco:check gate bound to verify, on top of the
                     report-only setup shipped in v1.3.0.
 
-                    IMPORTANT — the 30% instruction-coverage minimum below is a
-                    deliberately conservative PLACEHOLDER, not a measured baseline. No
-                    coding-agent session has had access to this repo's actual CI-measured
-                    coverage percentage (no local Maven/Maven Central access to run a real
-                    build, no gh/API access to pull a past CI run's artifact). Rather than
-                    guess a "realistic-looking" number and risk being wrong in either
-                    direction — too high (breaks verify immediately) or too low
-                    (rubber-stamps a regression) — this floor is set low enough that it
-                    should pass regardless of the real number, purely to get the
-                    enforcement MECHANISM in place now. Pull the actual percentage from a
-                    real `mvn clean verify` run or the jacoco-coverage-report CI artifact
-                    and raise this to a properly calibrated value in a follow-up patch.
+                    NOTE — the 60% instruction-coverage minimum below was raised from this
+                    change's original 0.30 placeholder before merge. Whether 60% reflects a
+                    real, measured baseline for this repo (as opposed to another unverified
+                    number) hasn't been confirmed by any coding-agent session — none have had
+                    local Maven/Maven Central access to run a real build, or gh/API access to
+                    pull a past CI run's artifact. If 60% wasn't set from an actual
+                    `mvn clean verify` / jacoco-coverage-report CI artifact reading, this gate
+                    can fail unexpectedly the next time `verify` runs. Confirm against a real
+                    coverage report and adjust if needed.
                 -->
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -235,7 +232,7 @@
                                         <limit>
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- Placeholder floor — see comment above. -->
+                                            <!-- See comment above: confirm this reflects real, measured coverage. -->
                                             <minimum>0.60</minimum>
                                         </limit>
                                     </limits>

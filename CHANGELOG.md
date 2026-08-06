@@ -24,13 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added a `jacoco:check` execution to the `verify` phase, enforcing a minimum coverage floor
-  on top of the report-only JaCoCo setup shipped in v1.3.0. **The 60% instruction-coverage
-  minimum is an explicit placeholder, not a measured baseline** — no session working on this
-  repo has had access to this project's actual CI-measured coverage percentage. The floor is
-  deliberately set low enough to pass regardless of the real number, so this ships the
-  enforcement *mechanism* (coverage can no longer silently regress forever) without pretending
-  to have calibrated it. A follow-up patch should raise this to a real, measured value once
-  it's pulled from an actual `mvn clean verify` run or the `jacoco-coverage-report` CI artifact.
+  on top of the report-only JaCoCo setup shipped in v1.3.0. The threshold was raised from
+  this change's original 30% placeholder to **60% instruction coverage** before merge. Whether
+  60% reflects a real, measured baseline for this repo — as opposed to another unverified
+  number — hasn't been confirmed by any coding-agent session working on this codebase; none
+  have had local Maven/Maven Central access to run a real build, or `gh`/API access to pull a
+  past CI run's artifact. If 60% wasn't set from an actual `mvn clean verify` run or the
+  `jacoco-coverage-report` CI artifact, this gate can fail unexpectedly the next time `verify`
+  runs — confirm against a real coverage report and adjust if needed.
 
 ## [2.0.0] - 2026-08-04
 
