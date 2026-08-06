@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-08-05
+
+### Security
+
+- Fixed locale-sensitive case folding in two remaining locations, completing the sweep
+  deferred from the v1.2.2 review (which fixed the pattern in `FileService.java` only):
+  `ShareService`'s permission-type parsing (`toUpperCase()` → `toUpperCase(Locale.ROOT)`) and,
+  more significantly, `RateLimitingFilter`'s account-based rate-limit key hashing
+  (`toLowerCase()` → `toLowerCase(Locale.ROOT)`). The latter is the more security-relevant of
+  the two: on a non-default-locale JVM, inconsistent case folding here could split rate-limit
+  buckets for the same account, silently weakening the rate limiter without ever raising an
+  exception to surface it. Three other occurrences of the same pattern remain, still out of
+  scope (`AuditPartitionScheduler.java` ×2, and the `text/html` Content-Type checks in
+  `FileController`/`ShareController`) — all lower-risk since none of the strings involved
+  contain characters affected by the relevant locale-specific case rules.
+
+### Added
+
+- Added a `jacoco:check` execution to the `verify` phase, enforcing a minimum coverage floor
+  on top of the report-only JaCoCo setup shipped in v1.3.0. The threshold was raised from
+  this change's original 30% placeholder to **60% instruction coverage** before merge. Whether
+  60% reflects a real, measured baseline for this repo — as opposed to another unverified
+  number — hasn't been confirmed by any coding-agent session working on this codebase; none
+  have had local Maven/Maven Central access to run a real build, or `gh`/API access to pull a
+  past CI run's artifact. If 60% wasn't set from an actual `mvn clean verify` run or the
+  `jacoco-coverage-report` CI artifact, this gate can fail unexpectedly the next time `verify`
+  runs — confirm against a real coverage report and adjust if needed.
+
 ## [2.0.0] - 2026-08-04
 
 ### Changed
