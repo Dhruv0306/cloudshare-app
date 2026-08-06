@@ -299,7 +299,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: cloudshare/backend:v2.0.0
+          image: cloudshare/backend:v2.1.0
           ports:
             - containerPort: 8080
           resources:
