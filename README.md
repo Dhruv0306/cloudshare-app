@@ -89,7 +89,7 @@ mvn spring-boot:run
 or build and run the jar:
 ```bash
 mvn clean package -DskipTests
-java -jar target/cloudshare-1.3.0.jar
+java -jar target/cloudshare-2.1.0.jar
 ```
 
 ### 5. Open the app
@@ -112,7 +112,7 @@ See [`docs/system-design/api-spec.md`](docs/system-design/api-spec.md) for the f
 
 **Key Rotation:** to migrate to a new KEK version without downtime:
 ```bash
-java -jar target/cloudshare-1.3.0.jar \
+java -jar target/cloudshare-2.1.0.jar \
   --spring.profiles.active=rekey-job \
   --rekey.oldVersion=1 \
   --rekey.newVersion=2
