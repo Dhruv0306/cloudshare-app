@@ -24,7 +24,7 @@ Unit tests focus on validating core business logic in isolation. All external de
 
 *   **Frameworks:** JUnit 5 (Jupyter), Mockito, AssertJ.
 *   **Execution Criteria:** Must run in memory in < 1 second per test class.
-*   **Target Coverage:** Minimum 80% line coverage for services and utilities.
+*   **Target Coverage:** Enforces a minimum 60% instruction coverage gate at the project bundle level via the `jacoco-maven-plugin` check goal (`jacoco:check`) during the Maven `verify` phase. Developers should target at least 80% line coverage for new services and utilities.
 
 ### Example Unit Test Case (File Ownership Validation)
 ```java
