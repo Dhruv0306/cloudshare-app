@@ -5,16 +5,21 @@
 CloudShare is a portfolio-grade demonstration of enterprise backend engineering: envelope-encrypted file storage, zero-trust authentication with step-up MFA, a defense-in-depth caching architecture, ClamAV-scanned uploads, and full runtime observability — all running behind a hardened Nginx edge.
 
 [![Java CI with Maven](https://github.com/Dhruv0306/cloudshare-app/actions/workflows/maven.yml/badge.svg)](https://github.com/Dhruv0306/cloudshare-app/actions/workflows/maven.yml)
+![GitHub release](https://img.shields.io/github/v/release/Dhruv0306/cloudshare-app)
+![Last commit](https://img.shields.io/github/last-commit/Dhruv0306/cloudshare-app)
 
 ---
 
 ## Table of Contents
 - [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Local Setup / Installation](#local-setup--installation)
 - [Usage](#usage)
 - [Environment Variables](#environment-variables)
 - [Testing](#testing)
+- [Versioning](#versioning)
+- [Contributing](#contributing)
 - [Documentation](#documentation)
 
 ---
@@ -36,6 +41,15 @@ CloudShare is a portfolio-grade demonstration of enterprise backend engineering:
 | **Observability** | Micrometer + Prometheus, structured JSON logging (Logback + Logstash encoder) |
 | **Testing** | JUnit 5 / Mockito (unit), Playwright (E2E), Python `requests`-based API suite, Gatling (load) |
 | **CI/CD** | GitHub Actions (`verify`, `api-tests` required checks on protected `main`) |
+
+---
+
+## Architecture
+
+- **Backend:** Spring Boot (REST APIs)
+- **Database:** PostgreSQL
+- **Containerization:** Docker
+- **Design:** Layered architecture (Controller → Service → Repository)
 
 ---
 
@@ -158,6 +172,24 @@ npx playwright test   # see tests/e2e
 # Load tests (Gatling — validates p95 < 200ms, error rate < 0.1%)
 mvn verify -Pperformance
 ```
+
+---
+
+## Versioning
+
+This project follows semantic versioning.  
+Multiple releases have been published with incremental improvements and bug fixes.
+
+Check all versions here: https://github.com/Dhruv0306/cloudshare-app/releases
+
+---
+
+## Contributing
+
+Contributions are welcome!  
+Feel free to fork the repo and submit a PR.
+
+For major changes, please open an issue first to discuss what you would like to change.
 
 ---
 
