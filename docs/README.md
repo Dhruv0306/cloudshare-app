@@ -2,6 +2,10 @@
 
 This is the index for all design, security, and operational documentation. Start here.
 
+> The original `implementation_phase_plan.md` (root-level, 5-phase build plan) has been
+> removed — it was empty and superseded. Its content now lives across the docs indexed
+> below, primarily [Architecture](system-design/architecture.md) and this index.
+
 ## System Design
 - [Architecture](system-design/architecture.md) — topology, component breakdown, functional/non-functional requirements
 - [Data Flows](system-design/data-flows.md) — sequence diagrams for auth, upload, download, sharing

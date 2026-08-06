@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-08-06
+
+### Security
+
+- **[Critical]** Bumped `tika-core` `3.0.0` → `3.3.2`, fixing CVE-2025-66516 — a critical
+  XXE vulnerability (CVSS 10.0 per NVD/GitHub Advisory, 8.4 per some vendor scoring) present
+  in `tika-core` versions 1.13–3.2.1. Exploitable via a crafted XFA structure embedded in a
+  PDF; this codebase's `FileService.uploadFile()` calls `Tika#detect()` directly against
+  every uploaded file's magic bytes, including PDFs, making this live attack surface on the
+  upload pipeline (info disclosure, SSRF, DoS). Fixed upstream in `tika-core` ≥3.2.2; pinned
+  to the latest stable release rather than the minimum fixed version.
+- Dropped the deprecated `X-XSS-Protection` header from `nginx/nginx.conf`. It's ignored by
+  all modern browsers, and its legacy heuristic mode was itself an XSS vector in old
+  IE/Edge. The existing CSP already provides the real protection here.
+
+### Changed
+
+- Bumped Spring Boot parent `3.5.0` → `3.5.16`, the final OSS release of the 3.5.x line
+  (3.5 reached end-of-life 2026-06-30; no further OSS patches will land on this branch).
+  Patch-level bump only — no Spring Security/Jackson/Java-baseline changes are introduced
+  by this release line. A move to Spring Boot 4.x (Spring Framework 7, Java 21 baseline,
+  Spring Security 7 default changes) is tracked separately as its own future major-version
+  initiative, not folded into this release.
+- Bumped `jjwt` (`jjwt-api`/`jjwt-impl`/`jjwt-jackson`) `0.12.6` → `0.13.0`. Upstream this
+  release contains a single change (a previously-private constructor made `public`) with no
+  impact on this codebase's usage.
+
+### Fixed
+
+- Reconciled `security-scans` documentation drift: `README.md`'s CI/CD table and
+  `docs/system-design/infrastructure-cicd.md` both referenced a `security-scans` required
+  check that has never existed as an actual workflow file — only `maven.yml`,
+  `api-tests.yml`, `e2e-tests.yml`, `load-tests.yml`, and `release.yml` are live under
+  `.github/workflows/`. Removed the false claim from the README table and relabeled the
+  job spec in the infra doc as planned/not-yet-implemented, preserving the intended design
+  (OWASP Dependency-Check + SpotBugs) without asserting it runs today. If `security-scans`
+  is configured as a required status check in GitHub's branch-protection settings for
+  `main`, it should be removed there too — verify directly in repo settings.
+- Confirmed the JaCoCo `jacoco:check` gate added in v2.1.0 against a real measured
+  baseline: actual instruction coverage is 69%. The 60% minimum is kept as an intentional
+  buffer below that baseline rather than raised to match it, so routine coverage drift
+  doesn't fail `verify` on unrelated PRs.
+
+### Removed
+
+- Removed the tracked, 0-byte `implementation_phase_plan.md` from the repo root. Its
+  original 5-phase plan content is superseded by `docs/system-design/`; a breadcrumb note
+  was added to `docs/README.md` for anyone who finds the old filename in git history.
+
 ## [2.1.0] - 2026-08-05
 
 ### Security
