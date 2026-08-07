@@ -136,11 +136,12 @@ REST endpoints are validated using Spring `MockMvc` to test controller routing, 
 
 To enforce code style consistency and discover security vulnerabilities during early compilation, the Maven build incorporates these analyzers:
 
-| Tool | Focus Area | Maven Execution Command |
+| Tool | Focus Area | Maven / Docker Execution Command |
 | :--- | :--- | :--- |
 | **Checkstyle** | Format guidelines, naming conventions, import ordering. | `mvn checkstyle:check` |
 | **SpotBugs** | NullPointer dangers, resource leaks, basic logical bugs. | `mvn spotbugs:check` |
-| **OWASP Dependency Check** | Scans pom.xml dependencies for known CVE vulnerabilities. | `mvn dependency-check:check` |
+| **OWASP Dependency Check** | Scans `pom.xml` dependencies for known CVE vulnerabilities (SCA). | `mvn dependency-check:check -Psecurity-scan` |
+| **Trivy Container Scan** | Scans the built Docker image for base OS and library vulnerabilities. | `docker build -t app . && trivy image app` |
 
 ---
 
