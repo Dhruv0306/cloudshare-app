@@ -43,7 +43,7 @@
             Spring Boot's embedded Tomcat container does not deploy or package Tomcat's "examples" web application in any environment.
             Since the affected example application is completely absent from CloudShare's deployment, this CVE is inapplicable.
         ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/tomcat-embed-core.*$</packageUrl>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/tomcat-embed-.*$</packageUrl>
         <cve>CVE-2026-66299</cve>
     </suppress>
 </suppressions>
