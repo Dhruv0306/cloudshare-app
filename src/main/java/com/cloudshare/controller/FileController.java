@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
@@ -74,7 +75,7 @@ public class FileController {
         
         // Prevent inline scripts or HTML injection by setting content type to application/octet-stream if text/html
         String contentType = fileStream.getMimeType();
-        if (contentType == null || contentType.toLowerCase().contains("text/html")) {
+        if (contentType == null || contentType.toLowerCase(Locale.ROOT).contains("text/html")) {
             contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
         }
         
