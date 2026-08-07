@@ -5,6 +5,7 @@ import com.cloudshare.security.UserPrincipal;
 import com.cloudshare.security.ClientIpResolver;
 import com.cloudshare.service.FileService;
 import com.cloudshare.service.ShareService;
+import java.util.Locale;
 import java.util.UUID;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -71,7 +72,7 @@ public class ShareController {
 
         // Prevent inline scripts or html injection
         String contentType = fileStream.getMimeType();
-        if (contentType == null || contentType.toLowerCase().contains("text/html")) {
+        if (contentType == null || contentType.toLowerCase(Locale.ROOT).contains("text/html")) {
             contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
         }
 

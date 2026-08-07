@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.sql.Connection;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Locale;
 
 @Component
 @RequiredArgsConstructor
@@ -30,7 +31,7 @@ public class AuditPartitionScheduler {
         log.info("Starting audit log partition maintenance scheduler job...");
         try {
             String dbProduct = jdbcTemplate.execute((Connection conn) -> conn.getMetaData().getDatabaseProductName());
-            if (dbProduct == null || !dbProduct.toLowerCase().contains("postgresql")) {
+            if (dbProduct == null || !dbProduct.toLowerCase(Locale.ROOT).contains("postgresql")) {
                 log.info("Database is not PostgreSQL ({}); skipping native partition creation.", dbProduct);
                 return;
             }
@@ -52,7 +53,7 @@ public class AuditPartitionScheduler {
                 "JOIN pg_class parent ON pg_inherits.inhparent = parent.oid " +
                 "JOIN pg_class child ON pg_inherits.inhrelid = child.oid " +
                 "WHERE parent.relname = 'audit_logs'",
-                (rs, rowNum) -> rs.getString("partition_name").toLowerCase()
+                (rs, rowNum) -> rs.getString("partition_name").toLowerCase(Locale.ROOT)
             );
         } catch (Exception e) {
             log.error("Failed to query existing partitions for audit_logs table", e);
