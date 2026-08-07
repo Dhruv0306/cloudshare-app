@@ -93,6 +93,12 @@ The client-side administrative step-up countdown is a UX-only element. It acts s
     ```http
     Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
     ```
+*   **Security Headers:** Nginx injects a complete set of defense-in-depth security headers:
+    *   `X-Frame-Options: DENY` (prevents clickjacking)
+    *   `X-Content-Type-Options: nosniff` (prevents MIME-sniffing exploits)
+    *   `Content-Security-Policy (CSP)` (enforces strict script/style source restrictions)
+    *   `Referrer-Policy: strict-origin-when-cross-origin` (restricts referrer leakage)
+    *   `Permissions-Policy` (disables client-side features like camera/microphone/geolocation)
 *   **Cipher Suites:** Restricts connections to highly secure ciphers, e.g., `TLS_AES_256_GCM_SHA384` and `TLS_CHACHA20_POLY1305_SHA256`.
 
 ### 2.2 Encryption-at-Rest: Envelope Encryption
@@ -119,6 +125,7 @@ flowchart TD
     *   The file data is encrypted using AES-256-GCM, generating cipher data and a 16-byte authentication tag (ensuring integrity).
     *   The FEK is encrypted using the KEK via RFC 3394 `AESWrap`.
     *   The encrypted file is stored in MinIO/local storage.
+        *   *MinIO Client Vulnerability Mitigation (CVE-2025-59952):* To protect secrets and system environment configuration variables from exfiltration by compromised or malicious storage endpoints, the MinIO Java SDK is pinned to version `8.6.0` or later, disabling XML external reference injection.
     *   The encrypted FEK, the GCM Initialization Vector (IV), KEK version, and file metadata are saved in the PostgreSQL database.
 3.  **File Download (Decryption):**
     *   The backend retrieves the encrypted FEK and GCM IV from the database.
@@ -177,8 +184,14 @@ flowchart TD
 | Vulnerability | Threat Vector in File Sharing | CloudShare Mitigation Strategy |
 | :--- | :--- | :--- |
 | **Broken Object Level Authorization (BOLA)** | User accesses another user's private file by guessing the database ID. | Files are identified via random `UUIDv4` instead of sequential IDs. Access control queries enforce ownership/share check via BOLA-safe query patterns (`FileRepository.findAccessibleFile` and `findByIdAndOwnerIdAndDeletedFalse`). |
-| **Cross-Site Scripting (XSS)** | Attacker uploads an HTML/SVG file containing malicious JS, which executes when another user downloads/views it. | All file downloads force `Content-Disposition: attachment; filename="sanitized.ext"` and `Content-Type: application/octet-stream` headers, preventing inline execution. Nginx sets a strict `Content-Security-Policy (CSP)`. |
+| **Cross-Site Scripting (XSS)** | Attacker uploads an HTML/SVG file containing malicious JS, which executes when another user downloads/views it. | All file downloads force `Content-Disposition: attachment; filename="sanitized.ext"` and `Content-Type: application/octet-stream` headers, preventing inline execution. Nginx sets a strict `Content-Security-Policy (CSP)`, `Referrer-Policy`, and `Permissions-Policy`. |
 | **SQL Injection (SQLi)** | Attacker inputs SQL commands in search queries. | Use Spring Data JPA with standard repository queries running parameterized queries under the hood. |
 | **Path Traversal** | Attacker uploads files with path parameters, overwriting system files. | Absolute separation between user-facing metadata name and backend storage name (random UUID folder/file structure on disk). |
 | **Cross-Site Request Forgery (CSRF)** | Attacker triggers state changes on behalf of a logged-in user. | Stateless JWTs are passed via `Authorization: Bearer <JWT>` headers. Refresh token cookies use `SameSite=Strict` and `HttpOnly`. |
 | **Rate Limiting & Brute Force** | Attackers perform automated login guessing or script file downloads. | Redis sliding-window rate limiters filter requests across auth (5/min per IP), uploads (10/min per user/IP), MFA (5/min per user/IP), public link access (two-tier: 30/min per link+IP AND 100/min global per IP), and general APIs (100/min per user/IP). Gateway network topology blocks direct container access, trusting Nginx's sanitized `X-Real-IP`. |
+
+---
+
+## 5. Security Policy & Disclosure
+
+For details on supported versions and reporting vulnerabilities privately to the maintainers, please refer to the project's root [SECURITY.md](../../SECURITY.md) policy.
