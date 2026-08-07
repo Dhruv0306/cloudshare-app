@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-08-07
+
+### Added
+
+- Added `.github/workflows/security-scans.yml`: a real, implemented SCA/CVE
+  scanning job, replacing the commented-out design stub that previously lived
+  in `docs/system-design/infrastructure-cicd.md` with no corresponding
+  workflow file. Two jobs, both running on push/PR to `main` and weekly
+  (Mondays 06:00 UTC) to catch newly-disclosed CVEs against unchanged code,
+  not just CVEs introduced by new commits:
+  - `dependency-check` — OWASP `dependency-check-maven` against the full
+    Maven dependency tree, gated at CVSS ≥ 7. This is exactly the class of
+    tool that would have caught `CVE-2025-66516` (tika-core) automatically
+    before it reached `main`, instead of relying on periodic manual review.
+  - `container-scan` — Trivy against the `Dockerfile`-built image (built
+    locally in the runner, not pushed to a registry), covering base-image /
+    OS-package CVEs that dependency-only SCA doesn't see.
+- Added a `security-scan` Maven profile (opt-in, not bound to the default
+  `verify` lifecycle) wrapping the `dependency-check-maven` plugin, activated
+  in CI via `-Psecurity-scan`. Kept out of the default build because the NVD
+  database sync is slow and network-dependent — local `mvn verify` shouldn't
+  pay that cost on every run.
+- Added `.owasp/suppressions.xml` as the documented home for any future
+  dependency-check false-positive suppressions, currently empty.
+- Added `.github/dependabot.yml` enabling native Dependabot alerts for the
+  `maven` and `github-actions` ecosystems (weekly cadence for routine
+  version bumps; security PRs open immediately regardless of schedule).
+
+### Requires manual follow-up (not part of this release's automated changes)
+
+- An `NVD_API_KEY` repository secret needs to be added under Settings →
+  Secrets and variables → Actions for the `dependency-check` job to run at a
+  practical speed in CI (free key: nvd.nist.gov/developers/request-an-api-key).
+  Without it, NVD database updates fall back to a heavily rate-limited public
+  endpoint.
+- Branch protection on `main` should be updated to require the new
+  `security-scans` checks once they've run cleanly a few times — a workflow
+  file can't configure this itself. While auditing branch protection for
+  this, also check for any stale `security-scans` required-check entry left
+  over from before this job existed (see the known-gap note carried in
+  earlier releases).
+
+### Docs
+
+- Corrected `docs/system-design/infrastructure-cicd.md`: replaced the
+  commented-out `security-scans` stub with a pointer to the real
+  implementation above, and added an explicit note that the composite
+  pipeline YAML shown in that section is illustrative — the actual pipeline
+  is several separate workflow files, and the `publish-images` job
+  (GHCR push + registry-image Trivy scan) documented there is still
+  design-only with no corresponding workflow file. That's a separate,
+  not-yet-scoped gap, not something this release closes.
+
 ## [2.3.0] - 2026-08-07
 
 ### Security
