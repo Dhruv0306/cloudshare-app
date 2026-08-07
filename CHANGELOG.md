@@ -15,9 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgraded managed dependency `org.postgresql:postgresql` from `42.7.11` to `42.7.12` to address
   CVE-2026-54291 — a vulnerability where man-in-the-middle attackers could trigger a downgrade in
   SCRAM-SHA-256-PLUS authentication, bypassing MITM protection.
-- Upgraded managed dependency `io.netty:netty-codec` (and related compression codecs) from
-  `4.1.135.Final` to `4.1.136.Final` to address CVE-2026-59901 — an infinite loop vulnerability
-  in netty-codec-compression (bzip2 handler) that could be triggered by malformed streams to cause DoS.
+- Upgraded managed dependency `io.netty:netty-codec` (and all other Netty dependencies) from
+  `4.1.135.Final` to `4.2.16.Final` to address both CVE-2026-59901 (infinite loop in bzip2 decompression handler)
+  and CVE-2026-56816 (HTTP/3 frame codec memory exhaustion DoS).
+- Upgraded Tomcat embed libraries from `10.1.55` to `10.1.57` to address multiple security vulnerabilities,
+  including CVE-2026-66299 and CVE-2026-55276 (high/critical request parsing vulnerabilities).
+- Upgraded Log4j2 dependency from `2.24.3` to `2.26.1` to mitigate CVE-2026-34479 (XML layout character escaping vulnerability).
+- Suppressed `kotlin-stdlib` CVEs (CVE-2026-53914, CVE-2020-29582) in `.owasp/suppressions.xml` as build-time issues
+  not applicable to our runtime classpath (with Kotlin version bumped to `2.0.21` to maintain modern tooling alignment).
 
 ### Added
 
