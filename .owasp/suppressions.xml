@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    OWASP dependency-check suppression file. https://jeremylong.github.io/DependencyCheck/general/suppression.html
+
+    Empty by default. Add an entry here ONLY when a finding is confirmed to be a false
+    positive or genuinely inapplicable to how CloudShare uses the dependency — never to
+    silence a real CVE because it's inconvenient. Every suppression must include a <notes>
+    block explaining the reasoning, so a future reviewer (or a future you) can tell why it's
+    safe to ignore without re-deriving it from scratch.
+
+    Example:
+    <suppress>
+        <notes><![CDATA[
+            CVE-XXXX-XXXXX only affects the Windows-native code path of this library;
+            CloudShare only runs it inside the Linux container images built by Dockerfile.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/com\.example/some-lib@.*$</packageUrl>
+        <cve>CVE-XXXX-XXXXX</cve>
+    </suppress>
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+</suppressions>
