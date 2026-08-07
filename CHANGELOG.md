@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-08-07
+
+### Security
+
+- Bumped `io.minio:minio` `8.5.12` → `8.6.0`, fixing CVE-2025-59952
+  (GHSA-h7rh-xfpj-hpcm) — an information-disclosure flaw where the XML serializer
+  substituted `${...}` references in response tag values with system property /
+  environment variable values. A malicious or compromised S3-compatible endpoint
+  could use this to exfiltrate JVM system properties or environment variables
+  (credentials, paths) through client-side XML response parsing. MinIO fronts
+  this project's encryption and object-storage pipeline, so client-side handling
+  of storage-backend responses is directly relevant attack surface. Pinned to
+  `8.6.0` rather than the latest `9.0.3`; `9.0.0` was an explicit breaking API
+  refactor and is tracked separately as a future major-version initiative, same
+  as the Spring Boot 4.x note below.
+- Added an explicit `com.squareup.okhttp3:okhttp` pin at `4.12.0`. MinIO
+  `8.6.0`'s own transitive `okhttp` default moved to `5.1.0`, which ships as
+  split JVM/Android artifacts and breaks compilation (missing `okhttp3.HttpUrl`
+  and related classes — see upstream `minio/minio-java#1670`/`#1681`). `4.12.0`
+  is what `8.5.12` already resolved to, so this is a no-op for the actual
+  runtime dependency graph, not a downgrade.
+
+### Added
+
+- Added `Referrer-Policy: strict-origin-when-cross-origin` and a `Permissions-Policy`
+  (denying geolocation, camera, microphone, payment, USB, and FLoC) to
+  `nginx/nginx.conf`, rounding out the existing header set (CSP, HSTS,
+  X-Frame-Options, X-Content-Type-Options).
+- Added a root `SECURITY.md` with a supported-versions table and vulnerability
+  disclosure policy, surfaced by GitHub's Security tab. Two follow-ups are
+  called out inline rather than blocking this release: the maintainer contact
+  email is a placeholder, and GitHub's private vulnerability reporting needs to
+  be manually enabled under repo Settings → Security → Vulnerability reporting.
+
+### Fixed
+
+- Closed out the last 4 call sites from the locale-folding sweep flagged in
+  v2.1.0's own CHANGELOG: `AuditPartitionScheduler.java` (database product name
+  check, partition name normalization) and the Content-Type sniffing in
+  `FileController`/`ShareController` ahead of the inline-HTML-injection guard.
+  Same latent-bug class as the real defect previously fixed in
+  `RateLimitingFilter` — none of these 4 sites had an observed failure, but
+  case folding under non-English default locales can silently change ASCII
+  string comparisons, so they're closed out for consistency.
+
 ## [2.2.0] - 2026-08-06
 
 ### Security
