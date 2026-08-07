@@ -20,6 +20,9 @@
     <properties>
         <java.version>17</java.version>
         <jjwt.version>0.13.0</jjwt.version>
+        <netty.version>4.1.136.Final</netty.version>
+        <postgresql.version>42.7.12</postgresql.version>
+        <bouncycastle.version>1.84</bouncycastle.version>
     </properties>
 
     <dependencies>
@@ -129,6 +132,13 @@
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
             <version>4.12.0</version>
+        </dependency>
+        <!-- Explicit Bouncy Castle override to fix CVE-2025-14813 (critical GOST block count bypass)
+             in MinIO transitive dependency graph. Pinned to the latest stable release. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>${bouncycastle.version}</version>
         </dependency>
 
         <!-- TOTP / MFA library -->

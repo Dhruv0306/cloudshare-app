@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.4.0] - 2026-08-07
 
+### Security
+
+- **[Critical]** Upgraded transitive dependency `org.bouncycastle:bcprov-jdk18on` from `1.81` to
+  `1.84` in `pom.xml` to address CVE-2025-14813 — a critical GOST block count bypass vulnerability
+  that could allow attackers to bypass specific security properties in cryptographic libraries.
+- Upgraded managed dependency `org.postgresql:postgresql` from `42.7.11` to `42.7.12` to address
+  CVE-2026-54291 — a vulnerability where man-in-the-middle attackers could trigger a downgrade in
+  SCRAM-SHA-256-PLUS authentication, bypassing MITM protection.
+- Upgraded managed dependency `io.netty:netty-codec` (and related compression codecs) from
+  `4.1.135.Final` to `4.1.136.Final` to address CVE-2026-59901 — an infinite loop vulnerability
+  in netty-codec-compression (bzip2 handler) that could be triggered by malformed streams to cause DoS.
+
 ### Added
 
 - Added `.github/workflows/security-scans.yml`: a real, implemented SCA/CVE
