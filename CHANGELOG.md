@@ -19,7 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `4.1.135.Final` to `4.2.16.Final` to address both CVE-2026-59901 (infinite loop in bzip2 decompression handler)
   and CVE-2026-56816 (HTTP/3 frame codec memory exhaustion DoS).
 - Upgraded Tomcat embed libraries from `10.1.55` to `10.1.57` to address multiple security vulnerabilities,
-  including CVE-2026-66299 and CVE-2026-55276 (high/critical request parsing vulnerabilities).
+  including CVE-2026-55276 (high/critical request parsing vulnerability).
+- Suppressed `tomcat-embed-core` CVE-2026-66299 in `.owasp/suppressions.xml` because it only affects the Tomcat
+  WebSocket chat example web application, which is completely absent from Spring Boot's embedded server deployments.
 - Upgraded Log4j2 dependency from `2.24.3` to `2.26.1` to mitigate CVE-2026-34479 (XML layout character escaping vulnerability).
 - Suppressed `kotlin-stdlib` CVEs (CVE-2026-53914, CVE-2020-29582) in `.owasp/suppressions.xml` as build-time issues
   not applicable to our runtime classpath (with Kotlin version bumped to `2.0.21` to maintain modern tooling alignment).

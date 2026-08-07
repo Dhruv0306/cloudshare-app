@@ -37,4 +37,13 @@
         <packageUrl regex="true">^pkg:maven/org\.jetbrains\.kotlin/kotlin-stdlib.*$</packageUrl>
         <cve>CVE-2020-29582</cve>
     </suppress>
+    <suppress>
+        <notes><![CDATA[
+            CVE-2026-66299 is an uncontrolled resource consumption vulnerability in Tomcat's WebSocket chat example application.
+            Spring Boot's embedded Tomcat container does not deploy or package Tomcat's "examples" web application in any environment.
+            Since the affected example application is completely absent from CloudShare's deployment, this CVE is inapplicable.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/tomcat-embed-core.*$</packageUrl>
+        <cve>CVE-2026-66299</cve>
+    </suppress>
 </suppressions>
