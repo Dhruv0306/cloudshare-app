@@ -346,6 +346,18 @@ spec:
 
 ## 4. CI/CD Pipeline Configuration (GitHub Actions)
 
+> **Note on this section:** the YAML below is an illustrative composite of the pipeline's
+> intended shape, not a literal copy of any single workflow file. The actual, live
+> workflows are `.github/workflows/maven.yml`, `api-tests.yml`, `e2e-tests.yml`,
+> `load-tests.yml`, `release.yml`, and (as of v2.4.0) `security-scans.yml` — each a
+> separate file, none triggered on a `release/*` branch pattern (branch protection is
+> `main`-only today). Job 1 (`verify`) and Job 2 (`security-scans`) below correspond to
+> real, live jobs. **Job 3 (`publish-images`) does not exist as an implemented workflow**
+> — no GHCR push, no image-build step, and no registry-image Trivy scan run in CI today.
+> It's left here as the intended design; treat it the same way the security-scans job
+> was treated before v2.4.0 — a documented plan, not a running check. If you need image
+> publishing enforced, that's a separate, not-yet-scoped piece of work.
+
 This pipeline triggers automatically on commits to the `main` or `release/*` branches. It validates the code, runs automated tests using JUnit and Mockito, performs security vulnerability scans (OWASP Dependency Check, Trivy), builds the docker image, and deploys.
 
 ```yaml
@@ -387,31 +399,22 @@ jobs:
           path: target/site/jacoco/
           retention-days: 14
 
-  # Job 2: Static Security Scanning — PLANNED, NOT YET IMPLEMENTED.
-  # No `.github/workflows/security-scans.yml` exists in this repo; only maven.yml,
-  # api-tests.yml, e2e-tests.yml, load-tests.yml, and release.yml are live. The job
-  # below documents the intended design (OWASP Dependency-Check for SCA, SpotBugs for
-  # static analysis) so it isn't lost, but it is not a required status check on `main`
-  # today — verify the actual branch-protection settings in GitHub if that matters for
-  # your workflow. Tracked as a future addition; see project backlog.
-  #
-  # security-scans:
-  #   needs: verify
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout Source Code
-  #       uses: actions/checkout@v4
-  #
-  #     - name: Run OWASP Dependency-Check (SCA)
-  #       uses: dependency-check/Dependency-Check_Action@main
-  #       with:
-  #         project: 'CloudShare'
-  #         path: '.'
-  #         format: 'HTML'
-  #         out: 'reports'
-  #
-  #     - name: Run Static Code Analysis (SonarCloud / Spotbugs)
-  #       run: mvn spotbugs:check -B
+  # Job 2: Static Security Scanning — IMPLEMENTED as of v2.4.0.
+  # Lives in its own file, .github/workflows/security-scans.yml, rather than as a job
+  # in this composite — it runs on its own schedule (weekly, plus push/PR to main) and
+  # doesn't share a `needs: verify` dependency with the jobs above. It has two jobs:
+  #   - dependency-check: OWASP dependency-check-maven (SCA), gated at CVSS >= 7,
+  #     activated via the `security-scan` Maven profile in pom.xml. Requires an
+  #     NVD_API_KEY repo secret (https://nvd.nist.gov/developers/request-an-api-key) —
+  #     without one, NVD database updates are rate-limited to the point of
+  #     impracticality in CI.
+  #   - container-scan: Trivy against the Dockerfile-built image (built locally in the
+  #     runner, not pushed — see the Job 3 note above for why).
+  # This closes the doc/reality gap that existed before v2.4.0: this job was previously
+  # described here as a commented-out stub with no corresponding workflow file.
+  # Note: as with any new required-status-check candidate, branch protection on `main`
+  # needs to be updated manually in GitHub repo settings to require this check — that's
+  # not something a workflow file itself can configure.
 
   # Job 3: Build & Publish Container Images
   publish-images:
