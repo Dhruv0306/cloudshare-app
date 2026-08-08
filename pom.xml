@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>3.5.16</version>
-        <relativePath/> <!-- lookup parent from repository -->
+        <relativePath /> <!-- lookup parent from repository -->
     </parent>
 
     <groupId>com.cloudshare</groupId>
@@ -27,6 +27,20 @@
         <log4j2.version>2.26.1</log4j2.version>
         <kotlin.version>2.0.21</kotlin.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Pin Jackson 3.x dependencies to a secure version to resolve CVE-2026-29062,
+            CVE-2026-54512, and CVE-2026-54513 -->
+            <dependency>
+                <groupId>tools.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>3.2.1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Spring Boot Starters -->
@@ -136,7 +150,8 @@
             <artifactId>okhttp</artifactId>
             <version>4.12.0</version>
         </dependency>
-        <!-- Explicit Bouncy Castle override to fix CVE-2025-14813 (critical GOST block count bypass)
+        <!-- Explicit Bouncy Castle override to fix CVE-2025-14813 (critical GOST block count
+        bypass)
              in MinIO transitive dependency graph. Pinned to the latest stable release. -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
@@ -259,7 +274,8 @@
                                         <limit>
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- Confirmed buffer below the measured 69% baseline; see comment above. -->
+                                            <!-- Confirmed buffer below the measured 69% baseline;
+                                            see comment above. -->
                                             <minimum>0.60</minimum>
                                         </limit>
                                     </limits>
