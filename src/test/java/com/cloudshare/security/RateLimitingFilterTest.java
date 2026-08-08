@@ -1,7 +1,8 @@
 package com.cloudshare.security;
 
 import com.cloudshare.service.RateLimiterService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
@@ -43,7 +44,7 @@ class RateLimitingFilterTest {
     @Mock
     private FilterChain filterChain;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = JsonMapper.builder().build();
 
     private RateLimitingFilter rateLimitingFilter;
 
