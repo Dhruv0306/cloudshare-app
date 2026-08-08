@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-08-08
+
+### Changed
+
+- Upgraded core application framework to **Spring Boot 4.1.0** and migrated to Tomcat 11 managed-coordinates.
+- Upgraded managed dependency `io.minio:minio` from `8.6.0` to `9.0.3` (major-line upgrade) and fixed the method signature mismatch (`PutObjectArgs#stream` parameter `int` -> `long` type).
+- Upgraded managed dependency `org.bouncycastle:bcprov-jdk18on` from `1.84` to `1.85`.
+- Upgraded managed dependency `net.logstash.logback:logstash-logback-encoder` from `8.0` to `9.0`.
+- Upgraded managed dependency `org.jacoco:jacoco-maven-plugin` from `0.8.12` to `0.8.15`.
+- Upgraded managed dependency `org.owasp:dependency-check-maven` from `12.2.2` to `13.0.0`.
+- Upgraded managed dependency `io.gatling:gatling-maven-plugin` from `4.9.x` to `4.21.10`.
+- Upgraded managed dependency `io.gatling.highcharts:gatling-charts-highcharts` from `3.11.x` to `3.15.1`.
+- Upgraded GitHub Actions versions: `actions/setup-java` to `v5`, `actions/checkout` to `v7`, `actions/setup-node` to `v7`, `actions/cache` to `v6`, and `actions/upload-artifact` to `v7`.
+- Refactored the ClamAV concurrency E2E test (`clamav-concurrency.spec.ts`) to use parallel fetch API requests inside the page context instead of browser file input UI interactions, achieving 100% concurrent request execution and eliminating flakiness.
+
+### Security
+
+- Upgraded managed dependency `com.fasterxml.jackson:jackson-bom` (Jackson 3.x) from `3.2.0` to `3.2.1` to resolve security vulnerabilities (CVE-2026-29062).
+- Pinned Tomcat embedded server dependency `<tomcat.version>` to `11.0.24` to resolve five vulnerabilities (CVE-2026-53434, CVE-2026-55276, CVE-2026-59083, CVE-2026-59084, and CVE-2026-53404) present in the default Spring Boot 4.1 Tomcat dependency.
+- Pinned classic `com.fasterxml.jackson:jackson-bom` version to `2.22.1` in dependency management to resolve CVE-2026-54515 (case-insensitive deserialization exclusion bypass in jackson-databind).
+
 ## [2.4.0] - 2026-08-07
 
 ### Security
