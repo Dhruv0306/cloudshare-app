@@ -7,8 +7,8 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.16</version>
-        <relativePath /> <!-- lookup parent from repository -->
+        <version>4.1.0</version>
+        <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
     <groupId>com.cloudshare</groupId>
@@ -22,7 +22,7 @@
         <jjwt.version>0.13.0</jjwt.version>
         <netty.version>4.2.16.Final</netty.version>
         <postgresql.version>42.7.12</postgresql.version>
-        <bouncycastle.version>1.84</bouncycastle.version>
+        <bouncycastle.version>1.85</bouncycastle.version>
         <tomcat.version>10.1.57</tomcat.version>
         <log4j2.version>2.26.1</log4j2.version>
         <kotlin.version>2.0.21</kotlin.version>
@@ -91,8 +91,8 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
@@ -140,7 +140,7 @@
         <dependency>
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
-            <version>8.6.0</version>
+            <version>9.0.3</version>
         </dependency>
         <!-- minio-java 8.6.0's own transitive okhttp default (5.1.0) ships split JVM/Android
              artifacts that break compilation (upstream minio/minio-java#1670) - pin explicitly
@@ -180,6 +180,16 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
@@ -192,7 +202,7 @@
         <dependency>
             <groupId>io.gatling.highcharts</groupId>
             <artifactId>gatling-charts-highcharts</artifactId>
-            <version>3.11.5</version>
+            <version>3.15.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -244,7 +254,7 @@
                 -->
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.12</version>
+                <version>0.8.15</version>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
@@ -342,7 +352,7 @@
                     <plugin>
                         <groupId>io.gatling</groupId>
                         <artifactId>gatling-maven-plugin</artifactId>
-                        <version>4.9.4</version>
+                        <version>4.21.10</version>
                         <executions>
                             <execution>
                                 <phase>integration-test</phase>

@@ -8,7 +8,7 @@ import com.cloudshare.service.FileService;
 import com.cloudshare.service.RateLimiterService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
@@ -30,7 +30,11 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import org.springframework.context.annotation.Import;
+import com.cloudshare.config.SecurityConfig;
+
 @WebMvcTest(FileController.class)
+@Import(SecurityConfig.class)
 class FileControllerTest {
 
     @Autowired

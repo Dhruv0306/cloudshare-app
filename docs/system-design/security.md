@@ -192,6 +192,29 @@ flowchart TD
 
 ---
 
-## 5. Security Policy & Disclosure
+## 5. Dependency Security & Hardening
+
+CloudShare enforces continuous vulnerability scanning and proactive dependency upgrading. The following key security mitigations are implemented within the application classpath:
+
+### 5.1 Mitigated Vulnerabilities (CVEs)
+
+*   **Bouncy Castle (CVE-2025-14813):** The Bouncy Castle provider (`org.bouncycastle:bcprov-jdk18on`) is explicitly pinned to version `1.84` (overriding the transitive dependency from the MinIO SDK). This mitigates a critical issue where the GOST CTR cipher implementation could not process more than 255 blocks correctly, preventing potential cryptographic authentication bypass.
+*   **PostgreSQL JDBC Driver (CVE-2026-54291):** The PostgreSQL driver version is pinned to `42.7.12` or later. This addresses a high-severity man-in-the-middle (MITM) downgrade vulnerability that could allow attackers to bypass transport encryption protections during SCRAM-SHA-256-PLUS authentication.
+*   **Netty Framework (CVE-2026-56816 & CVE-2026-59901):** The Netty network library version is overridden to `4.2.16.Final` in Maven properties. This mitigates:
+    *   `CVE-2026-56816` — A resource exhaustion Denial of Service (DoS) in the HTTP/3 codec handler.
+    *   `CVE-2026-59901` — An infinite loop DoS in the `netty-codec-compression` bzip2 handler triggered by malformed streams.
+*   **Apache Tomcat (CVE-2026-55276):** Embedded Tomcat servlet libraries are pinned to version `10.1.57`. This addresses a high-severity request parsing vulnerability. *(Note: CVE-2026-66299 in the Tomcat WebSocket examples application is suppressed via `.owasp/suppressions.xml` because the examples webapp is not packaged or deployed in Spring Boot's embedded server.)*
+*   **Log4j2 API (CVE-2026-34479):** The Log4j2 library is pinned to `2.26.1` to address a moderate-severity unescaped character handling issue in the XML layout that could trigger downstream log analysis DoS.
+
+### 5.2 Dependency Scanning & Automation
+
+*   **SCA Checking:** The project incorporates the OWASP Dependency-Check plugin (active in CI via `-Psecurity-scan`) gated to automatically fail builds when a vulnerability of CVSS ≥ 7.0 is detected.
+*   **Container Scanning:** GitHub Actions run Trivy scans against local Docker image builds to identify OS-level package vulnerabilities before release.
+*   **Automated Bumps:** Dependabot is enabled to track weekly routine upgrades for the `maven` and `github-actions` ecosystems.
+
+---
+
+## 6. Security Policy & Disclosure
 
 For details on supported versions and reporting vulnerabilities privately to the maintainers, please refer to the project's root [SECURITY.md](../../SECURITY.md) policy.
+
