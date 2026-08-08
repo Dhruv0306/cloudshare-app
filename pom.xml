@@ -336,7 +336,7 @@
                     <plugin>
                         <groupId>io.gatling</groupId>
                         <artifactId>gatling-maven-plugin</artifactId>
-                        <version>4.9.4</version>
+                        <version>4.21.10</version>
                         <executions>
                             <execution>
                                 <phase>integration-test</phase>
