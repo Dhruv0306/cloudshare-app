@@ -24,16 +24,24 @@
         <postgresql.version>42.7.12</postgresql.version>
         <bouncycastle.version>1.85</bouncycastle.version>
         <!--
-            v3.0.0 follow-up: removed <tomcat.version>10.1.57</tomcat.version> a second
-            time. It was reintroduced by the Dependabot spring-boot-starter-parent PR
-            (which only touches the parent version, not unrelated property overrides)
-            and wasn't caught by the manual Boot-4.1 compile-fix pass, because a stale
+            v3.0.0 follow-up, round 1: removed <tomcat.version>10.1.57</tomcat.version>.
+            It was reintroduced by the Dependabot spring-boot-starter-parent PR (which
+            only touches the parent version, not unrelated property overrides) and
+            wasn't caught by the manual Boot-4.1 compile-fix pass, because a stale
             container-version override doesn't produce a compile error - it's a
             runtime/binary-compatibility risk. Tomcat 10.1.x implements Servlet 6.0;
-            Boot 4.1 requires the Servlet 6.1 / Jakarta EE 11 baseline. Same fix as
-            before: let the parent BOM manage Tomcat (11.0.x line). If this needs
-            pinning again for a future CVE, pin within 11.0.x, not back to 10.1.x.
+            Boot 4.1 requires the Servlet 6.1 / Jakarta EE 11 baseline. Removing it let
+            the parent BOM manage Tomcat, which resolved to 11.0.22.
+
+            v3.0.0 follow-up, round 2: the new security-scans job (OWASP dependency-check)
+            caught real CVEs against that 11.0.22 default - CVE-2026-53434, -55276,
+            -59083, -59084, -53404 (CVSS 7.3-9.1 per NVD; Apache's own security-11.html
+            rates all five "Low" - a known NVD-vs-vendor scoring gap, not cause to
+            distrust the finding) - within the same day the override was removed. Pinned
+            forward to 11.0.24, which fixes all five, staying within the 11.0.x line as
+            planned rather than reverting to 10.1.x.
         -->
+        <tomcat.version>11.0.24</tomcat.version>
         <log4j2.version>2.26.1</log4j2.version>
         <kotlin.version>2.0.21</kotlin.version>
     </properties>
@@ -46,6 +54,26 @@
                 <groupId>tools.jackson</groupId>
                 <artifactId>jackson-bom</artifactId>
                 <version>3.2.1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!--
+                v3.0.0 follow-up: Boot 4.1's default-managed classic jackson-databind
+                (2.21.4, pulled in transitively via jjwt-jackson - the app's own code
+                uses tools.jackson/Jackson 3 exclusively since the Boot 4.1 compile-fix
+                pass) is affected by CVE-2026-54515 (Medium, CVSS 5.3-6.9): case-insensitive
+                deserialization can bypass a per-property @JsonIgnoreProperties exclusion.
+                Below the security-scans CVSS>=7 gate so it didn't fail the build, but real
+                and cheaply fixed - pinned to latest stable (2.22.1) rather than the bare
+                minimum fix version (2.21.5), matching how tika-core/Tomcat overrides above
+                are pinned. JJWT's own claim (de)serialization doesn't use
+                @JsonFormat(ACCEPT_CASE_INSENSITIVE_PROPERTIES), so exploitability here was
+                already low, but no reason to leave it unpatched given the fix is free.
+            -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>2.22.1</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
