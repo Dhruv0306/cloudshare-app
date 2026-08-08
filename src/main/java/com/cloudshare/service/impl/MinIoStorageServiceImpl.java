@@ -52,7 +52,7 @@ public class MinIoStorageServiceImpl implements StorageService {
                     PutObjectArgs.builder()
                             .bucket(bucketName)
                             .object(path)
-                            .stream(inputStream, -1, 10485760) // 10MB part size
+                            .stream(inputStream, -1L, 10485760L) // 10MB part size
                             .build()
             );
         } catch (Exception e) {
