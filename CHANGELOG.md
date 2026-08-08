@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-08-07
+
+### Security
+
+- **[Critical]** Upgraded transitive dependency `org.bouncycastle:bcprov-jdk18on` from `1.81` to
+  `1.84` in `pom.xml` to address CVE-2025-14813 — a critical GOST block count bypass vulnerability
+  that could allow attackers to bypass specific security properties in cryptographic libraries.
+- Upgraded managed dependency `org.postgresql:postgresql` from `42.7.11` to `42.7.12` to address
+  CVE-2026-54291 — a vulnerability where man-in-the-middle attackers could trigger a downgrade in
+  SCRAM-SHA-256-PLUS authentication, bypassing MITM protection.
+- Upgraded managed dependency `io.netty:netty-codec` (and all other Netty dependencies) from
+  `4.1.135.Final` to `4.2.16.Final` to address both CVE-2026-59901 (infinite loop in bzip2 decompression handler)
+  and CVE-2026-56816 (HTTP/3 frame codec memory exhaustion DoS).
+- Upgraded Tomcat embed libraries from `10.1.55` to `10.1.57` to address multiple security vulnerabilities,
+  including CVE-2026-55276 (high/critical request parsing vulnerability).
+- Suppressed Tomcat `tomcat-embed-*` CVE-2026-66299 in `.owasp/suppressions.xml` because it only affects the Tomcat
+  WebSocket chat example web application, which is completely absent from Spring Boot's embedded server deployments.
+- Upgraded Log4j2 dependency from `2.24.3` to `2.26.1` to mitigate CVE-2026-34479 (XML layout character escaping vulnerability).
+- Suppressed `kotlin-stdlib` CVEs (CVE-2026-53914, CVE-2020-29582) in `.owasp/suppressions.xml` as build-time issues
+  not applicable to our runtime classpath (with Kotlin version bumped to `2.0.21` to maintain modern tooling alignment).
+
+### Added
+
+- Added `.github/workflows/security-scans.yml`: a real, implemented SCA/CVE
+  scanning job, replacing the commented-out design stub that previously lived
+  in `docs/system-design/infrastructure-cicd.md` with no corresponding
+  workflow file. Two jobs, both running on push/PR to `main` and weekly
+  (Mondays 06:00 UTC) to catch newly-disclosed CVEs against unchanged code,
+  not just CVEs introduced by new commits:
+  - `dependency-check` — OWASP `dependency-check-maven` against the full
+    Maven dependency tree, gated at CVSS ≥ 7. This is exactly the class of
+    tool that would have caught `CVE-2025-66516` (tika-core) automatically
+    before it reached `main`, instead of relying on periodic manual review.
+  - `container-scan` — Trivy against the `Dockerfile`-built image (built
+    locally in the runner, not pushed to a registry), covering base-image /
+    OS-package CVEs that dependency-only SCA doesn't see.
+- Added a `security-scan` Maven profile (opt-in, not bound to the default
+  `verify` lifecycle) wrapping the `dependency-check-maven` plugin, activated
+  in CI via `-Psecurity-scan`. Kept out of the default build because the NVD
+  database sync is slow and network-dependent — local `mvn verify` shouldn't
+  pay that cost on every run.
+- Added `.owasp/suppressions.xml` as the documented home for any future
+  dependency-check false-positive suppressions, currently empty.
+- Added `.github/dependabot.yml` enabling native Dependabot alerts for the
+  `maven` and `github-actions` ecosystems (weekly cadence for routine
+  version bumps; security PRs open immediately regardless of schedule).
+
+### Requires manual follow-up (not part of this release's automated changes)
+
+- An `NVD_API_KEY` repository secret needs to be added under Settings →
+  Secrets and variables → Actions for the `dependency-check` job to run at a
+  practical speed in CI (free key: nvd.nist.gov/developers/request-an-api-key).
+  Without it, NVD database updates fall back to a heavily rate-limited public
+  endpoint.
+- Branch protection on `main` should be updated to require the new
+  `security-scans` checks once they've run cleanly a few times — a workflow
+  file can't configure this itself. While auditing branch protection for
+  this, also check for any stale `security-scans` required-check entry left
+  over from before this job existed (see the known-gap note carried in
+  earlier releases).
+
+### Docs
+
+- Corrected `docs/system-design/infrastructure-cicd.md`: replaced the
+  commented-out `security-scans` stub with a pointer to the real
+  implementation above, and added an explicit note that the composite
+  pipeline YAML shown in that section is illustrative — the actual pipeline
+  is several separate workflow files, and the `publish-images` job
+  (GHCR push + registry-image Trivy scan) documented there is still
+  design-only with no corresponding workflow file. That's a separate,
+  not-yet-scoped gap, not something this release closes.
+
 ## [2.3.0] - 2026-08-07
 
 ### Security
