@@ -13,7 +13,7 @@
 
     <groupId>com.cloudshare</groupId>
     <artifactId>cloudshare</artifactId>
-    <version>3.0.0</version>
+    <version>3.1.0</version>
     <name>cloudshare</name>
     <description>Secure File Sharing Web Application</description>
 
@@ -113,7 +113,6 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
