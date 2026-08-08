@@ -126,7 +126,7 @@
         <dependency>
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
-            <version>8.6.0</version>
+            <version>9.0.3</version>
         </dependency>
         <!-- minio-java 8.6.0's own transitive okhttp default (5.1.0) ships split JVM/Android
              artifacts that break compilation (upstream minio/minio-java#1670) - pin explicitly
