@@ -1,8 +1,8 @@
 package com.cloudshare.security;
 
 import com.cloudshare.service.RateLimiterService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -228,7 +228,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             }
             JsonNode node = objectMapper.readTree(body);
             JsonNode field = node.get("usernameOrEmail");
-            return (field != null && field.isTextual()) ? field.asText() : null;
+            return (field != null && field.isString()) ? field.asString() : null;
         } catch (Exception e) {
             log.debug("Failed to extract usernameOrEmail from login body: {}", e.getMessage());
             return null;

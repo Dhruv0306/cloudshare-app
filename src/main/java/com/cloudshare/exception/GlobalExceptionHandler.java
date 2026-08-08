@@ -100,7 +100,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleVirusDetectedException(VirusDetectedException ex) {
         log.warn("Virus detected warning: {}", ex.getMessage());
         ApiResponse<Void> response = ApiResponse.error("VIRUS_DETECTED", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(response);
     }
 
     @ExceptionHandler(UnsupportedMediaTypeException.class)
@@ -145,7 +145,7 @@ public class GlobalExceptionHandler {
         log.warn("Max upload size exceeded: {}", ex.getMessage());
         ApiResponse<Void> response = ApiResponse.error("PAYLOAD_TOO_LARGE",
                 "The uploaded file exceeds the maximum allowed size of 100MB.");
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).body(response);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
