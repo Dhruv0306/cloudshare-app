@@ -8,7 +8,7 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>4.1.0</version>
-        <relativePath/> <!-- lookup parent from repository -->
+        <relativePath /> <!-- lookup parent from repository -->
     </parent>
 
     <groupId>com.cloudshare</groupId>
@@ -23,7 +23,25 @@
         <netty.version>4.2.16.Final</netty.version>
         <postgresql.version>42.7.12</postgresql.version>
         <bouncycastle.version>1.85</bouncycastle.version>
-        <tomcat.version>10.1.57</tomcat.version>
+        <!--
+            v3.0.0 follow-up, round 1: removed <tomcat.version>10.1.57</tomcat.version>.
+            It was reintroduced by the Dependabot spring-boot-starter-parent PR (which
+            only touches the parent version, not unrelated property overrides) and
+            wasn't caught by the manual Boot-4.1 compile-fix pass, because a stale
+            container-version override doesn't produce a compile error - it's a
+            runtime/binary-compatibility risk. Tomcat 10.1.x implements Servlet 6.0;
+            Boot 4.1 requires the Servlet 6.1 / Jakarta EE 11 baseline. Removing it let
+            the parent BOM manage Tomcat, which resolved to 11.0.22.
+
+            v3.0.0 follow-up, round 2: the new security-scans job (OWASP dependency-check)
+            caught real CVEs against that 11.0.22 default - CVE-2026-53434, -55276,
+            -59083, -59084, -53404 (CVSS 7.3-9.1 per NVD; Apache's own security-11.html
+            rates all five "Low" - a known NVD-vs-vendor scoring gap, not cause to
+            distrust the finding) - within the same day the override was removed. Pinned
+            forward to 11.0.24, which fixes all five, staying within the 11.0.x line as
+            planned rather than reverting to 10.1.x.
+        -->
+        <tomcat.version>11.0.24</tomcat.version>
         <log4j2.version>2.26.1</log4j2.version>
         <kotlin.version>2.0.21</kotlin.version>
     </properties>
@@ -36,6 +54,26 @@
                 <groupId>tools.jackson</groupId>
                 <artifactId>jackson-bom</artifactId>
                 <version>3.2.1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!--
+                v3.0.0 follow-up: Boot 4.1's default-managed classic jackson-databind
+                (2.21.4, pulled in transitively via jjwt-jackson - the app's own code
+                uses tools.jackson/Jackson 3 exclusively since the Boot 4.1 compile-fix
+                pass) is affected by CVE-2026-54515 (Medium, CVSS 5.3-6.9): case-insensitive
+                deserialization can bypass a per-property @JsonIgnoreProperties exclusion.
+                Below the security-scans CVSS>=7 gate so it didn't fail the build, but real
+                and cheaply fixed - pinned to latest stable (2.22.1) rather than the bare
+                minimum fix version (2.21.5), matching how tika-core/Tomcat overrides above
+                are pinned. JJWT's own claim (de)serialization doesn't use
+                @JsonFormat(ACCEPT_CASE_INSENSITIVE_PROPERTIES), so exploitability here was
+                already low, but no reason to leave it unpatched given the fix is free.
+            -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>2.22.1</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -134,17 +172,26 @@
              The XML serializer substituted ${...} references in XML tag values with system
              property / env var values; a malicious or compromised S3-compatible endpoint could
              use this to exfiltrate JVM system properties or environment variables (credentials,
-             paths) through this client's response parsing. Fixed in 8.6.0; pinned to the fix
-             rather than the 9.x major line, which is a breaking API refactor tracked separately
-             as a future major-version initiative (same pattern as the Spring Boot 4 note above). -->
+             paths) through this client's response parsing. Fixed in 8.6.0.
+             v3.0.0 follow-up: bumped further to 9.0.3 via Dependabot - this WAS the major-line
+             bump previously deferred as a future initiative (see CHANGELOG history); it landed
+             ahead of that plan. One compile break was fixed (int -> long literal for
+             PutObjectArgs#stream, commit 9a051fa); the wider 9.x behavioral surface - including
+             whether this CVE's fix still holds the same way - has not had a full audit or
+             regression pass yet. Treat as unverified, not just "compiles now", until that
+             happens. -->
         <dependency>
             <groupId>io.minio</groupId>
             <artifactId>minio</artifactId>
             <version>9.0.3</version>
         </dependency>
-        <!-- minio-java 8.6.0's own transitive okhttp default (5.1.0) ships split JVM/Android
-             artifacts that break compilation (upstream minio/minio-java#1670) - pin explicitly
-             to the last known-good 4.x release, which is what 8.5.12 already resolved to. -->
+        <!-- Originally pinned against minio-java 8.6.0's transitive okhttp default (5.1.0),
+             which shipped split JVM/Android artifacts that broke compilation (upstream
+             minio/minio-java#1670). minio-java is now 9.0.3 (bumped via Dependabot,
+             v3.0.0 follow-up) - this override compiles fine against it, but whether it's
+             still NECESSARY (i.e. whether 9.0.3's own default okhttp still has the same
+             problem) hasn't been re-verified. Left in place as the known-safe pin rather
+             than risk removing it without that verification. -->
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
