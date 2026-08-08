@@ -123,9 +123,9 @@ flowchart TD
 2.  **File Upload (Encryption):**
     *   When a user uploads a file, the application generates a random 256-bit FEK.
     *   The file data is encrypted using AES-256-GCM, generating cipher data and a 16-byte authentication tag (ensuring integrity).
-    *   The FEK is encrypted using the KEK via RFC 3394 `AESWrap`.
+    *   FEK is encrypted using the KEK via RFC 3394 `AESWrap`.
     *   The encrypted file is stored in MinIO/local storage.
-        *   *MinIO Client Vulnerability Mitigation (CVE-2025-59952):* To protect secrets and system environment configuration variables from exfiltration by compromised or malicious storage endpoints, the MinIO Java SDK is pinned to version `8.6.0` or later, disabling XML external reference injection.
+        *   *MinIO Client Vulnerability Mitigation (CVE-2025-59952):* To protect secrets and system environment configuration variables from exfiltration by compromised or malicious storage endpoints, the MinIO Java SDK is pinned to version `9.0.3` (or version `8.6.0` or later), disabling XML external reference injection.
     *   The encrypted FEK, the GCM Initialization Vector (IV), KEK version, and file metadata are saved in the PostgreSQL database.
 3.  **File Download (Decryption):**
     *   The backend retrieves the encrypted FEK and GCM IV from the database.
@@ -198,12 +198,14 @@ CloudShare enforces continuous vulnerability scanning and proactive dependency u
 
 ### 5.1 Mitigated Vulnerabilities (CVEs)
 
-*   **Bouncy Castle (CVE-2025-14813):** The Bouncy Castle provider (`org.bouncycastle:bcprov-jdk18on`) is explicitly pinned to version `1.84` (overriding the transitive dependency from the MinIO SDK). This mitigates a critical issue where the GOST CTR cipher implementation could not process more than 255 blocks correctly, preventing potential cryptographic authentication bypass.
+*   **Bouncy Castle (CVE-2025-14813):** The Bouncy Castle provider (`org.bouncycastle:bcprov-jdk18on`) is explicitly pinned to version `1.85` (overriding the transitive dependency from the MinIO SDK). This mitigates a critical issue where the GOST CTR cipher implementation could not process more than 255 blocks correctly, preventing potential cryptographic authentication bypass.
 *   **PostgreSQL JDBC Driver (CVE-2026-54291):** The PostgreSQL driver version is pinned to `42.7.12` or later. This addresses a high-severity man-in-the-middle (MITM) downgrade vulnerability that could allow attackers to bypass transport encryption protections during SCRAM-SHA-256-PLUS authentication.
 *   **Netty Framework (CVE-2026-56816 & CVE-2026-59901):** The Netty network library version is overridden to `4.2.16.Final` in Maven properties. This mitigates:
     *   `CVE-2026-56816` — A resource exhaustion Denial of Service (DoS) in the HTTP/3 codec handler.
     *   `CVE-2026-59901` — An infinite loop DoS in the `netty-codec-compression` bzip2 handler triggered by malformed streams.
-*   **Apache Tomcat (CVE-2026-55276):** Embedded Tomcat servlet libraries are pinned to version `10.1.57`. This addresses a high-severity request parsing vulnerability. *(Note: CVE-2026-66299 in the Tomcat WebSocket examples application is suppressed via `.owasp/suppressions.xml` because the examples webapp is not packaged or deployed in Spring Boot's embedded server.)*
+*   **Apache Tomcat (CVE-2026-55276, CVE-2026-53434, etc.):** Embedded Tomcat servlet libraries are pinned to version `11.0.24` to stay within Tomcat 11 for Spring Boot 4.1 alignment. This resolves five security vulnerabilities: CVE-2026-53434, CVE-2026-55276, CVE-2026-59083, CVE-2026-59084, and CVE-2026-53404. *(Note: CVE-2026-66299 in the Tomcat WebSocket examples application is suppressed via `.owasp/suppressions.xml` because the examples webapp is not packaged or deployed in Spring Boot's embedded server.)*
+*   **Jackson BOM (CVE-2026-54515):** The classic `com.fasterxml.jackson:jackson-bom` is pinned to version `2.22.1` to resolve CVE-2026-54515 (case-insensitive deserialization exclusion bypass in jackson-databind).
+*   **Jackson 3 (CVE-2026-29062):** Jackson 3 dependencies (`tools.jackson:jackson-bom`) are upgraded to `3.2.1` to resolve CVE-2026-29062.
 *   **Log4j2 API (CVE-2026-34479):** The Log4j2 library is pinned to `2.26.1` to address a moderate-severity unescaped character handling issue in the XML layout that could trigger downstream log analysis DoS.
 
 ### 5.2 Dependency Scanning & Automation

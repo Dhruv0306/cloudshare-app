@@ -13,7 +13,7 @@
 
     <groupId>com.cloudshare</groupId>
     <artifactId>cloudshare</artifactId>
-    <version>2.4.0</version>
+    <version>3.0.0</version>
     <name>cloudshare</name>
     <description>Secure File Sharing Web Application</description>
 

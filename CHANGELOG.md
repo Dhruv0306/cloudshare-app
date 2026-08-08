@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- Upgraded managed dependency `com.fasterxml.jackson:jackson-bom` (Jackson 3.x) from `3.2.0` to `3.2.1` to resolve security vulnerabilities (CVE-2026-29062).
+- Upgraded managed dependency `tools.jackson:jackson-bom` (Jackson 3.x) from `3.2.0` to `3.2.1` to resolve security vulnerabilities (CVE-2026-29062).
 - Pinned Tomcat embedded server dependency `<tomcat.version>` to `11.0.24` to resolve five vulnerabilities (CVE-2026-53434, CVE-2026-55276, CVE-2026-59083, CVE-2026-59084, and CVE-2026-53404) present in the default Spring Boot 4.1 Tomcat dependency.
 - Pinned classic `com.fasterxml.jackson:jackson-bom` version to `2.22.1` in dependency management to resolve CVE-2026-54515 (case-insensitive deserialization exclusion bypass in jackson-databind).
 
