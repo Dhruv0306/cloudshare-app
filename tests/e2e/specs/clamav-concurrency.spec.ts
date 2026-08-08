@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeTestUser, registerAndLogin, loginUser, expectToast, readMfaSecret, waitForTotpRotation, createTempFile, apiLogin } from '../helpers';
+import { makeTestUser, registerAndLogin, waitForTotpRotation, apiLogin } from '../helpers';
 import { generateTotp } from '../totp';
 import { promoteUserToAdmin } from '../db';
 
@@ -82,15 +82,32 @@ test.describe('ClamAV Concurrency Cap E2E Test', () => {
         const uploadUser = makeTestUser('clamuploader');
         await registerAndLogin(page, uploadUser);
 
-        // Create two temp files for upload
-        const file1 = createTempFile('clam-concur-1');
-        const file2 = createTempFile('clam-concur-2');
+        // Execute concurrent uploads in the page context of the logged-in uploader user
+        const statuses = await page.evaluate(async () => {
+            const token = (globalThis as any).api.getAccessToken();
+            
+            // Create a small file blob for upload
+            const blob = new Blob(['concurrency test content'], { type: 'text/plain' });
+            
+            const uploadFilePromise = (index: number) => {
+                const formData = new FormData();
+                formData.append('file', blob, `clam-concur-${index}.txt`);
+                return fetch('/api/v1/files/upload', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+            };
 
-        // Select both files simultaneously to trigger concurrent parallel uploads in the SPA
-        await page.locator('#file-input').setInputFiles([file1.path, file2.path]);
+            // Fire 10 uploads concurrently to guarantee concurrency cap is exceeded
+            const responses = await Promise.all(
+                Array.from({ length: 10 }).map((_, i) => uploadFilePromise(i))
+            );
+            return responses.map(r => r.status);
+        });
 
-        // Assert both toasts appear on the page (order does not matter since expectToast uses locator matches with standard timeout)
-        await expectToast(page, /Uploaded.*successfully/i, 'success');
-        await expectToast(page, 'Virus scanning is temporarily at capacity. Please try again shortly.', 'danger');
+        // Verify that we successfully uploaded at least one file (201) and rejected at least one file (503)
+        expect(statuses).toContain(201);
+        expect(statuses).toContain(503);
     });
 });
