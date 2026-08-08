@@ -48,7 +48,7 @@ jobs:
       # The NVD database sync is the slow part of this job. Caching it across runs
       # keeps weekly/PR runs fast instead of re-syncing the full NVD dataset every time.
       - name: Cache OWASP dependency-check NVD database
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.m2/repository/org/owasp/dependency-check-data
           key: owasp-dependency-check-nvd-${{ github.run_id }}
