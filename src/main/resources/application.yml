@@ -133,6 +133,16 @@ app:
       cron: "${SCHEDULER_FILE_PURGE_CRON:0 0 2 * * ?}" # 2:00 AM UTC daily
     link-cleanup:
       cron: "${SCHEDULER_LINK_CLEANUP_CRON:0 0 3 * * ?}" # 3:00 AM UTC daily
+    audit-partition:
+      cron: "${SCHEDULER_AUDIT_PARTITION_CRON:0 0 4 * * ?}" # 4:00 AM UTC daily
+      lookahead-months: ${SCHEDULER_AUDIT_PARTITION_LOOKAHEAD_MONTHS:3}
+      # v3.1.0: retention hardening. 6 months of hot partitions before a partition
+      # is eligible for retirement - archive-enabled defaults to true regardless,
+      # since archiving is what actually makes any retention window safe, not the
+      # duration alone; see AuditPartitionScheduler#retirePartition.
+      retention-months: ${SCHEDULER_AUDIT_PARTITION_RETENTION_MONTHS:6}
+      archive-enabled: ${SCHEDULER_AUDIT_PARTITION_ARCHIVE_ENABLED:true}
+      archive-path-prefix: "${SCHEDULER_AUDIT_PARTITION_ARCHIVE_PATH_PREFIX:audit-archive}"
 
 logging:
   level:

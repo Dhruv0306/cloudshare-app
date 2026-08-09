@@ -82,6 +82,11 @@ jobs:
                   echo "STORAGE_DECRYPT_ACQUIRE_TIMEOUT_SECONDS=0" >> tests/.env.ci
                   echo "SPRING_DATA_WEB_PAGEABLE_MAX_PAGE_SIZE=100" >> tests/.env.ci
                   echo "SPRING_DATA_WEB_PAGEABLE_ONE_INDEXED_PARAMETERS=false" >> tests/.env.ci
+                  echo "SCHEDULER_AUDIT_PARTITION_CRON=0 0 4 * * ?" >> tests/.env.ci
+                  echo "SCHEDULER_AUDIT_PARTITION_LOOKAHEAD_MONTHS=3" >> tests/.env.ci
+                  echo "SCHEDULER_AUDIT_PARTITION_RETENTION_MONTHS=6" >> tests/.env.ci
+                  echo "SCHEDULER_AUDIT_PARTITION_ARCHIVE_ENABLED=true" >> tests/.env.ci
+                  echo "SCHEDULER_AUDIT_PARTITION_ARCHIVE_PATH_PREFIX=audit-archive" >> tests/.env.ci
 
             - name: Generate self-signed Nginx certs
               run: bash nginx/ssl/generate-certs.sh

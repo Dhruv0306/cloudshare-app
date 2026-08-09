@@ -1472,6 +1472,168 @@ def test_audit_partition_maintenance(url_prefix):
     ), f"Expected partition {expected_partition} not found in PostgreSQL partition list: {partitions}"
 
 
+def _psql(sql, tuples_only=True):
+    import subprocess
+
+    cmd = [
+        "docker", "compose", "exec", "-T", "db",
+        "psql", "-U", "cloudshare_user", "-d", "cloudshare",
+    ]
+    if tuples_only:
+        cmd.append("-t")
+    cmd += ["-c", sql]
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def _mc(subcommand):
+    """
+    Runs an `mc` subcommand inside the `storage` container against the `local`
+    alias, first (re-)authenticating that alias with the container's own
+    MINIO_ROOT_USER/MINIO_ROOT_PASSWORD (already present in its environment per
+    docker-compose.yml's `storage` service definition - never touches the
+    Python process's own env). `mc ready local` (docker-compose.yml's
+    healthcheck) works without real credentials, but `mc ls`/`mc rm` don't -
+    discovered by an actual failed run: 'mc: <ERROR> Unable to list folder.
+    Access Denied.' against a plain `mc ls local/...` call.
+    """
+    import subprocess
+
+    auth_cmd = 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1'
+    shell_cmd = f"{auth_cmd} && mc {subcommand}"
+    return subprocess.run(
+        ["docker", "compose", "exec", "-T", "storage", "sh", "-c", shell_cmd],
+        capture_output=True, text=True,
+    )
+
+
+def test_audit_partition_retention(url_prefix):
+    """
+    Proves the v3.1.0 retention behavior end-to-end through the same admin
+    trigger endpoint test_audit_partition_maintenance uses: a partition well
+    past the configured retention window (retention-months, default 6) gets
+    archived to object storage BEFORE being detached and dropped - not just
+    that an old partition eventually disappears.
+    """
+    import datetime
+
+    # 1. Pick a month safely past the retention cutoff. 8 months back gives a
+    # 2-month buffer over the default 6-month window so this isn't flaky right
+    # at the boundary, and stays well clear of the current+lookahead months
+    # checkAndCreatePartitions manages (today + 3 months by default) - no
+    # interaction between the two code paths in this test.
+    now = datetime.datetime.now(datetime.timezone.utc)
+    year, month = now.year, now.month
+    for _ in range(8):
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    partition_name = f"audit_logs_y{year}m{month:02d}"
+
+    next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
+    from_bound = f"{year}-{month:02d}-01 00:00:00+00"
+    to_bound = f"{next_year}-{next_month:02d}-01 00:00:00+00"
+    row_timestamp = f"{year}-{month:02d}-15 00:00:00+00"
+
+    # 2. Create the old partition directly and seed one real row into it, so
+    # this proves actual data gets archived, not just that an empty partition
+    # disappears. Mirrors the exact DDL shape checkAndCreatePartitions uses.
+    create_res = _psql(
+        f"CREATE TABLE IF NOT EXISTS {partition_name} PARTITION OF audit_logs "
+        f"FOR VALUES FROM ('{from_bound}') TO ('{to_bound}');"
+    )
+    assert create_res.returncode == 0, f"Failed to create test partition: {create_res.stderr}"
+
+    insert_res = _psql(
+        "INSERT INTO audit_logs (action, ip_address, details, created_at) "
+        f"VALUES ('SEEDED_RETENTION_TEST_LOG', '127.0.0.1', "
+        f"'Seeded row for retention test', '{row_timestamp}');"
+    )
+    assert insert_res.returncode == 0, f"Failed to seed retention test row: {insert_res.stderr}"
+
+    partition_query = (
+        "SELECT child.relname FROM pg_inherits "
+        "JOIN pg_class parent ON pg_inherits.inhparent = parent.oid "
+        "JOIN pg_class child ON pg_inherits.inhrelid = child.oid "
+        "WHERE parent.relname = 'audit_logs';"
+    )
+
+    # 3. Precondition: confirm setup actually landed before trusting the
+    # post-maintenance assertions below.
+    before = _psql(partition_query)
+    partitions_before = [p.strip() for p in before.stdout.split("\n") if p.strip()]
+    assert partition_name in partitions_before, (
+        f"Test setup failed: {partition_name} not present before maintenance ran: {partitions_before}"
+    )
+
+    # 4. Admin auth + step-up - same flow as test_audit_partition_maintenance.
+    user = generate_random_user()
+    requests.post(f"{url_prefix}/api/v1/auth/register", json=user)
+    assert promote_user_to_admin(user["username"])
+
+    login_res = requests.post(
+        f"{url_prefix}/api/v1/auth/login",
+        json={"usernameOrEmail": user["username"], "password": user["password"]},
+    ).json()
+    access_token = login_res["data"]["accessToken"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    setup_res = requests.post(f"{url_prefix}/api/v1/auth/mfa/setup", headers=headers)
+    secret = setup_res.json()["data"]["secret"]
+    mfa_code = generate_totp(secret)
+    requests.post(f"{url_prefix}/api/v1/auth/mfa/verify", headers=headers, json={"code": mfa_code})
+
+    wait_for_totp_rotation()
+    step_up_code = generate_totp(secret)
+    step_up_res = requests.post(
+        f"{url_prefix}/api/v1/auth/mfa/step-up",
+        headers=headers,
+        json={"code": step_up_code},
+    )
+    assert step_up_res.status_code == 200, f"Step-up failed: {step_up_res.text}"
+    step_up_token = step_up_res.json()["data"]["stepUpToken"]
+
+    admin_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "X-StepUp-Token": step_up_token,
+    }
+
+    # 5. Trigger maintenance. maintainPartitions() now runs both creation and
+    # retirement behind the same advisory-lock-guarded entrypoint - same
+    # endpoint test_audit_partition_maintenance already uses.
+    res = requests.post(
+        f"{url_prefix}/api/v1/admin/audit-logs/partitions", headers=admin_headers
+    )
+    assert res.status_code == 200, f"Trigger failed: {res.text}"
+    assert res.json()["success"] is True
+
+    # 6. The old partition must be gone (detached + dropped) - the core
+    # retirement behavior.
+    after = _psql(partition_query)
+    partitions_after = [p.strip() for p in after.stdout.split("\n") if p.strip()]
+    assert partition_name not in partitions_after, (
+        f"Expected {partition_name} to be retired, still present: {partitions_after}"
+    )
+
+    # 7. The partition's data must have been archived to storage BEFORE the
+    # drop - this is the actual point of archive-before-drop, not just "did it
+    # disappear". Uses the `mc` client already present in the storage
+    # container, via the _mc() helper above (see its docstring for why the
+    # alias needs re-authenticating first, unlike the healthcheck's
+    # `mc ready local`).
+    archive_key = f"audit-archive/{partition_name}.csv.gz"
+    mc_res = _mc(f"ls local/cloudshare-bucket/{archive_key}")
+    assert mc_res.returncode == 0 and partition_name in mc_res.stdout, (
+        f"Expected archive object {archive_key} in MinIO after retirement. "
+        f"mc ls stdout={mc_res.stdout!r} stderr={mc_res.stderr!r}"
+    )
+
+    # 8. Best-effort cleanup so repeated CI runs don't accumulate stale
+    # archive objects in the bucket. Not asserted - the test has already
+    # proven correctness by this point.
+    _mc(f"rm local/cloudshare-bucket/{archive_key}")
+
+
 def test_clamav_concurrency_limit(url_prefix):
     # 1. Register and promote admin user
     user = generate_random_user()
@@ -1712,6 +1874,9 @@ if __name__ == "__main__":
     )
     runner.run_case(
         "Audit Log Partition Maintenance", test_audit_partition_maintenance, BASE_URL
+    )
+    runner.run_case(
+        "Audit Log Partition Retention", test_audit_partition_retention, BASE_URL
     )
     runner.run_case(
         "ClamAV Scan Concurrency Limit", test_clamav_concurrency_limit, BASE_URL

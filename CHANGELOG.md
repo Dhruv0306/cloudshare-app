@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-08-08
+
+### Added
+
+- `AuditPartitionScheduler` now retires `audit_logs` partitions past a
+  configurable retention window (`app.scheduler.audit-partition.retention-months`,
+  default 6 months), closing the gap flagged during the `v3.0.0` follow-up
+  work where partitions were only ever created, never removed, and would
+  have accumulated indefinitely.
+- Retirement archives each expiring partition to `StorageService` as a
+  gzip-compressed CSV (via the Postgres JDBC driver's `CopyManager`) **before**
+  detaching and dropping it — controlled by `app.scheduler.audit-partition.archive-enabled`
+  (default `true`). A failed archive export always blocks the drop for that
+  partition and is retried on the next scheduled run; it never proceeds on a
+  "best effort" basis that could silently lose audit data. Archive location
+  is configurable via `app.scheduler.audit-partition.archive-path-prefix`
+  (default `audit-archive`), reusing the app's existing storage
+  abstraction (MinIO or local, per `storage.provider`) rather than adding new
+  storage infrastructure.
+- Added a Postgres session-level advisory lock (`pg_try_advisory_lock`)
+  guarding the entire `maintainPartitions()` job. The app scales horizontally
+  (`docs/system-design/architecture.md`); partition *creation* was already
+  race-safe on its own (`CREATE TABLE IF NOT EXISTS` is idempotent), but the
+  new `ALTER TABLE ... DETACH PARTITION` retirement step is not — a second
+  replica detaching an already-detached partition fails outright. The lock
+  ensures only one replica performs maintenance per scheduled run; any others
+  log and skip cleanly. Held on its own dedicated connection for the job's
+  duration and explicitly released in a `finally` block.
+- Added `test_audit_partition_retention` to `tests/api_test.py`: a full
+  black-box API test exercising the retirement path through the existing
+  `POST /api/v1/admin/audit-logs/partitions` trigger endpoint (the same one
+  `test_audit_partition_maintenance` already uses). Seeds a real row into a
+  partition well past the retention cutoff, triggers maintenance over HTTP,
+  and asserts both that the partition is actually gone from `pg_inherits`
+  afterward *and* that its data landed in MinIO first, via a new `_mc()` test
+  helper that re-authenticates the `storage` container's `local` `mc` alias
+  with its own `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` before each call —
+  `mc ready local` (the healthcheck) works without real credentials, but
+  `mc ls`/`mc rm` don't, and a real local run of the suite caught this
+  (`Access Denied`) before merge. Proves archive-before-drop end-to-end, not
+  just that an old partition eventually disappears.
+
+### Notes
+
+- Retention period was raised from an initial 3-month default to 6 months
+  (3 months was flagged as too short for hot retention of a security audit
+  trail). 6 months is still on the shorter side relative to some compliance
+  regimes (e.g. a 1-year minimum), so the archive-before-drop behavior above
+  is what actually makes any window here safe, not the duration alone — data
+  isn't gone at 6 months, just moved off the hot partition. Re-evaluate
+  against actual compliance requirements before relying on this for
+  production audit data.
+- Confirmed the two `Locale.ROOT` call sites in `AuditPartitionScheduler`
+  (flagged as future work in earlier release notes) were already fixed in
+  `v2.3.0` (commit `e8480d9`) — no changes needed here. Closing that item out
+  explicitly since it had been carried forward inaccurately.
+
 ## [3.0.0] - 2026-08-08
 
 ### Changed
