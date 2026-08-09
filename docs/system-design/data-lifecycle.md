@@ -19,7 +19,7 @@ Files and links progress through the following states during their lifetime:
 1.  **Active Files:** Stored encrypted. Fully searchable by owner.
 2.  **Soft Deleted (Recycle Bin):** `deleted = true` in PostgreSQL. Kept for **30 days** to allow user restoration. Files in this state do not appear in normal list queries but count toward user storage quotas.
 3.  **Expired Shared Links:** Validated at runtime. Access is blocked immediately upon expiration.
-4.  **Audit Logs:** Retained in PostgreSQL for 1 year, then detached, compressed, and archived to cold storage.
+4.  **Audit Logs:** Retained in PostgreSQL for **6 months** (hot partitions) by default, then detached, gzip-compressed to CSV format, and archived to object storage (`StorageService`).
 
 ---
 
@@ -55,6 +55,17 @@ To prevent **orphaned storage files** (files taking up space on disk/S3 with no 
     ```sql
     DELETE FROM share_links WHERE expires_at < CURRENT_TIMESTAMP;
     ```
+
+### 2.3 Audit Partition Maintenance Scheduler (`AuditPartitionScheduler`)
+*   **Schedule:** Runs daily at 4:00 AM UTC (`cron = "0 0 4 * * ?"`).
+*   **Logic:** Pre-creates future partition tables and retires partitions older than the configured retention period (`app.scheduler.audit-partition.retention-months`, default `6`).
+*   **Archiving Workflow:**
+    *   Finds any existing `audit_logs` partition older than the retention cutoff (e.g. `audit_logs_y2026m01` where the current month is `2026-10` and retention is 6 months).
+    *   If archiving is enabled (`app.scheduler.audit-partition.archive-enabled = true`, default), exports the partition using Postgres `CopyManager` to a temporary gzip-compressed CSV file.
+    *   Uploads the archive file to the configured object storage prefix (`app.scheduler.audit-partition.archive-path-prefix = "audit-archive"`).
+    *   Detaches and drops the partition from PostgreSQL once the archive is verified.
+    *   If archiving fails, the drop is aborted, preventing any audit log data loss.
+*   **Concurrency Lock:** Uses a dedicated session-level Postgres advisory lock (`pg_try_advisory_lock`) to coordinate executions across multiple horizontal replicas, ensuring only one instance detaches/drops tables.
 
 ---
 

@@ -222,11 +222,12 @@ The `audit_logs` table grows rapidly in active environments. Writing millions of
     CREATE TABLE audit_logs_y2026m07 PARTITION OF audit_logs
         FOR VALUES FROM ('2026-07-01 00:00:00+00') TO ('2026-08-01 00:00:00+00');
     ```
-*   **Automated Partition Management:** To prevent write outages under the fail-closed audit logging model, CloudShare automates partition pre-creation via the Java-based `AuditPartitionScheduler`. 
+*   **Automated Partition Management:** To prevent write outages under the fail-closed audit logging model, CloudShare automates partition pre-creation and retirement via the Java-based `AuditPartitionScheduler`. 
     *   It executes daily at 4:00 AM UTC (`app.scheduler.audit-partition.cron`).
     *   It queries `pg_inherits` to check partition availability and pre-creates tables up to 3 months in advance (`app.scheduler.audit-partition.lookahead-months`).
+    *   It identifies and retires partitions older than the configured retention period (`app.scheduler.audit-partition.retention-months`, default `6`).
     *   Manual maintenance can be triggered by administrators via `POST /api/v1/admin/audit-logs/partitions`.
-*   **Archiving:** A quarterly cron job detaches partitions older than 1 year, exports them to compressed cold storage (CSV/Parquet format), and drops the detached partitions from PostgreSQL.
+*   **Archiving:** When retiring a partition, the scheduler automatically exports it as a gzip-compressed CSV file using PostgreSQL `CopyManager` and uploads it to object storage (`StorageService`) before executing the `DETACH` and `DROP` commands. If archiving fails, the drop is blocked to prevent data loss. This can be toggled using `app.scheduler.audit-partition.archive-enabled` (default `true`).
 
 ---
 

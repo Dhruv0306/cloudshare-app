@@ -12,12 +12,22 @@ To automate this upkeep, the system includes `AuditPartitionScheduler`, which dy
 ## Observability & Alerting
 The scheduler registers the following Micrometer counters exposed via `/actuator/prometheus`:
 - `cloudshare.audit_partition.created`: Incremented on successful creation of a new partition.
-- `cloudshare.audit_partition.check_failures`: Incremented on checks or execution failures (e.g., query database error, connection pool exhaustion, SQL syntax error).
+- `cloudshare.audit_partition.check_failures`: Incremented on check or creation failures (e.g., query database error, connection pool exhaustion, SQL syntax error).
+- `cloudshare.audit_partition.retired`: Incremented when an old partition is successfully retired (archived and dropped, or just dropped if archiving is disabled).
+- `cloudshare.audit_partition.retire_failures`: Incremented on failures during the partition retirement process.
+- `cloudshare.audit_partition.archive_failures`: Incremented specifically if export/archiving to storage fails.
 
 > [!WARNING]
-> If a partition check or creation fails, the scheduler logs a high-severity **`ERROR`** message in log files:
-> `"Failed to create audit log partition: audit_logs_y[...]"`
-> Set up alerts on your log aggregator (ELK/Datadog) to trigger on this `ERROR` message or when the `cloudshare.audit_partition.check_failures` metric increments.
+> If a partition check, creation, or retirement fails, the scheduler logs high-severity **`ERROR`** or **`WARN`** messages in log files:
+> - `"Failed to create audit log partition: audit_logs_y[...]"`
+> - `"Failed to export partition to archive file: [...]"`
+> - `"Failed to retire partition: [...]"`
+> Set up alerts on your log aggregator (ELK/Datadog) to trigger on these patterns or when the `check_failures`, `retire_failures`, or `archive_failures` metrics increment.
+
+---
+
+## Concurrency Control
+The maintenance job is protected by a session-level Postgres advisory lock (`pg_try_advisory_lock` using a dedicated key). This prevents race conditions in multi-replica deployments where multiple instances might concurrently attempt the non-idempotent `ALTER TABLE ... DETACH PARTITION` retirement step. Only one replica performs partition maintenance per cron execution; others log and exit cleanly.
 
 ---
 
@@ -25,6 +35,9 @@ The scheduler registers the following Micrometer counters exposed via `/actuator
 The scheduler behavior is defined by the following variables in `application.yml` or via container environment properties:
 - `app.scheduler.audit-partition.cron`: Cron expression controlling how frequently the scheduler runs. Default is `0 0 4 * * ?` (daily at 4:00 AM UTC).
 - `app.scheduler.audit-partition.lookahead-months`: Number of months in the future to keep pre-created. Default is `3`.
+- `app.scheduler.audit-partition.retention-months`: Number of months of hot partitions to keep before retirement. Default is `6`.
+- `app.scheduler.audit-partition.archive-enabled`: Boolean controlling whether retired partitions are archived before drop. Default is `true`.
+- `app.scheduler.audit-partition.archive-path-prefix`: Path prefix in object storage for retired partition archives. Default is `"audit-archive"`.
 
 ---
 
@@ -33,7 +46,7 @@ The scheduler behavior is defined by the following variables in `application.yml
 If you receive an alert indicating that a partition failed to create or is missing, execute the following steps in order:
 
 ### Step 1: Trigger Automated Maintenance via Admin REST API (First Resort)
-CloudShare exposes a secure endpoint specifically for triggering partition checking and creation on-demand. This endpoint executes the same Java-based logic as the scheduler, meaning it dynamically evaluates missing months and handles year-boundary math.
+CloudShare exposes a secure endpoint specifically for triggering partition maintenance on-demand. This endpoint executes the same Java-based logic as the scheduler, dynamically pre-creating missing partitions and retiring/archiving partitions that have fallen outside the retention window.
 
 1. Authenticate to the application as a user with `ROLE_ADMIN`.
 2. Generate an MFA step-up token by calling:
