@@ -33,6 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ensures only one replica performs maintenance per scheduled run; any others
   log and skip cleanly. Held on its own dedicated connection for the job's
   duration and explicitly released in a `finally` block.
+- Added `test_audit_partition_retention` to `tests/api_test.py`: a full
+  black-box API test exercising the retirement path through the existing
+  `POST /api/v1/admin/audit-logs/partitions` trigger endpoint (the same one
+  `test_audit_partition_maintenance` already uses). Seeds a real row into a
+  partition well past the retention cutoff, triggers maintenance over HTTP,
+  and asserts both that the partition is actually gone from `pg_inherits`
+  afterward *and* that its data landed in MinIO first, via a new `_mc()` test
+  helper that re-authenticates the `storage` container's `local` `mc` alias
+  with its own `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` before each call —
+  `mc ready local` (the healthcheck) works without real credentials, but
+  `mc ls`/`mc rm` don't, and a real local run of the suite caught this
+  (`Access Denied`) before merge. Proves archive-before-drop end-to-end, not
+  just that an old partition eventually disappears.
 
 ### Notes
 
