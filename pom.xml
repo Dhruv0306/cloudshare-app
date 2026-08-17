@@ -22,7 +22,7 @@
         <jjwt.version>0.13.0</jjwt.version>
         <netty.version>4.2.16.Final</netty.version>
         <postgresql.version>42.7.12</postgresql.version>
-        <bouncycastle.version>1.85</bouncycastle.version>
+        <bouncycastle.version>1.85.2</bouncycastle.version>
         <!--
             v3.0.0 follow-up, round 1: removed <tomcat.version>10.1.57</tomcat.version>.
             It was reintroduced by the Dependabot spring-boot-starter-parent PR (which
