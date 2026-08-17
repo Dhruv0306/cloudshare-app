@@ -193,7 +193,7 @@
              than risk removing it without that verification. -->
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp</artifactId>
+            <artifactId>okhttp-jvm</artifactId>
             <version>5.4.0</version>
         </dependency>
         <!-- Explicit Bouncy Castle override to fix CVE-2025-14813 (critical GOST block count
