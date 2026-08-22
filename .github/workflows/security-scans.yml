@@ -59,8 +59,11 @@ jobs:
               run: |
                   if [ -n "${{ secrets.NVD_API_KEY }}" ]; then
                     export NVD_API_KEY="${{ secrets.NVD_API_KEY }}"
+                    echo "NVD_API_KEY is set"
+                    echo "${{ secrets.NVD_API_KEY}}"
                   else
                     unset NVD_API_KEY
+                    echo "NVD_API_KEY is not set"
                   fi
                   mvn -B org.owasp:dependency-check-maven:check -Psecurity-scan
 
