@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-08-24
+
+### Added
+
+- Added `.github/workflows/security-scans.yml` implementing automated security scans for the repository. This contains two jobs:
+  - **OWASP Dependency-Check (SCA)**: runs on pushes, pull requests, and a weekly schedule (Mondays 06:00 UTC) to scan the Maven dependency tree.
+  - **Trivy Container Scan**: builds the Docker image locally and scans for high and critical OS/library vulnerabilities.
+- Integrated dynamic handling of `NVD_API_KEY` within the OWASP Dependency-Check CI job to gracefully fall back and unset the key if the repository secret is empty, preventing build failures on external pull requests.
+
+### Changed
+
+- Upgraded `okhttp` dependency configuration in `pom.xml`, replacing the `com.squareup.okhttp3:okhttp` dependency (`4.12.0`) with `com.squareup.okhttp3:okhttp-jvm` (`5.5.0`) to ensure Maven compatibility.
+- Upgraded `org.bouncycastle:bcprov-jdk18on` from `1.85` to `1.85.2`.
+- Upgraded `tools.jackson:jackson-bom` from `3.2.1` to `3.2.2`.
+- Upgraded `com.fasterxml.jackson:jackson-bom` from `2.22.1` to `2.22.2`.
+- Upgraded GitHub Action `actions/setup-python` from `v5` to `v7` in the API test workflow (`api-tests.yml`).
+
+### Docs
+
+- Updated `docs/system-design/data-lifecycle.md` to clarify the GDPR audit log lifecycle: note that archived audit log files (exported as gzip-compressed CSV to object storage during retirement) are currently retained indefinitely, as `v3.1.0` did not implement an automated archive-expiry policy.
+
 ## [3.1.0] - 2026-08-08
 
 ### Added
