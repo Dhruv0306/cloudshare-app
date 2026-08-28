@@ -163,7 +163,7 @@
                  exploitable via a crafted XFA structure embedded in an uploaded PDF, processed
                  by this service's magic-byte MIME detection (FileService#uploadFile). Fixed in
                  tika-core >=3.2.2; pinned to the latest stable release. -->
-            <version>3.3.2</version>
+            <version>4.0.0</version>
         </dependency>
 
         <!-- MinIO Client for S3 storage -->
