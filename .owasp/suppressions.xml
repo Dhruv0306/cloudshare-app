@@ -46,4 +46,22 @@
         <packageUrl regex="true">^pkg:maven/org\.apache\.tomcat\.embed/tomcat-embed-.*$</packageUrl>
         <cve>CVE-2026-66299</cve>
     </suppress>
+    <suppress>
+        <notes><![CDATA[
+            CVE-2026-66755 and CVE-2026-66756 are false positives for the stable Apache Tika 4.0.0 release.
+            These vulnerabilities only affect pre-release versions (specifically alpha/beta versions prior to beta-1) or older 3.x versions.
+            Since CloudShare uses the official stable 4.0.0 release, it is not affected by these vulnerabilities.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.tika/tika-core@4\.0\.0$</packageUrl>
+        <cve>CVE-2026-66755</cve>
+    </suppress>
+    <suppress>
+        <notes><![CDATA[
+            CVE-2026-66755 and CVE-2026-66756 are false positives for the stable Apache Tika 4.0.0 release.
+            These vulnerabilities only affect pre-release versions (specifically alpha/beta versions prior to beta-1) or older 3.x versions.
+            Since CloudShare uses the official stable 4.0.0 release, it is not affected by these vulnerabilities.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.apache\.tika/tika-core@4\.0\.0$</packageUrl>
+        <cve>CVE-2026-66756</cve>
+    </suppress>
 </suppressions>
