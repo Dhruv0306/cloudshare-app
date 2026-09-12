@@ -155,7 +155,7 @@ services:
 
   # MinIO S3-Compatible Object Storage (Free local S3)
   storage:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     restart: unless-stopped
     command: server /data
     environment:
