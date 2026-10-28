@@ -30,6 +30,7 @@ export function makeTestUser(prefix: string): TestUser {
 
 export async function registerUser(page: Page, user: TestUser): Promise<void> {
     await page.goto('/#register');
+    await expect(page.locator('#auth-register-card')).not.toHaveClass(/hidden/);
     await page.locator('#register-username').fill(user.username);
     await page.locator('#register-email').fill(user.email);
     await page.locator('#register-password').fill(user.password);

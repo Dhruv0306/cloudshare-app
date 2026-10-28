@@ -48,6 +48,7 @@ export async function handleRegisterSubmit(e) {
         const res = await api.register(username, email, password);
         if (res.success) {
             showToast('Account registered successfully. Please sign in.', 'success');
+            window.location.hash = '#login';
             showAuthCard('login');
 
             // Populate login card username

@@ -46,6 +46,9 @@ function initApp() {
         clearSession();
     });
 
+    // Mount initial view based on current hash immediately
+    router();
+
     // Check if user is already logged in (try refresh first)
     checkActiveSession();
 
