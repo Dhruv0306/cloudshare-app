@@ -209,7 +209,7 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>33.7.2-jre</version>
+            <version>33.8.0-jre</version>
         </dependency>
         <!-- Explicit Snappy-java override to fix CVE-2026-108106 and CVE-2026-93451 (HIGH, DoS & buffer overflow)
              in MinIO transitive dependency graph. -->
