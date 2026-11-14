@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] - 2026-11-14
+
+### Security
+
+- Explicitly pinned `com.google.guava:guava` to `33.8.0-jre` in `pom.xml` to resolve CVE-2026-102554 (high severity unthrottled memory allocation DoS) in MinIO's transitive dependency graph.
+- Explicitly pinned `org.xerial.snappy:snappy-java` to `1.1.10.12` in `pom.xml` to resolve CVE-2026-108106 and CVE-2026-93451 (high severity denial-of-service and buffer overflow vulnerabilities) in MinIO's transitive dependency graph.
+- Upgraded embedded Tomcat `<tomcat.version>` from `11.0.24` to `11.0.25` in `pom.xml` to address upstream vulnerabilities.
+- Upgraded Netty `<netty.version>` from `4.2.16.Final` to `4.2.18.Final` in `pom.xml`.
+- Added false positive suppressions in `.owasp/suppressions.xml` for `CVE-2026-66755` and `CVE-2026-66756` on `org.apache.tika:tika-core@4.0.0`, as these issues only affect pre-release and older 3.x versions.
+
+### Fixed
+
+- Resolved registration hash routing and session race conditions in the frontend SPA:
+  - Invoked `router()` immediately during `initApp()` in `frontend/js/app.js` to ensure the view corresponding to the URL hash (e.g., `#register`) mounts before active session checks complete.
+  - Set `window.location.hash = '#login'` upon successful account registration in `frontend/js/views/auth.js`.
+- Stabilized E2E test helper `registerUser` in `tests/e2e/helpers.ts` by asserting `#auth-register-card` is visible before attempting form input.
+- Switched MinIO image registry from `minio/minio:latest` to `coollabsio/minio:latest` in `docker-compose.yml` and `docs/system-design/infrastructure-cicd.md` to resolve unauthorized image pull failures in CI.
+- Hardened OWASP Dependency-Check CI workflow (`.github/workflows/security-scans.yml`):
+  - Added conditional `-DautoUpdate=false` when `NVD_API_KEY` is not set, preventing unauthenticated NVD rate-limit failures.
+  - Added `-DnvdApiDelay=6000` and `-DnvdMaxRetryCount=20` when `NVD_API_KEY` is set to manage API pacing.
+  - Implemented an automated 3-attempt retry loop with progressive backoff (30s, 60s) to handle transient NVD HTTP errors (`429`, `500`, `502`, `503`, `504`) and data update failures.
+
+### Changed
+
+- Upgraded core application framework `org.springframework.boot:spring-boot-starter-parent` from `4.1.0` to `4.1.2`.
+- Upgraded managed dependency `org.apache.tika:tika-core` from `3.3.2` to `4.2.0` (major version upgrade to 4.x line).
+- Upgraded managed dependency `tools.jackson:jackson-bom` from `3.2.2` to `3.3.0`.
+- Upgraded managed dependency `com.fasterxml.jackson:jackson-bom` from `2.22.2` to `2.23.0`.
+- Upgraded managed dependency `org.bouncycastle:bcprov-jdk18on` from `1.85.2` to `1.86`.
+- Upgraded managed dependency `io.minio:minio` from `9.0.3` to `9.0.4`.
+- Upgraded managed dependency `com.squareup.okhttp3:okhttp-jvm` from `5.5.0` to `5.5.1`.
+- Upgraded testing and reporting plugins:
+  - `io.gatling:gatling-maven-plugin` from `4.21.10` to `4.21.12`.
+  - `io.gatling.highcharts:gatling-charts-highcharts` from `3.15.1` to `3.16.0`.
+  - `org.jacoco:jacoco-maven-plugin` from `0.8.15` to `0.8.16`.
+- Upgraded GitHub Action `actions/setup-java` from `v5` to `v6` across CI workflows (`maven.yml`, `load-tests.yml`, `security-scans.yml`).
+
 ## [3.2.0] - 2026-08-24
 
 ### Added
