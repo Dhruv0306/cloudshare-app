@@ -71,11 +71,11 @@ jobs:
 
                     status=${PIPESTATUS[0]}
 
-                    if ["$status" -eq 0 ]; then
+                    if [ "$status" -eq 0 ]; then
                         exit 0
                     fi
 
-                    if !grep -Eq 'NVD Returned Status Code: (429|500|502|503|504)|Error updating the NVD Data' dependency-check.log; then
+                    if ! grep -Eq 'NVD Returned Status Code: (429|500|502|503|504)|Error updating the NVD Data' dependency-check.log; then
                         exit "$status"
                     fi
 
