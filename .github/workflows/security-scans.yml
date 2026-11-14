@@ -57,15 +57,37 @@ jobs:
 
             - name: Run OWASP Dependency-Check
               run: |
-                  if [ -n "${{ secrets.NVD_API_KEY }}" ]; then
-                    export NVD_API_KEY="${{ secrets.NVD_API_KEY }}"
-                    echo "NVD_API_KEY is set"
-                    mvn -B org.owasp:dependency-check-maven:check -Psecurity-scan
-                  else
-                    unset NVD_API_KEY
-                    echo "NVD_API_KEY is not set"
-                    mvn -B org.owasp:dependency-check-maven:check -Psecurity-scan -DautoUpdate=false
-                  fi
+                  set +e
+                  for attempt in 1 2 3; do
+                    if [ -n "${{ secrets.NVD_API_KEY }}" ]; then
+                      export NVD_API_KEY="${{ secrets.NVD_API_KEY }}"
+                      echo "NVD_API_KEY is set"
+                      mvn -B org.owasp:dependency-check-maven:check -Psecurity-scan -DnvdApiDelay=6000 -DnvdMaxRetryCount=20 2>&1 | tee dependency-check.log
+                    else
+                      unset NVD_API_KEY
+                      echo "NVD_API_KEY is not set"
+                      mvn -B org.owasp:dependency-check-maven:check -Psecurity-scan -DautoUpdate=false 2>&1 | tee dependency-check.log
+                    fi
+
+                    status=${PIPESTATUS[0]}
+
+                    if ["$status" -eq 0 ]; then
+                        exit 0
+                    fi
+
+                    if !grep -Eq 'NVD Returned Status Code: (429|500|502|503|504)|Error updating the NVD Data' dependency-check.log; then
+                        exit "$status"
+                    fi
+
+                    if [ "$attempt" -lt 3 ]; then
+                        delay=$((attempt * 30))
+                        echo "Transient NVD failure. Retrying in ${delay}s..."
+                        sleep "$delay"
+                    fi
+
+                  done
+
+                  exit "$status"
 
             - name: Upload Dependency-Check report
               if: always()
