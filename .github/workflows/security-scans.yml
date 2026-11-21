@@ -105,7 +105,32 @@ jobs:
               uses: actions/checkout@v7
 
             - name: Build image locally (not pushed)
-              run: docker build -t cloudshare-backend:scan -f Dockerfile .
+              env:
+                  DOCKER_BUILDKIT: "1"
+              run: |
+                  set +e
+                  for attempt in 1 2 3; do
+                    echo "Building Docker image (attempt $attempt/3)..."
+                    docker build -t cloudshare-backend:scan -f Dockerfile . 2>&1 | tee docker-build.log
+                    status=${PIPESTATUS[0]}
+
+                    if [ "$status" -eq 0 ]; then
+                        exit 0
+                    fi
+
+                    if ! grep -Eq 'status code: (429|500|502|503|504)|Too Many Requests|Could not transfer artifact' docker-build.log; then
+                        echo "Non-transient build error encountered."
+                        exit "$status"
+                    fi
+
+                    if [ "$attempt" -lt 3 ]; then
+                        delay=$((attempt * 30))
+                        echo "Transient rate-limit or network failure (429/5xx). Retrying docker build in ${delay}s..."
+                        sleep "$delay"
+                    fi
+                  done
+
+                  exit "$status"
 
             - name: Run Trivy vulnerability scan
               uses: aquasecurity/trivy-action@master
