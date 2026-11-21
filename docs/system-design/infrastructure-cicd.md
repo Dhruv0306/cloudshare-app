@@ -9,25 +9,35 @@ This document details the configuration for local containerized development, pro
 The `Dockerfile` is optimized for security and performance. It utilizes a multi-stage build to ensure the runtime image contains no build-time utilities or raw source code, and runs under a restricted non-root user.
 
 ```dockerfile
+# syntax=docker/dockerfile:1
 # ==========================================
 # Stage 1: Build the Application
 # ==========================================
 FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
 WORKDIR /build
 
-# Copy Maven descriptor and resolve dependencies (enables layer caching)
+# Configure Maven wagon retries for network resilience against transient HTTP rate-limits / timeouts
+ENV MAVEN_OPTS="-Dmaven.wagon.http.retryHandler.count=5 -Dmaven.wagon.http.retryHandler.requestSpecific=true"
+
+# Copy Maven descriptor and resolve dependencies (enables layer and BuildKit caching)
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
+RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline -B \
+    -Dmaven.wagon.http.retryHandler.count=5 \
+    -Dmaven.wagon.http.retryHandler.requestSpecific=true
 
 # Copy source code and build jar
 COPY src ./src
-RUN mvn clean package -DskipTests -B
+RUN --mount=type=cache,target=/root/.m2 mvn clean package -DskipTests -B \
+    -Dmaven.wagon.http.retryHandler.count=5 \
+    -Dmaven.wagon.http.retryHandler.requestSpecific=true
 
 # ==========================================
 # Stage 2: Testing
 # ==========================================
 FROM builder AS tester
-RUN mvn test -B
+RUN --mount=type=cache,target=/root/.m2 mvn test -B \
+    -Dmaven.wagon.http.retryHandler.count=5 \
+    -Dmaven.wagon.http.retryHandler.requestSpecific=true
 
 # ==========================================
 # Stage 3: Production Runtime
